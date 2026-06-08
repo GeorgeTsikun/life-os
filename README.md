@@ -87,18 +87,24 @@ vercel env add SUPABASE_KEY
 }
 ```
 
-### 5. Telegram Mini App (Railway)
+### 5. Telegram-бот (Railway)
 
-1. Создай бота через [@BotFather](https://t.me/BotFather) → `/newbot`
-2. Задай Menu Button URL = `https://life-os.vercel.app`
-3. Разверни бот на Railway:
+Полноценный AI-бот живёт в папке [`bot/`](bot/) и деплоится на Railway отдельно от Mini App.
 
-```bash
-# В Railway создай новый сервис из GitHub
-# Задай переменные:
-# TELEGRAM_BOT_TOKEN=...
-# TELEGRAM_WEBAPP_URL=https://life-os.vercel.app
-```
+**Возможности:**
+- Голосовые сообщения → Whisper → GPT-4o классифицирует (задача / идея / решение / чек-ин)
+- Длительный AI-чат с памятью контекста
+- Утренний брифинг, вечерний чек-ин
+- Открывает Mini App кнопкой Web App
+- Транскрибация созвонов целиком
+
+**Подробная инструкция:** см. [bot/README.md](bot/README.md).
+
+Кратко:
+1. [@BotFather](https://t.me/BotFather) → `/newbot` → получи токен → задай Menu Button URL = `https://life-os-chi-rose.vercel.app`
+2. [Railway](https://railway.app) → **New Project** → **Deploy from GitHub** → `GeorgeTsikun/life-os`
+3. **Settings** → **Root Directory** = `bot`
+4. **Variables**: `TELEGRAM_BOT_TOKEN`, `OPENAI_API_KEY`, `TELEGRAM_WEBAPP_URL`
 
 ## Структура проекта
 
