@@ -16,6 +16,9 @@ export const notionАктивен = () => !!(TOKEN && ROOT_PAGE_ID);
 let notion = null;
 let базы = {};                                  // имя → id базы данных
 let инициализирован = false;
+let контейнерId = null;                          // id под-страницы «🤖 Инбокс бота»
+
+const ИМЯ_КОНТЕЙНЕРА = '🤖 Инбокс бота';
 
 if (notionАктивен()) {
   notion = new Client({ auth: TOKEN });
@@ -117,25 +120,53 @@ export async function поднятьБазы(принудительно = false)
     }
     console.log(`[notion] доступ OK к странице: ${рут.url || рут.id}`);
 
-    // 2. Поиск существующих баз
-    const существующие = await notion.blocks.children.list({ block_id: ROOT_PAGE_ID, page_size: 100 });
-    const найденные = {};
-    for (const блок of существующие.results) {
-      if (блок.type === 'child_database') {
-        const заголовок = блок.child_database?.title || '';
-        найденные[заголовок] = блок.id;
+    // 2. Ищем под-страницу «🤖 Инбокс бота» или создаём её
+    const дети = await notion.blocks.children.list({ block_id: ROOT_PAGE_ID, page_size: 100 });
+    for (const блок of дети.results) {
+      if (блок.type === 'child_page' && блок.child_page?.title === ИМЯ_КОНТЕЙНЕРА) {
+        контейнерId = блок.id;
+        console.log(`[notion] ✓ найдена под-страница «${ИМЯ_КОНТЕЙНЕРА}»`);
+        break;
       }
     }
-    console.log(`[notion] существующие базы на странице: ${Object.keys(найденные).length ? Object.keys(найденные).join(', ') : '(нет)'}`);
+    if (!контейнерId) {
+      const подстр = await notion.pages.create({
+        parent: { type: 'page_id', page_id: ROOT_PAGE_ID },
+        icon:   { type: 'emoji', emoji: '🤖' },
+        properties: {
+          title: [{ type: 'text', text: { content: ИМЯ_КОНТЕЙНЕРА } }],
+        },
+        children: [
+          {
+            object: 'block', type: 'paragraph',
+            paragraph: { rich_text: [{ type: 'text', text: {
+              content: 'Сюда AI-бот пишет всё что ты ему присылаешь: идеи, решения, заметки встреч, входящие.'
+            }, annotations: { italic: true, color: 'gray' } }] },
+          },
+        ],
+      });
+      контейнерId = подстр.id;
+      console.log(`[notion] ✨ создана под-страница «${ИМЯ_КОНТЕЙНЕРА}» → ${контейнерId}`);
+    }
 
-    // 3. Создание недостающих
+    // 3. Ищем существующие базы внутри контейнера
+    const базыВнутри = await notion.blocks.children.list({ block_id: контейнерId, page_size: 100 });
+    const найденные = {};
+    for (const блок of базыВнутри.results) {
+      if (блок.type === 'child_database') {
+        найденные[блок.child_database?.title || ''] = блок.id;
+      }
+    }
+    console.log(`[notion] существующие базы: ${Object.keys(найденные).length ? Object.keys(найденные).join(', ') : '(нет)'}`);
+
+    // 4. Создание недостающих внутри контейнера
     for (const [имя, опр] of Object.entries(ОПРЕДЕЛЕНИЯ)) {
       if (найденные[имя]) {
         базы[имя] = найденные[имя];
         console.log(`[notion] ✓ ${опр.emoji} ${имя}`);
       } else {
         const бд = await notion.databases.create({
-          parent: { type: 'page_id', page_id: ROOT_PAGE_ID },
+          parent: { type: 'page_id', page_id: контейнерId },
           icon:   { type: 'emoji', emoji: опр.emoji },
           title:  [{ type: 'text', text: { content: имя } }],
           properties: опр.properties,
