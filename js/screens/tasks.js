@@ -66,22 +66,25 @@ function renderList(tasks) {
 function renderMatrix(tasks) {
   return `<div class="quadrant-grid">
     ${QUADS.map(q => {
-      const items = tasks.filter(t => t.quadrant === q.key && !t.done).slice(0,3);
+      const all      = tasks.filter(t => t.quadrant === q.key && !t.done);
+      const видимые  = all.slice(0,4);
       return `<div class="quadrant-card" style="border-top:2px solid ${q.color}">
-        <div style="font-size:9px;font-weight:700;color:${q.color};margin-bottom:8px">${q.label.split('·')[0].trim()}</div>
-        ${items.map(t => `<div style="font-size:11px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;display:flex;gap:6px;align-items:center" onclick="window.toggleTask('${t.id}')">
-          <div style="width:14px;height:14px;border-radius:3px;border:1px solid rgba(255,255,255,.2);flex-shrink:0;font-size:9px;display:flex;align-items:center;justify-content:center"></div>
-          <span>${t.text}</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:9px;font-weight:700;color:${q.color}">${q.label.split('·')[0].trim()}</div>
+          <span class="num" style="font-size:12px;color:${q.color}">${all.length}</span>
+        </div>
+        ${видимые.map(t => `<div style="font-size:11px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;display:flex;gap:6px;align-items:flex-start" onclick="event.stopPropagation();window.toggleTask('${t.id}')">
+          <div style="width:14px;height:14px;border-radius:3px;border:1px solid rgba(255,255,255,.2);flex-shrink:0;margin-top:2px"></div>
+          <span style="line-height:1.3">${t.text}</span>
         </div>`).join('')}
-        ${items.length === 0 ? `<div style="font-size:10px;color:rgba(232,237,245,.25);text-align:center;padding:8px 0">✓ Пусто</div>` : ''}
-        ${tasks.filter(t=>t.quadrant===q.key&&!t.done).length > 3 ? `<div style="font-size:9px;color:rgba(232,237,245,.3);margin-top:6px">+${tasks.filter(t=>t.quadrant===q.key&&!t.done).length-3} ещё</div>` : ''}
+        ${видимые.length === 0 ? `<div style="font-size:10px;color:rgba(232,237,245,.25);text-align:center;padding:12px 0">✓ Пусто</div>` : ''}
+        ${all.length > 4 ? `<div style="font-size:9px;color:rgba(232,237,245,.3);margin-top:6px;text-align:center">+${all.length-4} ещё</div>` : ''}
       </div>`;
     }).join('')}
   </div>
-  ${QUADS.map(q => {
-    const items = tasks.filter(t => t.quadrant === q.key);
-    return renderList(tasks.filter(t=>t.quadrant===q.key));
-  }).join('')}`;
+  <div style="font-size:10px;color:rgba(232,237,245,.35);text-align:center;margin-top:8px;letter-spacing:.05em">
+    Переключи на «📋 Список» чтобы видеть детали и категории
+  </div>`;
 }
 
 function taskItemHTML(t, quadColor) {
