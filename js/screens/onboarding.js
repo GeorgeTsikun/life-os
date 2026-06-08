@@ -60,6 +60,8 @@ let аудиоЧанки = [];
 let поток = null;
 let таймер = null;
 let секунды = 0;
+let последняяЗапись = null;          // последний blob — для скачивания/повтора
+let последнийМимТип = 'audio/webm';
 
 export function renderOnboarding() {
   const блок = БЛОКИ[текущийБлок];
@@ -93,6 +95,14 @@ export function renderOnboarding() {
       ${ответ ? renderОтвет(ответ) : renderКнопкаЗаписи()}
     </div>
 
+    ${!ответ ? `<div style="margin-top:14px">
+      <details style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px 12px">
+        <summary style="cursor:pointer;font-size:12px;color:rgba(232,237,245,.7)">✍️ Или вставь текстом</summary>
+        <textarea id="manual-text" class="input" rows="4" placeholder="Напиши текстом если так удобнее..." style="margin-top:10px;resize:vertical"></textarea>
+        <button class="btn btn-teal" style="width:100%;margin-top:8px" onclick="window.onbСохранитьТекст()">Сохранить и далее →</button>
+      </details>
+    </div>` : ''}
+
     <div style="display:flex;gap:8px;margin-top:16px">
       ${текущийБлок > 0
         ? `<button class="btn btn-ghost" style="flex:1" onclick="window.onbПрев()">← Назад</button>`
@@ -110,7 +120,7 @@ export function renderOnboarding() {
 }
 
 function renderКнопкаЗаписи() {
-  return `<div style="text-align:center;padding:20px 0">
+  return `<div style="text-align:center;padding:16px 0">
     <button id="rec-btn" onclick="window.onbЗапись()" style="
       width:100px;height:100px;border-radius:50%;
       background:linear-gradient(135deg,#FF4560,#FF6B6B);
@@ -123,7 +133,31 @@ function renderКнопкаЗаписи() {
       Нажми и говори
     </div>
     <div id="rec-timer" style="font-family:'Orbitron';font-size:18px;color:#FF4560;margin-top:6px;min-height:22px"></div>
+    <div id="rec-warning" style="font-size:10px;color:rgba(255,159,67,.8);margin-top:4px;min-height:14px"></div>
+    <div id="rec-actions" style="margin-top:14px;display:none"></div>
   </div>`;
+}
+
+function renderОшибкаЗаписи(сообщение) {
+  const есть = последняяЗапись !== null;
+  const статус = document.getElementById('rec-status');
+  const действия = document.getElementById('rec-actions');
+  if (статус) {
+    статус.innerHTML = `<span style="color:#FF6B6B">❌ ${сообщение}</span><br>
+      <small style="opacity:.65">${есть ? 'Аудио не потеряно — можно скачать или повторить' : ''}</small>`;
+  }
+  if (действия) {
+    действия.style.display = 'block';
+    действия.innerHTML = `
+      ${есть ? `
+        <button class="btn btn-teal" style="width:100%;margin-bottom:6px" onclick="window.onbПовтор()">↻ Попробовать снова</button>
+        <button class="btn btn-ghost" style="width:100%;margin-bottom:6px" onclick="window.onbСкачать()">⬇️ Скачать аудио (.webm)</button>
+      ` : ''}
+      <div style="font-size:10px;color:rgba(232,237,245,.45);margin-top:8px;text-align:left">
+        Можно вставить расшифровку вручную через «✍️ Или вставь текстом» ниже.
+      </div>
+    `;
+  }
 }
 
 function renderОтвет(текст) {
@@ -141,13 +175,14 @@ window.onbЗапись = async function() {
   const кнопка = document.getElementById('rec-btn');
   const статус = document.getElementById('rec-status');
   const таймерЭл = document.getElementById('rec-timer');
+  const предупр = document.getElementById('rec-warning');
 
   if (рекордер && рекордер.state === 'recording') {
     // Стоп
     рекордер.stop();
     кнопка.style.background = 'linear-gradient(135deg,#FF4560,#FF6B6B)';
     кнопка.style.animation = 'none';
-    статус.textContent = 'Расшифровываю…';
+    статус.textContent = '⏳ Сохраняю запись…';
     if (таймер) clearInterval(таймер);
     return;
   }
@@ -156,25 +191,37 @@ window.onbЗапись = async function() {
   try {
     поток = await navigator.mediaDevices.getUserMedia({ audio: true });
     аудиоЧанки = [];
+    последняяЗапись = null;
 
     const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+    последнийМимТип = mimeType;
     рекордер = new MediaRecorder(поток, { mimeType });
 
     рекордер.ondataavailable = e => { if (e.data.size > 0) аудиоЧанки.push(e.data); };
     рекордер.onstop = async () => {
       поток.getTracks().forEach(t => t.stop());
       const blob = new Blob(аудиоЧанки, { type: mimeType });
+      последняяЗапись = blob;          // ⬅ СОХРАНЯЕМ СРАЗУ, ДО ОТПРАВКИ
+      const размерМб = (blob.size / 1024 / 1024).toFixed(1);
+      document.getElementById('rec-status').textContent = `⏳ Отправляю на расшифровку… (${размерМб} МБ)`;
       await отправитьНаРасшифровку(blob, mimeType);
     };
 
     рекордер.start();
     секунды = 0;
     таймерЭл.textContent = '00:00';
+    предупр.textContent = '';
     таймер = setInterval(() => {
       секунды++;
       const m = String(Math.floor(секунды/60)).padStart(2,'0');
       const s = String(секунды%60).padStart(2,'0');
       таймерЭл.textContent = `${m}:${s}`;
+      // Предупреждение при превышении 3 минут
+      if (секунды === 180) {
+        предупр.textContent = '⚠️ Запись длинная — лучше нажать ⏹ и записать продолжение отдельно';
+      } else if (секунды >= 240) {
+        предупр.textContent = '⚠️ Очень длинная — большой шанс что сервер не успеет. Остановись сейчас.';
+      }
     }, 1000);
 
     кнопка.style.background = 'linear-gradient(135deg,#7B61FF,#00F5D4)';
@@ -188,24 +235,76 @@ window.onbЗапись = async function() {
 };
 
 async function отправитьНаРасшифровку(blob, mimeType) {
+  const размерМб = blob.size / 1024 / 1024;
+  // Vercel hobby plan: max ~4.5 МБ тело запроса
+  if (размерМб > 4) {
+    renderОшибкаЗаписи(`Запись слишком большая (${размерМб.toFixed(1)} МБ). Vercel принимает до 4 МБ. Скачай файл и расшифруй вручную, либо запиши короче.`);
+    document.getElementById('rec-btn').textContent = '🎙️';
+    return;
+  }
+
+  // Таймаут — выдаём контроль, чтобы можно было показать ошибку и не зависнуть
+  const controller = new AbortController();
+  const таймаут = setTimeout(() => controller.abort(), 90000); // 90с
+
   try {
     const res = await fetch('/api/transcribe', {
       method: 'POST',
       headers: { 'Content-Type': mimeType },
       body: blob,
+      signal: controller.signal,
     });
+    clearTimeout(таймаут);
+
     if (!res.ok) {
-      const ошибка = await res.json().catch(() => ({error: 'Ошибка сервера'}));
+      const ошибка = await res.json().catch(() => ({error: `Сервер вернул ${res.status}`}));
       throw new Error(ошибка.error || 'Не удалось расшифровать');
     }
     const { text } = await res.json();
     ответы[БЛОКИ[текущийБлок].key] = text;
+    последняяЗапись = null; // успех — забываем
     renderOnboarding();
   } catch (err) {
-    document.getElementById('rec-status').innerHTML = `❌ ${err.message}<br><small style="opacity:.6">Проверь что OPENAI_API_KEY добавлен в Vercel</small>`;
+    clearTimeout(таймаут);
+    const сообщ = err.name === 'AbortError'
+      ? 'Сервер не успел за 90 секунд'
+      : err.message;
+    renderОшибкаЗаписи(сообщ);
     document.getElementById('rec-btn').textContent = '🎙️';
   }
 }
+
+// ── НОВЫЕ ХЕНДЛЕРЫ: повтор, скачать, ручной ввод ─────────────────────────────
+window.onbПовтор = async function() {
+  if (!последняяЗапись) return;
+  document.getElementById('rec-actions').style.display = 'none';
+  document.getElementById('rec-status').textContent = '⏳ Повторная попытка…';
+  await отправитьНаРасшифровку(последняяЗапись, последнийМимТип);
+};
+
+window.onbСкачать = function() {
+  if (!последняяЗапись) return;
+  const url = URL.createObjectURL(последняяЗапись);
+  const a = document.createElement('a');
+  const дата = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const блок = БЛОКИ[текущийБлок].key;
+  a.href = url;
+  a.download = `lifeos-${блок}-${дата}.webm`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
+window.onbСохранитьТекст = function() {
+  const поле = document.getElementById('manual-text');
+  const текст = поле?.value?.trim();
+  if (!текст || текст.length < 10) {
+    поле?.focus();
+    return;
+  }
+  ответы[БЛОКИ[текущийБлок].key] = текст;
+  последняяЗапись = null;
+  renderOnboarding();
+};
 
 window.onbПерезаписать = function() {
   delete ответы[БЛОКИ[текущийБлок].key];
