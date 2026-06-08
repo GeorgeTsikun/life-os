@@ -1,0 +1,21 @@
+# Окружение
+.env
+.env.local
+.env.*.local
+
+# Зависимости
+node_modules/
+
+# Системные
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Vercel
+.vercel/
+
+# Логи
+*.log

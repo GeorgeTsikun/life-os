@@ -1,0 +1,275 @@
+/* ── DASHBOARD ───────────────────────────────────────────────────────────── */
+.dash-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.dash-name {
+  font-size: 22px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.dash-tagline {
+  font-size: 10px;
+  color: var(--text-mute);
+  letter-spacing: .1em;
+  margin-top: 3px;
+}
+
+.energy-chips {
+  display: grid;
+  grid-template-columns: repeat(4,1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.focus-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+}
+
+.focus-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.quests-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ── TASKS ───────────────────────────────────────────────────────────────── */
+.quadrant-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.quadrant-card {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  padding: 10px;
+  background: var(--surface);
+}
+
+.quick-add-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.quad-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.quad-btn {
+  padding: 8px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all .2s;
+}
+
+.quad-btn:active { transform: scale(.97); }
+
+/* ── HEALTH ──────────────────────────────────────────────────────────────── */
+.health-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.activity-rings-row {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 14px;
+}
+
+.sleep-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: flex-end;
+}
+
+.workout-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,.025);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  margin-bottom: 7px;
+}
+
+.workout-type-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  background: rgba(0,245,212,.08);
+  border: 1px solid rgba(0,245,212,.15);
+}
+
+.nutrition-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all .2s;
+}
+
+.check-row.checked {
+  border-color: rgba(0,245,212,.2);
+  background: rgba(0,245,212,.04);
+}
+
+/* ── PROJECTS ────────────────────────────────────────────────────────────── */
+.project-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-bottom: 12px;
+  transition: border-color .2s;
+  cursor: pointer;
+}
+
+.project-card:active { transform: scale(.99); }
+
+/* ── PEOPLE ──────────────────────────────────────────────────────────────── */
+.commitment-block {
+  padding: 8px 10px;
+  border-radius: 9px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.person-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+/* ── ACHIEVEMENTS ────────────────────────────────────────────────────────── */
+.level-hero {
+  background: linear-gradient(135deg, rgba(0,245,212,.08), rgba(123,97,255,.08));
+  border: 1px solid rgba(0,245,212,.2);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.ach-grid {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 8px;
+}
+
+.weekly-challenge {
+  background: linear-gradient(135deg, rgba(123,97,255,.08), rgba(255,215,0,.06));
+  border: 1px solid rgba(123,97,255,.25);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+/* ── MODALS ──────────────────────────────────────────────────────────────── */
+.cat-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.cat-pill {
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  transition: all .2s;
+}
+
+.cat-pill.active {
+  border-color: rgba(0,245,212,.35);
+  background: rgba(0,245,212,.1);
+  color: var(--teal);
+}
+
+/* ── DETAIL OVERLAY ──────────────────────────────────────────────────────── */
+.detail-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(3,3,10,.9);
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;
+  animation: fadeIn .2s ease;
+}
+
+.detail-sheet {
+  width: 100%;
+  max-width: 430px;
+  margin: 0 auto;
+  background: #0A0A18;
+  border-top: 1px solid var(--border-teal);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 20px 16px calc(32px + var(--safe-bottom));
+  animation: slideUp .25s ease;
+}

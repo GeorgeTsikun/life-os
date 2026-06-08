@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#03030A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LIFE OS">
+<title>LIFE OS</title>
+<link rel="manifest" href="manifest.json">
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Orbitron:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+<!-- External libs -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+<!-- Styles -->
+<link rel="stylesheet" href="css/base.css?v=2">
+<link rel="stylesheet" href="css/components.css?v=2">
+<link rel="stylesheet" href="css/screens.css?v=2">
+
+<style>body{background:#03030A}</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="content"></div>
+
+  <!-- Bottom Navigation -->
+  <nav>
+    <button class="nav-btn active" data-tab="dash" onclick="goTab(this,'dash')">
+      <span class="icon">⚡</span><span class="lbl">Главная</span>
+    </button>
+    <button class="nav-btn" data-tab="tasks" onclick="goTab(this,'tasks')">
+      <span class="icon">✅</span><span class="lbl">Задачи</span>
+    </button>
+    <button class="nav-btn" data-tab="health" onclick="goTab(this,'health')">
+      <span class="icon">💪</span><span class="lbl">Здоровье</span>
+    </button>
+    <button class="nav-btn" data-tab="projects" onclick="goTab(this,'projects')">
+      <span class="icon">🚀</span><span class="lbl">Проекты</span>
+    </button>
+    <button class="nav-btn" data-tab="people" onclick="goTab(this,'people')">
+      <span class="icon">👥</span><span class="lbl">Люди</span>
+    </button>
+  </nav>
+</div>
+
+<!-- FAB -->
+<button id="fab" aria-label="Добавить">＋</button>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- App bootstrap -->
+<script type="module" src="js/app.js?v=2"></script>
+<script>
+  // Stub until module loads (module will override with real implementation)
+  window.goTab = function(btn, tab) {};
+</script>
+
+</body>
+</html>
