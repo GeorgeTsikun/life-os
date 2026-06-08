@@ -13,10 +13,14 @@ const TOKEN = process.env.NOTION_TOKEN;
 export const notionАктивен = () => !!TOKEN;
 
 // ── ID БАЗ ДАННЫХ (из твоего Master Databases) ───────────────────────────────
+// Старые базы Tasks/Ideas/CRM создавались давно, до интеграции LIFE OS BOT —
+// Notion не пропагирует доступ на pre-existing databases (известный quirk).
+// Поэтому для них созданы свежие копии с суффиксом "(Bot)" — они автоматом
+// унаследовали доступ интеграции, так как создавались уже после её появления.
 const БАЗЫ = {
-  tasks:     'eb9e5837-701b-49ea-9691-2b7122f90d29',   // ✅ Tasks
-  ideas:     '2cccc556-e6c2-4f7c-b0dc-8d606b725c85',   // 💡 Ideas
-  crm:       '890adb1d-4cfa-4f0c-a1ce-62aee43c58db',   // 💰 CRM
+  tasks:     'f21760cf-682e-4f3b-ad63-a0c72bfc945f',   // ✅ Tasks (Bot)
+  ideas:     'b6536d16-46e1-4db9-b385-b3e8f7a50d77',   // 💡 Ideas (Bot)
+  crm:       '890adb1d-4cfa-4f0c-a1ce-62aee43c58db',   // 💰 CRM — бот пока не пишет
   meetings:  '35f51507-ca79-4745-8643-295f7473fd3e',   // 📝 Meeting Notes
   decisions: 'f5dcabfb-4bb2-4c5f-a657-476256145334',   // 🔑 Decisions
 };
