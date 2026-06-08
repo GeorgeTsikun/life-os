@@ -414,8 +414,41 @@ bot.catch((err) => {
   console.error('Ошибка бота:', err);
 });
 
+// ── GRACEFUL SHUTDOWN — даём Telegram отпустить getUpdates ────────────────────
+async function остановить(сигнал) {
+  console.log(`📴 Получен ${сигнал} — корректное завершение…`);
+  try {
+    await bot.stop();
+    console.log('✅ Бот остановлен');
+  } catch (err) {
+    console.error('Ошибка остановки:', err);
+  }
+  process.exit(0);
+}
+process.once('SIGINT',  () => остановить('SIGINT'));
+process.once('SIGTERM', () => остановить('SIGTERM'));
+
 // ── ЗАПУСК ────────────────────────────────────────────────────────────────────
-console.log('🤖 LIFE OS бот запущен');
-console.log(`📱 Mini App: ${WEBAPP_URL}`);
-console.log(`💾 Supabase: ${supa ? 'подключён' : 'НЕ подключён (бот работает без сохранения данных)'}`);
-bot.start();
+async function запустить() {
+  try {
+    // На случай если где-то висит webhook — снимаем его (long polling несовместим с webhook)
+    // drop_pending_updates: true очищает очередь старых апдейтов
+    await bot.api.deleteWebhook({ drop_pending_updates: true });
+  } catch (err) {
+    console.warn('Не удалось снять webhook:', err.message);
+  }
+
+  console.log('🤖 LIFE OS бот запущен');
+  console.log(`📱 Mini App: ${WEBAPP_URL}`);
+  console.log(`💾 Supabase: ${supa ? 'подключён' : 'НЕ подключён'}`);
+
+  await bot.start({
+    drop_pending_updates: true,    // не обрабатывать старые сообщения при старте
+    onStart: (инфо) => console.log(`✅ Polling запущен · @${инфо.username}`),
+  });
+}
+
+запустить().catch((err) => {
+  console.error('💥 Критическая ошибка запуска:', err);
+  process.exit(1);
+});
