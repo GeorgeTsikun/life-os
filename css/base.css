@@ -130,6 +130,10 @@ html, body {
 .row    { display: flex; gap: 8px; align-items: center; }
 .col    { display: flex; flex-direction: column; }
 .grid2  { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grid2 > * { min-width: 0; overflow: hidden; }
+.grid3 > * { min-width: 0; }
+.grid4 > * { min-width: 0; }
+canvas  { max-width: 100% !important; }
 .grid3  { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
 .grid4  { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }
 .spacer { flex: 1; }
