@@ -145,6 +145,40 @@ bot.callbackQuery('evening', async (ctx) => {
   ПАМЯТЬ_ЧАТА.set(ctx.from.id, [{ режим: 'checkin' }]);
 });
 
+// ── ПЕРЕМЕЩЕНИЕ ЗАДАЧИ В ДРУГОЙ КВАДРАНТ ─────────────────────────────────────
+bot.callbackQuery(/^move:(do|schedule|delegate|eliminate)$/, async (ctx) => {
+  const квадрант = ctx.match[1];
+  const ярлыки = {
+    do:        '🔴 Сделать сейчас (важно · срочно)',
+    schedule:  '🟢 Запланировать (важно · не срочно)',
+    delegate:  '🟡 Делегировать (не важно · срочно)',
+    eliminate: '⚫ Удалить (не важно · не срочно)',
+  };
+  await ctx.answerCallbackQuery({ text: 'Перемещаю…' });
+
+  if (!supa) {
+    return ctx.answerCallbackQuery({ text: '⚠️ Supabase не подключён', show_alert: true });
+  }
+
+  try {
+    // Берём последнюю задачу пользователя и обновляем её квадрант
+    const { data: задачи } = await supa.from('tasks')
+      .select('id').eq('owner', 'george').order('created_at', { ascending: false }).limit(1);
+    if (!задачи?.length) {
+      return ctx.reply('❌ Не нашёл недавнюю задачу для перемещения');
+    }
+    const xp = {do:75,schedule:50,delegate:25,eliminate:25}[квадрант];
+    const { error } = await supa.from('tasks')
+      .update({ quadrant: квадрант, xp_value: xp })
+      .eq('id', задачи[0].id);
+    if (error) throw new Error(error.message);
+
+    await ctx.reply(`✓ Перемещено: *${ярлыки[квадрант]}*\n_Открой Mini App чтобы увидеть_`, { parse_mode: 'Markdown' });
+  } catch (err) {
+    await ctx.reply(`⚠️ Не удалось переместить: ${err.message}`);
+  }
+});
+
 // ── /chat — режим разговора ───────────────────────────────────────────────────
 bot.command('chat', async (ctx) => {
   ПАМЯТЬ_ЧАТА.set(ctx.from.id, []);
@@ -279,7 +313,12 @@ async function обработатьВход(ctx, текст, opts = {}) {
     // Клавиатура подтверждения
     const клавиатура = new InlineKeyboard();
     if (разбор.тип === 'task') {
-      клавиатура.text('✅ В Q1 (срочно)', `add_task:do`).text('📅 В Q2', `add_task:schedule`).row();
+      // Переназначить квадрант — каждая кнопка переписывает классификацию AI
+      клавиатура
+        .text('🔴 Сделать сейчас', 'move:do')
+        .text('🟢 Запланировать',  'move:schedule').row()
+        .text('🟡 Делегировать',   'move:delegate')
+        .text('⚫ Удалить',         'move:eliminate').row();
     }
     клавиатура.webApp('🔍 Открыть в приложении', WEBAPP_URL);
 
@@ -289,9 +328,21 @@ async function обработатьВход(ctx, текст, opts = {}) {
       : (supa
           ? '_⚠️ Сохранение не получилось — посмотри логи Railway_'
           : '_ℹ️ Supabase не подключён. Добавь SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY в Variables на Railway и перезапусти бот._');
+
+    // Для задач — человекочитаемый квадрант после JSON
+    const квадрантЯрлыки = {
+      do:        '🔴 Сделать сейчас (важно · срочно)',
+      schedule:  '🟢 Запланировать (важно · не срочно)',
+      delegate:  '🟡 Делегировать (не важно · срочно)',
+      eliminate: '⚫ Удалить (не важно · не срочно)',
+    };
+    const квадрантПодсказка = (разбор.тип === 'task' && разбор.извлечено?.quadrant)
+      ? `\n*Квадрант:* ${квадрантЯрлыки[разбор.извлечено.quadrant] || разбор.извлечено.quadrant}\n_Если AI ошибся — нажми правильную кнопку ниже._\n`
+      : '';
+
     await ctx.reply(
       `${ярлык}\n\n${разбор.ответ_пользователю}\n\n` +
-      `\`\`\`json\n${извлечено}\n\`\`\`\n` + подпись,
+      `\`\`\`json\n${извлечено}\n\`\`\`` + квадрантПодсказка + '\n' + подпись,
       { parse_mode: 'Markdown', reply_markup: клавиатура }
     );
 
