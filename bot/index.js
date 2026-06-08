@@ -6,6 +6,7 @@ import 'dotenv/config';
 import { Bot, InlineKeyboard, InputFile } from 'grammy';
 import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
+import * as Notion from './notion.js';
 
 // ── КОНФИГ ────────────────────────────────────────────────────────────────────
 const TOKEN         = process.env.TELEGRAM_BOT_TOKEN;
@@ -310,6 +311,12 @@ async function обработатьВход(ctx, текст, opts = {}) {
     let сохранён = false;
     if (supa) сохранён = await сохранитьВSupabase(ctx.from.id.toString(), разбор);
 
+    // Параллельно — в Notion (для типов: idea, decision, meeting_notes — в свои базы, плюс всё во Входящие)
+    let notionРезульт = { inbox: null, специфика: null };
+    if (Notion.notionАктивен()) {
+      notionРезульт = await Notion.сохранитьВNotion(разбор, текст, 'telegram');
+    }
+
     // Клавиатура подтверждения
     const клавиатура = new InlineKeyboard();
     if (разбор.тип === 'task') {
@@ -323,11 +330,26 @@ async function обработатьВход(ctx, текст, opts = {}) {
     клавиатура.webApp('🔍 Открыть в приложении', WEBAPP_URL);
 
     const извлечено = JSON.stringify(разбор.извлечено, null, 2);
-    const подпись = сохранён
+    const ярлыкиБаз = {
+      idea: 'Идеи', decision: 'Журнал решений', meeting_notes: 'Заметки встреч'
+    };
+    const notionСтрока = (() => {
+      if (!Notion.notionАктивен()) return '';
+      if (notionРезульт.специфика) {
+        return `\n_📓 Записано в Notion → ${ярлыкиБаз[разбор.тип] || 'Входящие'}_`;
+      }
+      if (notionРезульт.inbox) {
+        return `\n_📓 Записано в Notion → Входящие_`;
+      }
+      return `\n_⚠️ Notion не записал — проверь права доступа на странице_`;
+    })();
+
+    const подпись = (сохранён
       ? '_✓ сохранено в облако · видно в Mini App_'
       : (supa
-          ? '_⚠️ Сохранение не получилось — посмотри логи Railway_'
-          : '_ℹ️ Supabase не подключён. Добавь SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY в Variables на Railway и перезапусти бот._');
+          ? '_⚠️ Supabase не сохранил — посмотри логи Railway_'
+          : '_ℹ️ Supabase не подключён._')
+    ) + notionСтрока;
 
     // Для задач — человекочитаемый квадрант после JSON
     const квадрантЯрлыки = {
@@ -512,6 +534,18 @@ async function запустить() {
   console.log('🤖 LIFE OS бот запущен');
   console.log(`📱 Mini App: ${WEBAPP_URL}`);
   console.log(`💾 Supabase: ${supa ? 'подключён' : 'НЕ подключён'}`);
+
+  // Поднимаем базы данных в Notion (создаст недостающие, использует существующие)
+  if (Notion.notionАктивен()) {
+    const ок = await Notion.поднятьБазы();
+    if (ок) {
+      console.log('📓 Notion: базы готовы', JSON.stringify(Notion.idБаз(), null, 2));
+    } else {
+      console.log('📓 Notion: ошибка инициализации (см. выше)');
+    }
+  } else {
+    console.log('📓 Notion: НЕ настроен (нет NOTION_TOKEN или NOTION_ROOT_PAGE_ID)');
+  }
 
   await bot.start({
     drop_pending_updates: true,    // не обрабатывать старые сообщения при старте
