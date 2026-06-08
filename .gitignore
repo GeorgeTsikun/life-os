@@ -20,3 +20,4 @@ Thumbs.db
 # Логи
 *.log
 .vercel
+node_modules/

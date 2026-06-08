@@ -1,0 +1,14 @@
+{
+  "name": "life-os",
+  "version": "1.0.0",
+  "description": "Персональная ОС жизни — PWA + Telegram Mini App с геймификацией и AI",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "python3 -m http.server 8000",
+    "deploy": "vercel deploy --prod"
+  },
+  "dependencies": {
+    "openai": "^4.77.0"
+  }
+}

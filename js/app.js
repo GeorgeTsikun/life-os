@@ -8,9 +8,13 @@ import { renderHealth }       from './screens/health.js';
 import { renderProjects }     from './screens/projects.js';
 import { renderPeople }       from './screens/people.js';
 import { renderAchievements } from './screens/achievements.js';
+import { renderOnboarding }   from './screens/onboarding.js';
 
 // ── ИНИЦИАЛИЗАЦИЯ ─────────────────────────────────────────────────────────────
-DB.init();
+const ОНБОРДИНГ_ПРОЙДЕН = localStorage.getItem('lifeos_onboarded') === 'true'
+                       || localStorage.getItem('lifeos_onboarding_skipped') === 'true';
+
+if (ОНБОРДИНГ_ПРОЙДЕН) DB.init();
 TG.init();
 injectUI(показатьТост, показатьXpFloat);
 
@@ -148,5 +152,100 @@ function обработатьДиплинк() {
 
 // ── ЗАПУСК ────────────────────────────────────────────────────────────────────
 // ES-модули отложены — DOM уже готов к моменту выполнения
-checkAchievements();
-обработатьДиплинк();
+if (!ОНБОРДИНГ_ПРОЙДЕН) {
+  // Скрываем нижнюю навигацию и FAB на время онбординга
+  document.querySelector('nav').style.display = 'none';
+  document.getElementById('fab').style.display = 'none';
+  renderOnboarding();
+} else {
+  checkAchievements();
+  обработатьДиплинк();
+  смонтироватьAIКнопку();
+}
+
+// ── ПЛАВАЮЩАЯ AI-КНОПКА (чат с директором) ────────────────────────────────────
+function смонтироватьAIКнопку() {
+  if (document.getElementById('ai-fab')) return;
+  const кнопка = document.createElement('button');
+  кнопка.id = 'ai-fab';
+  кнопка.innerHTML = '🧠';
+  кнопка.title = 'AI-директор';
+  кнопка.style.cssText = `
+    position:absolute;bottom:calc(var(--nav-h) + 76px);right:16px;
+    width:46px;height:46px;border-radius:50%;
+    background:linear-gradient(135deg,#7B61FF,#FFD700);
+    border:none;cursor:pointer;font-size:20px;
+    box-shadow:0 4px 16px rgba(123,97,255,.4);z-index:99;`;
+  кнопка.onclick = открытьAIЧат;
+  document.getElementById('app').appendChild(кнопка);
+}
+
+function открытьAIЧат() {
+  const существ = document.getElementById('ai-chat');
+  if (существ) { существ.remove(); return; }
+
+  const div = document.createElement('div');
+  div.id = 'ai-chat';
+  div.className = 'modal-overlay';
+  div.innerHTML = `<div class="modal-sheet" style="max-height:75vh;display:flex;flex-direction:column">
+    <div class="modal-handle"></div>
+    <div class="row" style="justify-content:space-between;margin-bottom:14px">
+      <div class="modal-title" style="margin:0">🧠 AI-директор</div>
+      <button onclick="document.getElementById('ai-chat').remove()" style="background:none;border:none;color:rgba(232,237,245,.5);font-size:18px;cursor:pointer">×</button>
+    </div>
+    <div id="ai-messages" style="flex:1;overflow-y:auto;margin-bottom:12px;display:flex;flex-direction:column;gap:8px">
+      <div style="background:rgba(123,97,255,.08);border:1px solid rgba(123,97,255,.18);border-radius:10px;padding:10px 12px;font-size:13px">
+        Привет. Спроси что угодно про свою жизнь, задачи, проекты, людей. Я держу весь контекст.
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <input id="ai-input" class="input" placeholder="напр.: как мой месяц?" onkeydown="if(event.key==='Enter') window.aiОтправить()">
+      <button class="btn btn-teal" onclick="window.aiОтправить()">→</button>
+    </div>
+  </div>`;
+  div.addEventListener('click', e => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
+  setTimeout(() => document.getElementById('ai-input')?.focus(), 100);
+}
+
+window.aiОтправить = async function() {
+  const inp = document.getElementById('ai-input');
+  const сообщение = inp.value.trim();
+  if (!сообщение) return;
+  inp.value = '';
+
+  const messages = document.getElementById('ai-messages');
+  messages.insertAdjacentHTML('beforeend', `
+    <div style="background:rgba(0,245,212,.08);border:1px solid rgba(0,245,212,.18);border-radius:10px;padding:10px 12px;font-size:13px;align-self:flex-end;max-width:85%">
+      ${сообщение}
+    </div>
+    <div id="ai-loading" style="font-size:11px;color:rgba(232,237,245,.4);padding:6px">Думаю...</div>
+  `);
+  messages.scrollTop = messages.scrollHeight;
+
+  try {
+    const контекст = {
+      профиль: DB.getProfile(),
+      проектов: DB.getProjects().length,
+      задач_открыто: DB.getTasks().filter(t=>!t.done).length,
+      страйк: DB.getProfile().streak,
+      энергия: DB.getDailyLog().energy,
+    };
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ сообщение, контекст }),
+    });
+    const { ответ, error } = await res.json();
+    document.getElementById('ai-loading')?.remove();
+    messages.insertAdjacentHTML('beforeend', `
+      <div style="background:rgba(123,97,255,.08);border:1px solid rgba(123,97,255,.18);border-radius:10px;padding:10px 12px;font-size:13px;max-width:90%">
+        ${error || ответ}
+      </div>
+    `);
+    messages.scrollTop = messages.scrollHeight;
+  } catch (err) {
+    document.getElementById('ai-loading')?.remove();
+    messages.insertAdjacentHTML('beforeend', `<div style="color:#FF6B6B;font-size:11px">Ошибка: ${err.message}</div>`);
+  }
+};
