@@ -311,8 +311,8 @@ async function обработатьВход(ctx, текст, opts = {}) {
     let сохранён = false;
     if (supa) сохранён = await сохранитьВSupabase(ctx.from.id.toString(), разбор);
 
-    // Параллельно — в Notion (для типов: idea, decision, meeting_notes — в свои базы, плюс всё во Входящие)
-    let notionРезульт = { inbox: null, специфика: null };
+    // Параллельно — в Notion (пишет в твои существующие базы Master Databases)
+    let notionРезульт = { записал: null, база: null };
     if (Notion.notionАктивен()) {
       notionРезульт = await Notion.сохранитьВNotion(разбор, текст, 'telegram');
     }
@@ -330,18 +330,14 @@ async function обработатьВход(ctx, текст, opts = {}) {
     клавиатура.webApp('🔍 Открыть в приложении', WEBAPP_URL);
 
     const извлечено = JSON.stringify(разбор.извлечено, null, 2);
-    const ярлыкиБаз = {
-      idea: 'Идеи', decision: 'Журнал решений', meeting_notes: 'Заметки встреч'
-    };
     const notionСтрока = (() => {
       if (!Notion.notionАктивен()) return '';
-      if (notionРезульт.специфика) {
-        return `\n_📓 Записано в Notion → ${ярлыкиБаз[разбор.тип] || 'Входящие'}_`;
+      if (notionРезульт.записал) {
+        return `\n_📓 Записано в Notion → ${notionРезульт.база}_`;
       }
-      if (notionРезульт.inbox) {
-        return `\n_📓 Записано в Notion → Входящие_`;
-      }
-      return `\n_⚠️ Notion не записал — проверь права доступа на странице_`;
+      // Для типов которые не пишем в Notion — никакой строки
+      const пишемВNotion = ['task', 'idea', 'decision', 'meeting_notes'].includes(разбор.тип);
+      return пишемВNotion ? `\n_⚠️ Notion не записал — проверь логи Railway_` : '';
     })();
 
     const подпись = (сохранён

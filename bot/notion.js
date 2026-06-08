@@ -1,339 +1,188 @@
 // ── NOTION — твоё хранилище знаний ───────────────────────────────────────────
-// При первом запуске создаёт 4 базы данных внутри корневой страницы «LIFE OS»:
-//   📥 Входящие   — полный лог всего, что прилетает
-//   💡 Идеи        — мысли, которые ещё не задачи
-//   📝 Заметки встреч — транскрипты созвонов
-//   🔑 Журнал решений — ключевые решения с обоснованием
-// Дальше использует кэш ID этих баз.
+// Пишет в твои существующие базы данных в Master Databases:
+//   task          → ✅ Tasks  (как «📥 Входящие» — ты сам распределяешь)
+//   idea          → 💡 Ideas (как «💡 Сырая»)
+//   decision      → 🔑 Decisions (как «🟢 Активно»)
+//   meeting_notes → 📝 Meeting Notes
+//
+// waiting / mood / question / checkin — не пишем (это в Supabase или нигде).
 
 import { Client } from '@notionhq/client';
 
 const TOKEN = process.env.NOTION_TOKEN;
-const ROOT_PAGE_ID = process.env.NOTION_ROOT_PAGE_ID;
+export const notionАктивен = () => !!TOKEN;
 
-export const notionАктивен = () => !!(TOKEN && ROOT_PAGE_ID);
-
-let notion = null;
-let базы = {};                                  // имя → id базы данных
-let инициализирован = false;
-let контейнерId = null;                          // id под-страницы «🤖 Инбокс бота»
-
-const ИМЯ_КОНТЕЙНЕРА = '🤖 Инбокс бота';
-
-if (notionАктивен()) {
-  notion = new Client({ auth: TOKEN });
-}
-
-// ── ОПРЕДЕЛЕНИЯ БАЗ ───────────────────────────────────────────────────────────
-const ОПРЕДЕЛЕНИЯ = {
-  'Входящие': {
-    emoji: '📥',
-    properties: {
-      'Заголовок': { title: {} },
-      'Тип':       { select: { options: [
-        {name:'task', color:'green'}, {name:'waiting', color:'orange'},
-        {name:'idea', color:'purple'}, {name:'decision', color:'red'},
-        {name:'meeting_notes', color:'blue'}, {name:'mood', color:'pink'},
-        {name:'question', color:'gray'}, {name:'checkin', color:'yellow'},
-      ]}},
-      'Источник':   { select: { options: [
-        {name:'telegram', color:'blue'},
-        {name:'mini_app', color:'green'},
-        {name:'email', color:'gray'},
-      ]}},
-      'Дата':       { date: {} },
-      'Обработано': { checkbox: {} },
-    },
-  },
-  'Идеи': {
-    emoji: '💡',
-    properties: {
-      'Идея':       { title: {} },
-      'Категория':  { select: { options: [
-        {name:'Бизнес', color:'green'}, {name:'Продукт', color:'blue'},
-        {name:'Контент', color:'orange'}, {name:'Личное', color:'pink'},
-        {name:'Здоровье', color:'red'}, {name:'Деньги', color:'yellow'},
-      ]}},
-      'Статус':     { select: { options: [
-        {name:'Новая', color:'gray'},
-        {name:'Обдумываю', color:'blue'},
-        {name:'Реализую', color:'green'},
-        {name:'Отложена', color:'orange'},
-        {name:'Отброшена', color:'red'},
-      ]}},
-      'Дата':       { date: {} },
-    },
-  },
-  'Заметки встреч': {
-    emoji: '📝',
-    properties: {
-      'Встреча':    { title: {} },
-      'Дата':       { date: {} },
-      'Участники':  { multi_select: { options: [] } },
-      'Тип':        { select: { options: [
-        {name:'Созвон', color:'blue'}, {name:'Офлайн', color:'green'},
-        {name:'Неформал', color:'pink'}, {name:'Мастермайнд', color:'purple'},
-      ]}},
-      'Действия':   { rich_text: {} },
-    },
-  },
-  'Журнал решений': {
-    emoji: '🔑',
-    properties: {
-      'Решение':    { title: {} },
-      'Дата':       { date: {} },
-      'Категория':  { select: { options: [
-        {name:'Бизнес', color:'green'}, {name:'Личное', color:'pink'},
-        {name:'Проект', color:'blue'}, {name:'Финансы', color:'yellow'},
-      ]}},
-      'Почему':     { rich_text: {} },
-      'Результат':  { rich_text: {} },
-    },
-  },
+// ── ID БАЗ ДАННЫХ (из твоего Master Databases) ───────────────────────────────
+const БАЗЫ = {
+  tasks:     'eb9e5837-701b-49ea-9691-2b7122f90d29',   // ✅ Tasks
+  ideas:     '2cccc556-e6c2-4f7c-b0dc-8d606b725c85',   // 💡 Ideas
+  crm:       '890adb1d-4cfa-4f0c-a1ce-62aee43c58db',   // 💰 CRM
+  meetings:  '35f51507-ca79-4745-8643-295f7473fd3e',   // 📝 Meeting Notes
+  decisions: 'f5dcabfb-4bb2-4c5f-a657-476256145334',   // 🔑 Decisions
 };
 
-// ── ИНИЦИАЛИЗАЦИЯ — поднимаем недостающие базы ────────────────────────────────
-export async function поднятьБазы(принудительно = false) {
-  if (!notionАктивен()) {
-    console.log('[notion] не настроен (нет NOTION_TOKEN или NOTION_ROOT_PAGE_ID)');
-    return false;
-  }
-  if (инициализирован && !принудительно) return true;
-
-  console.log(`[notion] init: root=${ROOT_PAGE_ID}`);
-
-  try {
-    // 1. Проверка доступа к странице
-    let рут;
-    try {
-      рут = await notion.pages.retrieve({ page_id: ROOT_PAGE_ID });
-    } catch (err) {
-      console.error('[notion] не могу открыть страницу:',
-        JSON.stringify({ code: err.code, status: err.status, message: err.message }, null, 2));
-      if (err.code === 'object_not_found') {
-        console.error('[notion] страница не существует или интеграция не имеет доступа.');
-        console.error('[notion] FIX: открой страницу LIFE OS → ⋯ → Connections → Add → выбери свою интеграцию');
-      } else if (err.code === 'unauthorized') {
-        console.error('[notion] неверный NOTION_TOKEN — проверь что скопировал правильный Internal Integration Secret');
-      }
-      return false;
-    }
-    console.log(`[notion] доступ OK к странице: ${рут.url || рут.id}`);
-
-    // 2. Ищем под-страницу «🤖 Инбокс бота» или создаём её
-    const дети = await notion.blocks.children.list({ block_id: ROOT_PAGE_ID, page_size: 100 });
-    for (const блок of дети.results) {
-      if (блок.type === 'child_page' && блок.child_page?.title === ИМЯ_КОНТЕЙНЕРА) {
-        контейнерId = блок.id;
-        console.log(`[notion] ✓ найдена под-страница «${ИМЯ_КОНТЕЙНЕРА}»`);
-        break;
-      }
-    }
-    if (!контейнерId) {
-      const подстр = await notion.pages.create({
-        parent: { type: 'page_id', page_id: ROOT_PAGE_ID },
-        icon:   { type: 'emoji', emoji: '🤖' },
-        properties: {
-          title: [{ type: 'text', text: { content: ИМЯ_КОНТЕЙНЕРА } }],
-        },
-        children: [
-          {
-            object: 'block', type: 'paragraph',
-            paragraph: { rich_text: [{ type: 'text', text: {
-              content: 'Сюда AI-бот пишет всё что ты ему присылаешь: идеи, решения, заметки встреч, входящие.'
-            }, annotations: { italic: true, color: 'gray' } }] },
-          },
-        ],
-      });
-      контейнерId = подстр.id;
-      console.log(`[notion] ✨ создана под-страница «${ИМЯ_КОНТЕЙНЕРА}» → ${контейнерId}`);
-    }
-
-    // 3. Ищем существующие базы внутри контейнера
-    const базыВнутри = await notion.blocks.children.list({ block_id: контейнерId, page_size: 100 });
-    const найденные = {};
-    for (const блок of базыВнутри.results) {
-      if (блок.type === 'child_database') {
-        найденные[блок.child_database?.title || ''] = блок.id;
-      }
-    }
-    console.log(`[notion] существующие базы: ${Object.keys(найденные).length ? Object.keys(найденные).join(', ') : '(нет)'}`);
-
-    // 4. Создание недостающих внутри контейнера
-    for (const [имя, опр] of Object.entries(ОПРЕДЕЛЕНИЯ)) {
-      if (найденные[имя]) {
-        базы[имя] = найденные[имя];
-        console.log(`[notion] ✓ ${опр.emoji} ${имя}`);
-      } else {
-        const бд = await notion.databases.create({
-          parent: { type: 'page_id', page_id: контейнерId },
-          icon:   { type: 'emoji', emoji: опр.emoji },
-          title:  [{ type: 'text', text: { content: имя } }],
-          properties: опр.properties,
-        });
-        базы[имя] = бд.id;
-        console.log(`[notion] ✨ создана ${опр.emoji} ${имя} → ${бд.id}`);
-      }
-    }
-
-    инициализирован = true;
-    return true;
-  } catch (err) {
-    console.error('[notion] ошибка:',
-      JSON.stringify({ code: err.code, status: err.status, message: err.message }, null, 2));
-    return false;
-  }
-}
-
-// Повторная попытка инициализации (вызывается из bot при каждом сообщении если ещё не готов)
-export async function убедитьсяЧтоГотов() {
-  if (!notionАктивен()) return false;
-  if (инициализирован) return true;
-  return await поднятьБазы();
-}
+let notion = null;
+if (notionАктивен()) notion = new Client({ auth: TOKEN });
 
 // ── УТИЛИТЫ ───────────────────────────────────────────────────────────────────
-function сегодня() { return new Date().toISOString().split('T')[0]; }
+const сегодня = () => new Date().toISOString().split('T')[0];
 
-function текстовыйБлок(текст) {
-  return {
-    object: 'block',
-    type:   'paragraph',
-    paragraph: {
-      rich_text: [{ type: 'text', text: { content: текст.slice(0, 2000) } }],
-    },
-  };
-}
+const text = (s, n = 2000) => [{ type: 'text', text: { content: String(s || '').slice(0, n) } }];
 
-function большойТекст(полнТекст) {
-  // Notion ограничивает rich_text 2000 символов — режем длинный текст на блоки
+function параграфы(полнТекст) {
   const блоки = [];
   for (let i = 0; i < полнТекст.length; i += 2000) {
-    блоки.push(текстовыйБлок(полнТекст.slice(i, i + 2000)));
+    блоки.push({
+      object: 'block',
+      type: 'paragraph',
+      paragraph: { rich_text: [{ type: 'text', text: { content: полнТекст.slice(i, i + 2000) } }] },
+    });
   }
   return блоки;
 }
 
-// ── ЗАПИСЬ ВО «ВХОДЯЩИЕ» (всегда, для всех типов) ─────────────────────────────
-export async function записатьВходящее(разбор, исходныйТекст, источник = 'telegram') {
-  if (!инициализирован || !базы['Входящие']) return null;
-  try {
-    const заголовок = краткийЗаголовок(разбор, исходныйТекст);
-    const стр = await notion.pages.create({
-      parent: { database_id: базы['Входящие'] },
-      properties: {
-        'Заголовок':  { title:    [{ text: { content: заголовок } }] },
-        'Тип':        { select:   { name: разбор.тип || 'question' } },
-        'Источник':   { select:   { name: источник } },
-        'Дата':       { date:     { start: сегодня() } },
-        'Обработано': { checkbox: true },
-      },
-      children: большойТекст(исходныйТекст),
-    });
-    return стр.id;
-  } catch (err) {
-    console.error('[notion inbox]', err.message);
-    return null;
-  }
+// ── МАППИНГ КАТЕГОРИЙ ─────────────────────────────────────────────────────────
+const КАТЕГОРИИ_ИДЕЙ   = { 'Бизнес':'Бизнес', 'Продукт':'Продукт', 'Контент':'Контент', 'Личное':'Личное',
+                            'Здоровье':'Личное', 'Деньги':'Бизнес', 'Клуб':'Бизнес', 'Стратегия':'Бизнес' };
+const КАТЕГОРИИ_РЕШЕНИЙ = { 'Бизнес':'Бизнес', 'Продукт':'Продукт', 'Личное':'Личное',
+                             'Финансы':'Финансы', 'Деньги':'Финансы', 'Стратегия':'Стратегия',
+                             'Здоровье':'Личное' };
+const ТИПЫ_ВСТРЕЧ     = { 'созвон':'Созвон', 'офлайн':'Офлайн', 'мастермайнд':'Мастермайнд', 'неформал':'Неформал' };
+
+function мапПриоритет(cat, quadrant) {
+  // Твой Приоритет: 💰 Деньги / 🚀 Рост / ⚙️ Поддержка — не совпадает с матрицей Эйзенхауэра
+  if (['Деньги', 'Бизнес'].includes(cat)) return '💰 Деньги';
+  if (['Клуб', 'Контент', 'Стратегия'].includes(cat)) return '🚀 Рост';
+  if (['Юрид.', 'Здоровье', 'Личное'].includes(cat)) return '⚙️ Поддержка';
+  return null;
 }
 
-// ── ИДЕЯ ──────────────────────────────────────────────────────────────────────
-export async function записатьИдею(разбор, исходныйТекст) {
-  if (!инициализирован || !базы['Идеи']) return null;
-  const извл = разбор.извлечено || {};
-  try {
-    const стр = await notion.pages.create({
-      parent: { database_id: базы['Идеи'] },
-      properties: {
-        'Идея':      { title:  [{ text: { content: (извл.text || исходныйТекст).slice(0, 200) } }] },
-        'Категория': { select: { name: извл.cat || извл.категория || 'Бизнес' } },
-        'Статус':    { select: { name: 'Новая' } },
-        'Дата':      { date:   { start: сегодня() } },
-      },
-      children: большойТекст(исходныйТекст),
-    });
-    return стр.id;
-  } catch (err) {
-    console.error('[notion idea]', err.message);
-    return null;
-  }
+function мапТип(cat) {
+  if (['Бизнес', 'Деньги'].includes(cat)) return 'Продажа';
+  if (cat === 'Контент') return 'Контент';
+  if (['Клуб', 'Стратегия', 'Юрид.'].includes(cat)) return 'Система';
+  return null;
 }
 
-// ── РЕШЕНИЕ ───────────────────────────────────────────────────────────────────
-export async function записатьРешение(разбор, исходныйТекст) {
-  if (!инициализирован || !базы['Журнал решений']) return null;
+// ── ЗАДАЧА → ✅ Tasks ────────────────────────────────────────────────────────
+async function записатьЗадачу(разбор, исходный) {
   const извл = разбор.извлечено || {};
-  try {
-    const почему = извл.контекст || извл.почему || извл.context || '';
-    const стр = await notion.pages.create({
-      parent: { database_id: базы['Журнал решений'] },
-      properties: {
-        'Решение':   { title:     [{ text: { content: (извл.text || исходныйТекст).slice(0, 200) } }] },
-        'Дата':      { date:      { start: сегодня() } },
-        'Категория': { select:    { name: извл.cat || 'Бизнес' } },
-        'Почему':    { rich_text: [{ text: { content: почему.slice(0, 2000) } }] },
-        'Результат': { rich_text: [{ text: { content: '' } }] },
-      },
-      children: большойТекст(исходныйТекст),
-    });
-    return стр.id;
-  } catch (err) {
-    console.error('[notion decision]', err.message);
-    return null;
-  }
+  const props = {
+    'Название': { title: text(извл.text || исходный.slice(0, 100)) },
+    'Статус':   { select: { name: '📥 Входящие' } }, // твоё правило: «Всё сначала → Inbox»
+    'Заметки':  { rich_text: text(`Из голосового: ${исходный}`) },
+  };
+  const приор = мапПриоритет(извл.cat, извл.quadrant);
+  if (приор) props['Приоритет'] = { select: { name: приор } };
+  const тип = мапТип(извл.cat);
+  if (тип) props['Тип'] = { select: { name: тип } };
+
+  const стр = await notion.pages.create({
+    parent: { database_id: БАЗЫ.tasks },
+    properties: props,
+  });
+  return стр.id;
 }
 
-// ── ЗАМЕТКИ ВСТРЕЧИ ───────────────────────────────────────────────────────────
-export async function записатьВстречу(разбор, исходныйТекст) {
-  if (!инициализирован || !базы['Заметки встреч']) return null;
+// ── ИДЕЯ → 💡 Ideas ───────────────────────────────────────────────────────────
+async function записатьИдею(разбор, исходный) {
   const извл = разбор.извлечено || {};
-  const участники = (извл.участники || извл.participants || [])
-    .map(п => ({ name: String(п).slice(0, 60) }))
-    .slice(0, 10);
-  try {
-    const стр = await notion.pages.create({
-      parent: { database_id: базы['Заметки встреч'] },
-      properties: {
-        'Встреча':   { title:        [{ text: { content: (извл.title || извл.text || 'Встреча').slice(0, 200) } }] },
-        'Дата':      { date:         { start: сегодня() } },
-        'Участники': { multi_select: участники },
-        'Тип':       { select:       { name: извл.тип_встречи || 'Созвон' } },
-        'Действия':  { rich_text:    [{ text: { content: (извл.действия || извл.actions || '').slice(0, 2000) } }] },
-      },
-      children: большойТекст(исходныйТекст),
-    });
-    return стр.id;
-  } catch (err) {
-    console.error('[notion meeting]', err.message);
-    return null;
-  }
+  const props = {
+    'Название': { title: text(извл.text || исходный.slice(0, 100)) },
+    'Статус':   { select: { name: '💡 Сырая' } },
+    'Заметки':  { rich_text: text(`Из голосового: ${исходный}`) },
+  };
+  const кат = КАТЕГОРИИ_ИДЕЙ[извл.cat || извл.категория] || 'Бизнес';
+  props['Категория'] = { select: { name: кат } };
+
+  const стр = await notion.pages.create({
+    parent: { database_id: БАЗЫ.ideas },
+    properties: props,
+    children: параграфы(исходный),
+  });
+  return стр.id;
+}
+
+// ── РЕШЕНИЕ → 🔑 Decisions ───────────────────────────────────────────────────
+async function записатьРешение(разбор, исходный) {
+  const извл = разбор.извлечено || {};
+  const props = {
+    'Решение':   { title: text(извл.text || исходный.slice(0, 100)) },
+    'Дата':      { date: { start: сегодня() } },
+    'Категория': { select: { name: КАТЕГОРИИ_РЕШЕНИЙ[извл.cat || извл.категория] || 'Бизнес' } },
+    'Почему':    { rich_text: text(извл.контекст || извл.почему || извл.context || '') },
+    'Альтернативы': { rich_text: text(извл.альтернативы || '') },
+    'Результат': { rich_text: text('') },
+    'Статус':    { select: { name: '🟢 Активно' } },
+  };
+  const стр = await notion.pages.create({
+    parent: { database_id: БАЗЫ.decisions },
+    properties: props,
+    children: параграфы(исходный),
+  });
+  return стр.id;
+}
+
+// ── ЗАМЕТКИ ВСТРЕЧИ → 📝 Meeting Notes ───────────────────────────────────────
+async function записатьВстречу(разбор, исходный) {
+  const извл = разбор.извлечено || {};
+  const участники = Array.isArray(извл.участники || извл.participants)
+    ? (извл.участники || извл.participants).join(', ')
+    : (извл.участники || извл.participants || '');
+  const типВстречи = ТИПЫ_ВСТРЕЧ[String(извл.тип_встречи || 'созвон').toLowerCase()] || 'Созвон';
+
+  const props = {
+    'Встреча':   { title: text(извл.title || извл.text || исходный.slice(0, 80) || 'Встреча') },
+    'Дата':      { date: { start: сегодня() } },
+    'Тип':       { select: { name: типВстречи } },
+    'Участники': { rich_text: text(участники) },
+    'Решения':   { rich_text: text(извл.решения || извл.decisions || '') },
+    'Действия':  { rich_text: text(извл.действия || извл.actions || '') },
+  };
+  const стр = await notion.pages.create({
+    parent: { database_id: БАЗЫ.meetings },
+    properties: props,
+    children: параграфы(исходный),
+  });
+  return стр.id;
 }
 
 // ── РОУТЕР: куда положить по типу ─────────────────────────────────────────────
-export async function сохранитьВNotion(разбор, исходныйТекст, источник = 'telegram') {
-  // Пытаемся доинициализироваться если ещё не готов (без передеплоя)
-  if (!инициализирован) {
-    const ок = await убедитьсяЧтоГотов();
-    if (!ок) return { inbox: null, специфика: null };
-  }
-  // Во Входящие — ВСЕГДА
-  const inboxId = await записатьВходящее(разбор, исходныйТекст, источник);
+export async function сохранитьВNotion(разбор, исходныйТекст /*, источник */) {
+  if (!notionАктивен()) return { записал: null, база: null };
 
-  let спецификаId = null;
-  switch (разбор.тип) {
-    case 'idea':          спецификаId = await записатьИдею(разбор, исходныйТекст); break;
-    case 'decision':      спецификаId = await записатьРешение(разбор, исходныйТекст); break;
-    case 'meeting_notes': спецификаId = await записатьВстречу(разбор, исходныйТекст); break;
+  try {
+    let id = null;
+    let база = null;
+    switch (разбор.тип) {
+      case 'task':
+        id = await записатьЗадачу(разбор, исходныйТекст); база = '✅ Tasks'; break;
+      case 'idea':
+        id = await записатьИдею(разбор, исходныйТекст); база = '💡 Ideas'; break;
+      case 'decision':
+        id = await записатьРешение(разбор, исходныйТекст); база = '🔑 Decisions'; break;
+      case 'meeting_notes':
+        id = await записатьВстречу(разбор, исходныйТекст); база = '📝 Meeting Notes'; break;
+      // waiting / mood / question / checkin — не пишем в Notion
+    }
+    if (id) console.log(`[notion] ✓ ${база} ← ${id}`);
+    return { записал: id, база };
+  } catch (err) {
+    console.error('[notion] ошибка:',
+      JSON.stringify({ code: err.code, status: err.status, message: err.message, body: err.body }, null, 2));
+    return { записал: null, база: null };
   }
-  return { inbox: inboxId, специфика: спецификаId };
 }
 
-// ── КРАТКИЙ ЗАГОЛОВОК ИЗ КЛАССИФИКАЦИИ ───────────────────────────────────────
-function краткийЗаголовок(разбор, исходный) {
-  const извл = разбор.извлечено || {};
-  return (извл.text || извл.what || извл.title || извл.заголовок ||
-          исходный.slice(0, 80) || '(без названия)').slice(0, 200);
+// Совместимость со старым API
+export async function поднятьБазы() {
+  if (!notionАктивен()) {
+    console.log('[notion] NOTION_TOKEN не задан');
+    return false;
+  }
+  console.log('[notion] подключено, пишем в:');
+  Object.entries(БАЗЫ).forEach(([k, v]) => console.log(`  ${k}: ${v}`));
+  return true;
 }
-
-// ── ID БАЗ — для логирования ─────────────────────────────────────────────────
-export function idБаз() { return базы; }
+export const убедитьсяЧтоГотов = поднятьБазы;
+export function idБаз() { return БАЗЫ; }
