@@ -63,10 +63,71 @@ let секунды = 0;
 let последняяЗапись = null;          // последний blob — для скачивания/повтора
 let последнийМимТип = 'audio/webm';
 
-export function renderOnboarding() {
+// ── IndexedDB — постоянное хранилище аудиозаписей ────────────────────────────
+// Запись сохраняется СРАЗУ → доступна даже после перезагрузки/крэша браузера
+async function открытьБД() {
+  return new Promise((resolve, reject) => {
+    const запрос = indexedDB.open('lifeos-recordings', 1);
+    запрос.onupgradeneeded = () => {
+      const бд = запрос.result;
+      if (!бд.objectStoreNames.contains('recordings')) {
+        бд.createObjectStore('recordings', { keyPath: 'key' });
+      }
+    };
+    запрос.onsuccess = () => resolve(запрос.result);
+    запрос.onerror = () => reject(запрос.error);
+  });
+}
+
+async function сохранитьАудио(ключ, blob, mimeType) {
+  try {
+    const бд = await открытьБД();
+    const tx = бд.transaction('recordings', 'readwrite');
+    tx.objectStore('recordings').put({
+      key:       ключ,
+      blob,
+      mimeType,
+      savedAt:   new Date().toISOString(),
+      sizeMb:    +(blob.size / 1024 / 1024).toFixed(2),
+    });
+    return new Promise(res => { tx.oncomplete = () => res(true); tx.onerror = () => res(false); });
+  } catch { return false; }
+}
+
+async function загрузитьАудио(ключ) {
+  try {
+    const бд = await открытьБД();
+    return new Promise((resolve) => {
+      const зап = бд.transaction('recordings').objectStore('recordings').get(ключ);
+      зап.onsuccess = () => resolve(зап.result || null);
+      зап.onerror = () => resolve(null);
+    });
+  } catch { return null; }
+}
+
+async function удалитьАудио(ключ) {
+  try {
+    const бд = await открытьБД();
+    бд.transaction('recordings', 'readwrite').objectStore('recordings').delete(ключ);
+  } catch {}
+}
+
+async function списокАудио() {
+  try {
+    const бд = await открытьБД();
+    return new Promise((resolve) => {
+      const зап = бд.transaction('recordings').objectStore('recordings').getAll();
+      зап.onsuccess = () => resolve(зап.result || []);
+      зап.onerror = () => resolve([]);
+    });
+  } catch { return []; }
+}
+
+export async function renderOnboarding() {
   const блок = БЛОКИ[текущийБлок];
   const прогресс = Math.round(((текущийБлок) / БЛОКИ.length) * 100);
   const ответ = ответы[блок.key];
+  const сохранёнка = ответ ? null : await загрузитьАудио(блок.key);
 
   const el = document.getElementById('content');
   el.innerHTML = `<div class="screen onboarding-screen">
@@ -94,6 +155,18 @@ export function renderOnboarding() {
     <div id="rec-area">
       ${ответ ? renderОтвет(ответ) : renderКнопкаЗаписи()}
     </div>
+
+    ${сохранёнка ? `<div style="background:rgba(255,215,0,.06);border:1px solid rgba(255,215,0,.2);border-radius:10px;padding:10px 12px;margin-top:14px">
+      <div style="font-size:10px;color:#FFD700;letter-spacing:.05em;margin-bottom:4px">💾 ЕСТЬ СОХРАНЁННАЯ ЗАПИСЬ</div>
+      <div style="font-size:11px;color:rgba(232,237,245,.6);margin-bottom:10px">
+        ${сохранёнка.sizeMb} МБ · ${new Date(сохранёнка.savedAt).toLocaleString('ru-RU')}
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-teal"  style="flex:1;font-size:10px" onclick="window.onbВосстановить()">↻ Расшифровать снова</button>
+        <button class="btn btn-ghost" style="flex:1;font-size:10px" onclick="window.onbСкачатьСохранённую()">⬇️ Скачать</button>
+        <button class="btn btn-ghost" style="font-size:10px"        onclick="window.onbУдалитьСохранённую()">🗑</button>
+      </div>
+    </div>` : ''}
 
     ${!ответ ? `<div style="margin-top:14px">
       <details style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px 12px">
@@ -201,7 +274,9 @@ window.onbЗапись = async function() {
     рекордер.onstop = async () => {
       поток.getTracks().forEach(t => t.stop());
       const blob = new Blob(аудиоЧанки, { type: mimeType });
-      последняяЗапись = blob;          // ⬅ СОХРАНЯЕМ СРАЗУ, ДО ОТПРАВКИ
+      последняяЗапись = blob;          // в RAM — на текущую сессию
+      // СОХРАНЯЕМ НА ДИСК БРАУЗЕРА (IndexedDB) — выживает перезагрузки и крэши
+      await сохранитьАудио(БЛОКИ[текущийБлок].key, blob, mimeType);
       const размерМб = (blob.size / 1024 / 1024).toFixed(1);
       document.getElementById('rec-status').textContent = `⏳ Отправляю на расшифровку… (${размерМб} МБ)`;
       await отправитьНаРасшифровку(blob, mimeType);
@@ -262,7 +337,8 @@ async function отправитьНаРасшифровку(blob, mimeType) {
     }
     const { text } = await res.json();
     ответы[БЛОКИ[текущийБлок].key] = text;
-    последняяЗапись = null; // успех — забываем
+    последняяЗапись = null;
+    await удалитьАудио(БЛОКИ[текущийБлок].key); // успех — чистим IndexedDB
     renderOnboarding();
   } catch (err) {
     clearTimeout(таймаут);
@@ -294,7 +370,7 @@ window.onbСкачать = function() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
-window.onbСохранитьТекст = function() {
+window.onbСохранитьТекст = async function() {
   const поле = document.getElementById('manual-text');
   const текст = поле?.value?.trim();
   if (!текст || текст.length < 10) {
@@ -303,6 +379,31 @@ window.onbСохранитьТекст = function() {
   }
   ответы[БЛОКИ[текущийБлок].key] = текст;
   последняяЗапись = null;
+  await удалитьАудио(БЛОКИ[текущийБлок].key);
+  renderOnboarding();
+};
+
+// ── ВОССТАНОВЛЕНИЕ ИЗ INDEXEDDB ──────────────────────────────────────────────
+window.onbВосстановить = async function() {
+  const сохр = await загрузитьАудио(БЛОКИ[текущийБлок].key);
+  if (!сохр) return;
+  последняяЗапись = сохр.blob;
+  последнийМимТип = сохр.mimeType;
+  document.getElementById('rec-status').textContent = `⏳ Повтор расшифровки сохранённой записи (${сохр.sizeMb} МБ)…`;
+  await отправитьНаРасшифровку(сохр.blob, сохр.mimeType);
+};
+
+window.onbСкачатьСохранённую = async function() {
+  const сохр = await загрузитьАудио(БЛОКИ[текущийБлок].key);
+  if (!сохр) return;
+  последняяЗапись = сохр.blob;
+  последнийМимТип = сохр.mimeType;
+  window.onbСкачать();
+};
+
+window.onbУдалитьСохранённую = async function() {
+  if (!confirm('Удалить сохранённую запись для этого блока? Восстановить будет нельзя.')) return;
+  await удалитьАудио(БЛОКИ[текущийБлок].key);
   renderOnboarding();
 };
 
