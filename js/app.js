@@ -9,6 +9,7 @@ import { renderProjects }     from './screens/projects.js';
 import { renderPeople }       from './screens/people.js';
 import { renderAchievements } from './screens/achievements.js';
 import { renderOnboarding }   from './screens/onboarding.js';
+import * as Sync              from './supabaseSync.js';
 
 // ── ИНИЦИАЛИЗАЦИЯ ─────────────────────────────────────────────────────────────
 const ОНБОРДИНГ_ПРОЙДЕН = localStorage.getItem('lifeos_onboarded') === 'true'
@@ -17,6 +18,31 @@ const ОНБОРДИНГ_ПРОЙДЕН = localStorage.getItem('lifeos_onboarded
 if (ОНБОРДИНГ_ПРОЙДЕН) DB.init();
 TG.init();
 injectUI(показатьТост, показатьXpFloat);
+
+// Подключаем Supabase (асинхронно — не блокирует UI)
+Sync.инициализироватьSupabase().then(async (ок) => {
+  if (ок) {
+    // Подтягиваем актуальные данные из облака
+    await Sync.загрузитьВсё();
+    // Если уже отрисован экран — перерисовываем с обновлёнными данными
+    const активныйТаб = document.querySelector('.nav-btn.active')?.dataset?.tab;
+    if (активныйТаб && window.goTab) window.goTab(null, активныйТаб);
+    показатьТост('☁️', 'Облако подключено', 'Синхронизация с Supabase активна', '');
+  }
+});
+
+// Подписываемся на все изменения в DB → пушим в Supabase
+window._дбHook = function(тип, объект) {
+  if (!Sync.активен()) return;
+  switch (тип) {
+    case 'task':     Sync.сохранитьЗадачу(объект);     break;
+    case 'project':  Sync.сохранитьПроект(объект);     break;
+    case 'profile':  Sync.сохранитьПрофиль(объект);    break;
+    case 'daily':    Sync.сохранитьДневник(объект);    break;
+    case 'health':   Sync.сохранитьЗдоровье(объект);   break;
+    case 'ach':      Sync.разблокироватьДостижение(объект); break;
+  }
+};
 
 let текущийТаб = 'dash';
 

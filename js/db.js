@@ -152,21 +152,23 @@ export const DB = {
 
   addTask(задача) {
     const задачи = this.getTasks();
-    задачи.push({
+    const новая = {
       id: 't' + Date.now(),
       xpValue: {do:75, schedule:50, delegate:25, eliminate:25}[задача.quadrant] || 25,
       done: false,
       createdAt: Date.now(),
       ...задача,
-    });
+    };
+    задачи.push(новая);
     this.saveTasks(задачи);
-    return задачи[задачи.length - 1];
+    window._дбHook?.('task', новая);
+    return новая;
   },
 
   toggleTask(id) {
     const задачи = this.getTasks();
     const т = задачи.find(x => x.id === id);
-    if (т) { т.done = !т.done; this.saveTasks(задачи); }
+    if (т) { т.done = !т.done; this.saveTasks(задачи); window._дбHook?.('task', т); }
     return т;
   },
 
@@ -176,8 +178,10 @@ export const DB = {
 
   addProject(проект) {
     const проекты = this.getProjects();
-    проекты.push({ id: 'p' + Date.now(), ...проект });
+    const новый = { id: 'p' + Date.now(), ...проект };
+    проекты.push(новый);
     this.saveProjects(проекты);
+    window._дбHook?.('project', новый);
   },
 
   // Люди
@@ -224,14 +228,19 @@ export const DB = {
 
   // Профиль / XP
   getProfile()    { return this.get('profile'); },
-  saveProfile(p)  { this.set('profile', p); },
+  saveProfile(p)  { this.set('profile', p); window._дбHook?.('profile', p); },
 
   // Достижения
   getAchievements()   { return this.get('achievements'); },
   unlockAchievement(key) {
     const достижения = this.getAchievements();
     const д = достижения.find(x => x.key === key);
-    if (д && !д.unlocked) { д.unlocked = true; this.set('achievements', достижения); return д; }
+    if (д && !д.unlocked) {
+      д.unlocked = true;
+      this.set('achievements', достижения);
+      window._дбHook?.('ach', key);
+      return д;
+    }
     return null;
   },
 
@@ -240,7 +249,7 @@ export const DB = {
 
   // Дневник
   getDailyLog()   { return this.get('dailyLog'); },
-  saveDailyLog(d) { this.set('dailyLog', d); },
+  saveDailyLog(d) { this.set('dailyLog', d); window._дбHook?.('daily', d); },
 
   // Еженедельный челлендж
   getWeeklyChallenge() { return this.get('weeklyChallenge'); },

@@ -302,25 +302,24 @@ async function разговор(ctx, текст) {
 }
 
 // ── ЗАГРУЗКА КОНТЕКСТА ИЗ SUPABASE ────────────────────────────────────────────
+// Single-user версия: всё под owner='george'
 async function загрузитьКонтекст(telegramId) {
-  if (!supa) return { подсказка: 'Supabase не подключён — у меня нет данных о тебе' };
+  if (!supa) return { подсказка: 'Supabase не подключён' };
 
   try {
-    // Telegram ID → user_id маппинг (требует таблицу tg_users)
-    const { data: usr } = await supa.from('tg_users').select('user_id').eq('telegram_id', telegramId).single();
-    if (!usr) return { подсказка: 'Привяжи телеграм-аккаунт через приложение' };
-
-    const [{ data: задачи }, { data: проф }, { data: проекты }] = await Promise.all([
-      supa.from('tasks').select('text,quadrant,done').eq('user_id', usr.user_id).limit(20),
-      supa.from('profiles').select('xp,level,streak').eq('id', usr.user_id).single(),
-      supa.from('projects').select('name,progress,current,target').eq('user_id', usr.user_id),
+    const [{ data: задачи }, { data: проф }, { data: проекты }, { data: ожидания }] = await Promise.all([
+      supa.from('tasks').select('text,quadrant,done').eq('owner', 'george').limit(30),
+      supa.from('profile').select('xp,level,streak,name').eq('owner', 'george').maybeSingle(),
+      supa.from('projects').select('name,progress,current,target,stage').eq('owner', 'george'),
+      supa.from('waitings').select('what,person_name,due_date,context').eq('owner', 'george').eq('status', 'waiting').limit(10),
     ]);
 
     return {
       профиль: проф,
-      задачи_открыто: задачи?.filter(t => !t.done).length || 0,
-      задачи_q1: задачи?.filter(t => !t.done && t.quadrant === 'do').map(t => t.text) || [],
-      проекты,
+      открытых_задач: задачи?.filter(t => !t.done).length || 0,
+      срочные: задачи?.filter(t => !t.done && t.quadrant === 'do').map(t => t.text).slice(0, 5) || [],
+      проекты: проекты?.map(p => `${p.name} (${p.progress}%, ${p.stage})`),
+      жду: ожидания?.map(w => `${w.what} от ${w.person_name || 'кого-то'} до ${w.due_date || '?'}`),
     };
   } catch (err) {
     console.error('загрузить контекст:', err);
@@ -331,28 +330,55 @@ async function загрузитьКонтекст(telegramId) {
 // ── СОХРАНЕНИЕ В SUPABASE ─────────────────────────────────────────────────────
 async function сохранитьВSupabase(telegramId, разбор) {
   if (!supa) return false;
+  const извл = разбор.извлечено || {};
   try {
-    const { data: usr } = await supa.from('tg_users').select('user_id').eq('telegram_id', telegramId).single();
-    if (!usr) return false;
+    // Запись в inbox для всех типов — лог
+    await supa.from('inbox').insert({
+      owner: 'george',
+      source: 'telegram',
+      raw_text: JSON.stringify(извл),
+      classified_as: разбор.тип,
+      processed: true,
+    }).catch(() => {});
 
     if (разбор.тип === 'task') {
-      const з = разбор.извлечено || {};
       await supa.from('tasks').insert({
-        user_id:  usr.user_id,
-        text:     з.text,
-        quadrant: з.quadrant || 'schedule',
-        cat:      з.cat,
-        time_label: з.time,
-        xp_value: ({do:75,schedule:50,delegate:25,eliminate:25}[з.quadrant] || 50),
+        owner:      'george',
+        text:       извл.text || 'Без названия',
+        quadrant:   извл.quadrant || 'schedule',
+        cat:        извл.cat,
+        time_label: извл.time,
+        xp_value:   ({do:75,schedule:50,delegate:25,eliminate:25}[извл.quadrant] || 50),
       });
       return true;
     }
-    // Другие типы — позже
-    return false;
+
+    if (разбор.тип === 'waiting') {
+      await supa.from('waitings').insert({
+        owner:        'george',
+        person_name:  извл.name,
+        what:         извл.what || извл.text || 'Что-то ждём',
+        context:      извл.context || извл.notes,
+        due_date:     parseDate(извл.due),
+        status:       'waiting',
+      });
+      return true;
+    }
+
+    // idea / decision / meeting_notes / mood — пока пишем в inbox (выше)
+    // потом эти типы пойдут в Notion
+    return разбор.тип !== 'question';
   } catch (err) {
-    console.error('сохранить:', err);
+    console.error('сохранить:', err.message);
     return false;
   }
+}
+
+function parseDate(стр) {
+  if (!стр) return null;
+  // Простой парсер — даты типа "2026-07-15" пропускаем как есть
+  if (/^\d{4}-\d{2}-\d{2}$/.test(стр)) return стр;
+  return null;
 }
 
 // ── ОБРАБОТКА ОШИБОК ──────────────────────────────────────────────────────────
