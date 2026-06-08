@@ -357,47 +357,67 @@ async function загрузитьКонтекст(telegramId) {
 
 // ── СОХРАНЕНИЕ В SUPABASE ─────────────────────────────────────────────────────
 async function сохранитьВSupabase(telegramId, разбор) {
-  if (!supa) return false;
+  if (!supa) {
+    console.log('[supa] клиент не инициализирован');
+    return false;
+  }
   const извл = разбор.извлечено || {};
   try {
-    // Запись в inbox для всех типов — лог
-    await supa.from('inbox').insert({
+    // Запись в inbox для всех типов — для лога
+    const inboxРезульт = await supa.from('inbox').insert({
       owner: 'george',
       source: 'telegram',
       raw_text: JSON.stringify(извл),
       classified_as: разбор.тип,
       processed: true,
-    }).catch(() => {});
+    });
+    if (inboxРезульт.error) {
+      console.error('[supa inbox ERROR]', JSON.stringify(inboxРезульт.error, null, 2));
+    } else {
+      console.log('[supa] inbox ✓');
+    }
 
     if (разбор.тип === 'task') {
-      await supa.from('tasks').insert({
+      const запись = {
         owner:      'george',
         text:       извл.text || 'Без названия',
         quadrant:   извл.quadrant || 'schedule',
-        cat:        извл.cat,
-        time_label: извл.time,
+        cat:        извл.cat || null,
+        time_label: извл.time || null,
         xp_value:   ({do:75,schedule:50,delegate:25,eliminate:25}[извл.quadrant] || 50),
-      });
+      };
+      console.log('[supa] INSERT task:', JSON.stringify(запись));
+      const { data, error } = await supa.from('tasks').insert(запись).select();
+      if (error) {
+        console.error('[supa task ERROR]', JSON.stringify(error, null, 2));
+        return false;
+      }
+      console.log('[supa] task ✓ id=' + data?.[0]?.id);
       return true;
     }
 
     if (разбор.тип === 'waiting') {
-      await supa.from('waitings').insert({
+      const { data, error } = await supa.from('waitings').insert({
         owner:        'george',
-        person_name:  извл.name,
+        person_name:  извл.name || null,
         what:         извл.what || извл.text || 'Что-то ждём',
-        context:      извл.context || извл.notes,
+        context:      извл.context || извл.notes || null,
         due_date:     parseDate(извл.due),
         status:       'waiting',
-      });
+      }).select();
+      if (error) {
+        console.error('[supa waiting ERROR]', JSON.stringify(error, null, 2));
+        return false;
+      }
+      console.log('[supa] waiting ✓ id=' + data?.[0]?.id);
       return true;
     }
 
-    // idea / decision / meeting_notes / mood — пока пишем в inbox (выше)
-    // потом эти типы пойдут в Notion
+    // idea / decision / meeting_notes / mood — записаны в inbox выше
+    // → когда подключим Notion, они пойдут туда
     return разбор.тип !== 'question';
   } catch (err) {
-    console.error('сохранить:', err.message);
+    console.error('[supa] исключение:', err.message, err.stack);
     return false;
   }
 }
