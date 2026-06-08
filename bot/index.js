@@ -330,15 +330,12 @@ async function обработатьВход(ctx, текст, opts = {}) {
     клавиатура.webApp('🔍 Открыть в приложении', WEBAPP_URL);
 
     const извлечено = JSON.stringify(разбор.извлечено, null, 2);
-    const notionСтрока = (() => {
-      if (!Notion.notionАктивен()) return '';
-      if (notionРезульт.записал) {
-        return `\n_📓 Записано в Notion → ${notionРезульт.база}_`;
-      }
-      // Для типов которые не пишем в Notion — никакой строки
-      const пишемВNotion = ['task', 'idea', 'decision', 'meeting_notes'].includes(разбор.тип);
-      return пишемВNotion ? `\n_⚠️ Notion не записал — проверь логи Railway_` : '';
-    })();
+    // Notion временно отключён в UI — Notion API имеет известный quirk с
+    // pre-existing databases и integration access. Когда будет решено —
+    // вернём сюда показ статуса. Пока: молча пишем что получится, не парим.
+    const notionСтрока = notionРезульт.записал
+      ? `\n_📓 Записано в Notion → ${notionРезульт.база}_`
+      : '';
 
     const подпись = (сохранён
       ? '_✓ сохранено в облако · видно в Mini App_'
