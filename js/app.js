@@ -186,6 +186,15 @@ function обработатьДиплинк() {
 
 // ── ЗАПУСК ────────────────────────────────────────────────────────────────────
 // ES-модули отложены — DOM уже готов к моменту выполнения
+
+// Принудительно сбрасываем возможные inline-стили после bfcache Safari
+{
+  const nav = document.querySelector('nav');
+  const fab = document.getElementById('fab');
+  if (nav) nav.style.display = '';
+  if (fab) fab.style.display = '';
+}
+
 if (!ОНБОРДИНГ_ПРОЙДЕН) {
   // Скрываем нижнюю навигацию и FAB на время онбординга
   document.querySelector('nav').style.display = 'none';
@@ -196,6 +205,22 @@ if (!ОНБОРДИНГ_ПРОЙДЕН) {
   обработатьДиплинк();
   смонтироватьAIКнопку();
 }
+
+// На случай возврата через back-button Safari — тоже сбрасываем
+window.addEventListener('pageshow', () => {
+  const ок = localStorage.getItem('lifeos_onboarded') === 'true'
+          || localStorage.getItem('lifeos_onboarding_skipped') === 'true';
+  if (ок) {
+    const nav = document.querySelector('nav');
+    const fab = document.getElementById('fab');
+    if (nav && nav.style.display === 'none') {
+      nav.style.display = '';
+      if (fab) fab.style.display = '';
+      // Если онбординг сейчас на экране — перерисуем dash
+      if (window.goTab) window.goTab(null, 'dash');
+    }
+  }
+});
 
 // ── ПЛАВАЮЩАЯ AI-КНОПКА (чат с директором) ────────────────────────────────────
 function смонтироватьAIКнопку() {
