@@ -118,28 +118,72 @@ function taskItemHTML(t, quadColor) {
   </div>`;
 }
 
-// ── ADD TASK MODAL ────────────────────────────────────────────────────────────
+// ── ADD TASK MODAL — голос + AI-классификация + быстрые даты ────────────────
+const ОСНОВНЫЕ_КАТЕГОРИИ = [
+  'Работа','Контент','Эксперименты','Семья','Встречи','Быт',
+  'Стратегия','Обучение','Деньги','Здоровье','Chill'
+];
+
 export function openAddTask() {
   const existing = document.getElementById('add-task-modal');
   if (existing) existing.remove();
 
+  // Состояние модалки: 'auto' = AI решит, конкретное значение = ручной выбор
+  window._addState = { cat: 'auto', quad: 'auto', time: '', recording: null };
+
   const div = document.createElement('div');
   div.id = 'add-task-modal';
   div.className = 'modal-overlay';
-  div.innerHTML = `<div class="modal-sheet">
+  div.innerHTML = `<div class="modal-sheet" style="max-height:90vh;overflow-y:auto">
     <div class="modal-handle"></div>
     <div class="modal-title">+ Новая задача</div>
-    <input id="task-input" class="input" placeholder="Что нужно сделать..." style="margin-bottom:12px" autofocus>
-    <div style="font-size:11px;color:rgba(232,237,245,.4);margin-bottom:8px">Категория</div>
-    <div class="cat-pills">
-      ${Object.entries(CAT_COLOR).map(([cat,c])=>`<button class="cat-pill" data-cat="${cat}" onclick="window.selectCat(this,'${cat}')" style="--cc:${c}">${cat}</button>`).join('')}
+
+    <!-- ГОЛОСОВОЙ ВВОД -->
+    <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
+      <button id="add-mic" onclick="window.addMicToggle()" style="
+        width:48px;height:48px;border-radius:50%;border:none;cursor:pointer;
+        background:linear-gradient(135deg,#FF4560,#FF6B6B);font-size:20px;color:#fff;
+        box-shadow:0 0 16px rgba(255,69,96,.35);flex-shrink:0">🎙️</button>
+      <div style="flex:1;font-size:11px;color:rgba(232,237,245,.55);line-height:1.4">
+        <div id="add-mic-hint">Нажми и говори — AI заполнит все поля</div>
+        <div id="add-mic-timer" style="font-family:'Orbitron';font-size:13px;color:#FF4560;margin-top:2px;min-height:16px"></div>
+      </div>
     </div>
-    <div style="font-size:11px;color:rgba(232,237,245,.4);margin-bottom:8px">Срок (опц.)</div>
-    <input id="task-time" class="input" placeholder="напр. сегодня, пт, июль..." style="margin-bottom:16px">
-    <div style="font-size:11px;color:rgba(232,237,245,.4);margin-bottom:8px">Квадрант</div>
-    <div class="quad-picker">
-      ${QUADS.map(q=>`<button class="quad-btn" data-quad="${q.key}" onclick="window.selectQuad(this,'${q.key}')" style="border-color:${q.color}22;color:${q.color}">${q.label}</button>`).join('')}
+
+    <!-- ТЕКСТ ЗАДАЧИ -->
+    <textarea id="task-input" class="input" rows="2" placeholder="Что нужно сделать..." style="margin-bottom:14px;resize:vertical"></textarea>
+
+    <!-- КНОПКА AI-РАЗБОР -->
+    <button id="add-ai-btn" class="btn btn-ghost" style="width:100%;margin-bottom:14px;font-size:11px;border-color:rgba(123,97,255,.3);color:#7B61FF" onclick="window.addAiClassify()">
+      🧠 Разобрать через AI (категорию, квадрант, время)
+    </button>
+
+    <!-- КАТЕГОРИЯ -->
+    <div style="font-size:11px;color:rgba(232,237,245,.4);margin-bottom:6px">Категория</div>
+    <div class="cat-pills" id="add-cats">
+      <button class="cat-pill active" data-cat="auto" onclick="window.addPickCat('auto')" style="--cc:#FFD700">✨ Авто</button>
+      ${ОСНОВНЫЕ_КАТЕГОРИИ.map(cat=>`<button class="cat-pill" data-cat="${cat}" onclick="window.addPickCat('${cat}')" style="--cc:${CAT_COLOR[cat]||'#00F5D4'}">${cat}</button>`).join('')}
     </div>
+
+    <!-- ДАТА -->
+    <div style="font-size:11px;color:rgba(232,237,245,.4);margin:14px 0 6px">Срок</div>
+    <div class="cat-pills" id="add-dates">
+      <button class="cat-pill active" data-date="" onclick="window.addPickDate(this, '')" style="--cc:#FFD700">— Без даты</button>
+      <button class="cat-pill" data-date="сегодня" onclick="window.addPickDate(this, 'сегодня')" style="--cc:#FF4560">📅 Сегодня</button>
+      <button class="cat-pill" data-date="завтра" onclick="window.addPickDate(this, 'завтра')" style="--cc:#FF9F43">📅 Завтра</button>
+      <button class="cat-pill" data-date="эта нед." onclick="window.addPickDate(this, 'эта нед.')" style="--cc:#00F5D4">📅 На неделе</button>
+      <button class="cat-pill" data-date="след. нед." onclick="window.addPickDate(this, 'след. нед.')" style="--cc:#7B61FF">📅 След. нед.</button>
+    </div>
+    <input id="task-time-custom" class="input" placeholder="...или впиши свой срок (15 июля, пт 14:00)" style="margin-top:8px;font-size:12px">
+
+    <!-- КВАДРАНТ -->
+    <div style="font-size:11px;color:rgba(232,237,245,.4);margin:14px 0 6px">Категория срочности</div>
+    <div class="quad-picker" id="add-quads">
+      <button class="quad-btn active" data-quad="auto" onclick="window.addPickQuad('auto')" style="border-color:rgba(255,215,0,.3);color:#FFD700">✨ Авто</button>
+      ${QUADS.map(q=>`<button class="quad-btn" data-quad="${q.key}" onclick="window.addPickQuad('${q.key}')" style="border-color:${q.color}33;color:${q.color}">${q.label}</button>`).join('')}
+    </div>
+
+    <!-- КНОПКИ -->
     <div style="margin-top:16px;display:flex;gap:8px">
       <button class="btn btn-ghost" style="flex:1" onclick="window.closeAddTask()">Отмена</button>
       <button class="btn btn-teal" style="flex:2" onclick="window.submitAddTask()">Добавить ✓</button>
@@ -149,16 +193,7 @@ export function openAddTask() {
   div.addEventListener('click', e => { if (e.target === div) window.closeAddTask(); });
   document.body.appendChild(div);
 
-  window._selectedCat  = 'Бизнес';
-  window._selectedQuad = 'do';
-
-  // Pre-select defaults
-  setTimeout(() => {
-    document.querySelector('[data-cat="Бизнес"]')?.classList.add('active');
-    document.querySelector('[data-quad="do"]')?.classList.add('active');
-    document.getElementById('task-input')?.focus();
-  }, 50);
-
+  setTimeout(() => document.getElementById('task-input')?.focus(), 100);
   TG.hapticImpact('light');
 }
 
@@ -181,26 +216,161 @@ window.closeAddTask = function() {
   TG.hapticImpact('light');
 };
 
-window.selectCat = function(el, cat) {
-  document.querySelectorAll('.cat-pill').forEach(b => b.classList.remove('active'));
+window.addPickCat = function(cat) {
+  document.querySelectorAll('#add-cats .cat-pill').forEach(b => b.classList.remove('active'));
+  document.querySelector(`#add-cats [data-cat="${CSS.escape(cat)}"]`)?.classList.add('active');
+  window._addState.cat = cat;
+  TG.hapticSelection();
+};
+
+window.addPickQuad = function(quad) {
+  document.querySelectorAll('#add-quads .quad-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`#add-quads [data-quad="${CSS.escape(quad)}"]`)?.classList.add('active');
+  window._addState.quad = quad;
+  TG.hapticSelection();
+};
+
+window.addPickDate = function(el, date) {
+  document.querySelectorAll('#add-dates .cat-pill').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
-  window._selectedCat = cat;
+  document.getElementById('task-time-custom').value = '';
+  window._addState.time = date;
   TG.hapticSelection();
 };
 
-window.selectQuad = function(el, quad) {
-  document.querySelectorAll('.quad-btn').forEach(b => b.classList.remove('active'));
-  el.classList.add('active', `active-${quad}`);
-  window._selectedQuad = quad;
-  TG.hapticSelection();
+// ── ГОЛОСОВОЙ ВВОД ────────────────────────────────────────────────────────────
+window.addMicToggle = async function() {
+  const кнопка = document.getElementById('add-mic');
+  const подсказка = document.getElementById('add-mic-hint');
+  const таймерЭл = document.getElementById('add-mic-timer');
+  const рек = window._addState.recording;
+
+  if (рек && рек.recorder?.state === 'recording') {
+    рек.recorder.stop();
+    кнопка.style.animation = 'none';
+    кнопка.textContent = '🎙️';
+    подсказка.textContent = '⏳ Расшифровываю и разбираю…';
+    if (рек.timer) clearInterval(рек.timer);
+    return;
+  }
+
+  try {
+    const поток = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+    const recorder = new MediaRecorder(поток, { mimeType });
+    const chunks = [];
+    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    recorder.onstop = async () => {
+      поток.getTracks().forEach(t => t.stop());
+      const blob = new Blob(chunks, { type: mimeType });
+      await отправитьГолос(blob, mimeType);
+    };
+    recorder.start();
+    let секунды = 0;
+    const timer = setInterval(() => {
+      секунды++;
+      const m = String(Math.floor(секунды/60)).padStart(2,'0');
+      const s = String(секунды%60).padStart(2,'0');
+      таймерЭл.textContent = `${m}:${s}`;
+    }, 1000);
+
+    window._addState.recording = { recorder, timer };
+    кнопка.textContent = '⏹';
+    кнопка.style.animation = 'pulseRec 1.2s ease-in-out infinite';
+    подсказка.textContent = 'Идёт запись… Нажми ⏹ когда закончишь';
+  } catch (err) {
+    подсказка.innerHTML = `❌ Нет доступа к микрофону`;
+    console.error(err);
+  }
 };
 
-window.submitAddTask = function() {
+async function отправитьГолос(blob, mimeType) {
+  try {
+    const res = await fetch('/api/transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': mimeType },
+      body: blob,
+    });
+    if (!res.ok) throw new Error('Whisper не ответил');
+    const { text } = await res.json();
+    document.getElementById('task-input').value = text;
+    document.getElementById('add-mic-hint').textContent = '✓ Текст готов. Разбираю через AI…';
+    await window.addAiClassify();
+  } catch (err) {
+    document.getElementById('add-mic-hint').textContent = `❌ ${err.message}`;
+  }
+}
+
+// ── AI РАЗБОР ────────────────────────────────────────────────────────────────
+window.addAiClassify = async function() {
   const text = document.getElementById('task-input')?.value?.trim();
   if (!text) { document.getElementById('task-input')?.focus(); return; }
-  const time = document.getElementById('task-time')?.value?.trim() || '—';
-  DB.addTask({ text, cat: window._selectedCat || 'Бизнес', time, quadrant: window._selectedQuad || 'do' });
+  const подсказка = document.getElementById('add-mic-hint');
+  const кнопка = document.getElementById('add-ai-btn');
+  кнопка.textContent = '🧠 Разбираю…';
+  кнопка.disabled = true;
+  try {
+    const res = await fetch('/api/classify-task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ текст: text }),
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.error || 'API ошибка');
+    }
+    const разбор = await res.json();
+    // Применяем результат
+    if (разбор.text)     document.getElementById('task-input').value = разбор.text;
+    if (разбор.cat)      window.addPickCat(разбор.cat);
+    if (разбор.quadrant) window.addPickQuad(разбор.quadrant);
+    if (разбор.time)     {
+      // Если совпало с быстрой кнопкой — выделяем её, иначе впишем в custom
+      const быстрая = document.querySelector(`#add-dates [data-date="${CSS.escape(разбор.time)}"]`);
+      if (быстрая) window.addPickDate(быстрая, разбор.time);
+      else { document.getElementById('task-time-custom').value = разбор.time; window._addState.time = разбор.time; }
+    }
+    подсказка.textContent = `✓ AI разобрал: ${разбор.cat || '?'} · ${разбор.quadrant || '?'} · ${разбор.уверенность || 0}%`;
+    TG.hapticSuccess();
+  } catch (err) {
+    подсказка.textContent = `⚠️ ${err.message}`;
+    TG.hapticError();
+  } finally {
+    кнопка.textContent = '🧠 Разобрать через AI (категорию, квадрант, время)';
+    кнопка.disabled = false;
+  }
+};
+
+window.submitAddTask = async function() {
+  const text = document.getElementById('task-input')?.value?.trim();
+  if (!text) { document.getElementById('task-input')?.focus(); return; }
+
+  let { cat, quad, time } = window._addState;
+  // Если что-то на «Авто» и AI не запускали — запустим прямо сейчас
+  if (cat === 'auto' || quad === 'auto') {
+    await window.addAiClassify();
+    ({ cat, quad, time } = window._addState);
+  }
+
+  // Дата: либо выбрана быстрой кнопкой, либо вписана в custom-поле
+  const customTime = document.getElementById('task-time-custom')?.value?.trim();
+  const финальноеВремя = customTime || time || '—';
+
+  DB.addTask({
+    text,
+    cat:      cat === 'auto' ? 'Работа' : cat,
+    time:     финальноеВремя,
+    quadrant: quad === 'auto' ? 'schedule' : quad,
+  });
   window.closeAddTask();
   TG.hapticSuccess();
   renderTasks();
 };
+
+// Анимация для записи (если ещё не подгружена)
+if (!document.getElementById('add-task-anim')) {
+  const st = document.createElement('style');
+  st.id = 'add-task-anim';
+  st.textContent = `@keyframes pulseRec { 0%,100%{transform:scale(1);box-shadow:0 0 20px rgba(255,69,96,.5)} 50%{transform:scale(1.08);box-shadow:0 0 35px rgba(0,245,212,.6)} }`;
+  document.head.appendChild(st);
+}
