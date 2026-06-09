@@ -1,12 +1,17 @@
 // ── СИНХРОНИЗАЦИЯ Mini App ↔ Supabase ────────────────────────────────────────
-// Логика:
-//   1. На старте: pull из Supabase → если есть данные, перетираем localStorage
-//   2. После каждой записи: push в Supabase (fire-and-forget)
-//   3. Без блокировки UI — Mini App работает на localStorage, Supabase = облако
+// Прямой REST API — без библиотеки supabase-js, чтобы избежать проблем
+// с динамической загрузкой и новым форматом ключей sb_publishable_*
 
-let клиент = null;
+let базаURL = '';
+let ключ = '';
 let владелец = 'george';
 let готов = false;
+
+const заголовки = () => ({
+  apikey: ключ,
+  Authorization: `Bearer ${ключ}`,
+  'Content-Type': 'application/json',
+});
 
 // ── ИНИЦИАЛИЗАЦИЯ ─────────────────────────────────────────────────────────────
 export async function инициализироватьSupabase() {
@@ -14,16 +19,22 @@ export async function инициализироватьSupabase() {
     const ответ = await fetch('/api/config');
     const конфиг = await ответ.json();
     if (!конфиг.supabaseUrl || !конфиг.supabaseAnonKey) {
-      console.log('[Supabase] не настроен — работаем на localStorage');
+      console.log('[Supabase] env не настроен — работаем на localStorage');
       return false;
     }
+    базаURL = конфиг.supabaseUrl.replace(/\/$/, '') + '/rest/v1';
+    ключ = конфиг.supabaseAnonKey;
     владелец = конфиг.owner || 'george';
 
-    // Динамический импорт supabase-js из CDN
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.45.0');
-    клиент = createClient(конфиг.supabaseUrl, конфиг.supabaseAnonKey);
+    // Тест соединения
+    const тест = await fetch(`${базаURL}/profile?owner=eq.${владелец}&select=owner`, { headers: заголовки() });
+    if (!тест.ok) {
+      console.warn('[Supabase] тест соединения упал:', тест.status, await тест.text());
+      return false;
+    }
+
     готов = true;
-    console.log('[Supabase] подключён');
+    console.log('[Supabase] подключён через REST API');
     return true;
   } catch (err) {
     console.warn('[Supabase] ошибка инициализации:', err);
@@ -31,67 +42,90 @@ export async function инициализироватьSupabase() {
   }
 }
 
-export function активен() { return готов && клиент !== null; }
+export function активен() { return готов; }
+
+// ── REST-ХЕЛПЕРЫ ──────────────────────────────────────────────────────────────
+async function запросSelect(таблица, params = '') {
+  const url = `${базаURL}/${таблица}?owner=eq.${владелец}&select=*${params ? '&' + params : ''}`;
+  const res = await fetch(url, { headers: заголовки() });
+  if (!res.ok) {
+    console.warn(`[Supabase ${таблица} GET]`, res.status, await res.text());
+    return [];
+  }
+  return res.json();
+}
+
+async function запросUpsert(таблица, тело, conflictKey = 'id') {
+  const url = `${базаURL}/${таблица}?on_conflict=${conflictKey}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { ...заголовки(), Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify(Array.isArray(тело) ? тело : [тело]),
+  });
+  if (!res.ok) console.warn(`[Supabase ${таблица} UPSERT]`, res.status, await res.text());
+  return res.ok;
+}
 
 // ── PULL: загружаем всё из облака в localStorage ─────────────────────────────
 export async function загрузитьВсё() {
   if (!активен()) return false;
   try {
-    const [tasks, projects, people, profile, dailyLog, quests, achievements] = await Promise.all([
-      клиент.from('tasks').select('*').eq('owner', владелец).order('created_at'),
-      клиент.from('projects').select('*').eq('owner', владелец),
-      клиент.from('people').select('*').eq('owner', владелец),
-      клиент.from('profile').select('*').eq('owner', владелец).single(),
-      клиент.from('daily_log').select('*').eq('owner', владелец).eq('date', new Date().toISOString().split('T')[0]).maybeSingle(),
-      клиент.from('quests').select('*').eq('owner', владелец).eq('date', new Date().toISOString().split('T')[0]),
-      клиент.from('achievements').select('*').eq('owner', владелец),
+    const сегодня = new Date().toISOString().split('T')[0];
+    const [tasks, projects, people, profileАрр, dailyАрр, quests, achievements] = await Promise.all([
+      запросSelect('tasks', 'order=created_at.asc'),
+      запросSelect('projects'),
+      запросSelect('people'),
+      запросSelect('profile'),
+      запросSelect('daily_log', `date=eq.${сегодня}`),
+      запросSelect('quests', `date=eq.${сегодня}`),
+      запросSelect('achievements'),
     ]);
 
-    // Маппинг snake_case → camelCase
-    if (tasks.data?.length) {
-      localStorage.setItem('lifeos_tasks', JSON.stringify(tasks.data.map(маппингЗадачи)));
+    if (tasks?.length) {
+      localStorage.setItem('lifeos_tasks', JSON.stringify(tasks.map(маппингЗадачи)));
     }
-    if (projects.data?.length) {
-      localStorage.setItem('lifeos_projects', JSON.stringify(projects.data.map(маппингПроекта)));
+    if (projects?.length) {
+      localStorage.setItem('lifeos_projects', JSON.stringify(projects.map(маппингПроекта)));
     }
-    if (people.data?.length) {
-      localStorage.setItem('lifeos_people', JSON.stringify(people.data.map(маппингЧеловека)));
+    if (people?.length) {
+      localStorage.setItem('lifeos_people', JSON.stringify(people.map(маппингЧеловека)));
     }
-    if (profile.data) {
+    const профиль = profileАрр?.[0];
+    if (профиль) {
       localStorage.setItem('lifeos_profile', JSON.stringify({
-        name:       profile.data.name,
-        tagline:    profile.data.tagline,
-        avatar:     profile.data.avatar,
-        xp:         profile.data.xp,
-        level:      profile.data.level,
-        streak:     profile.data.streak,
-        lastActive: profile.data.last_active,
+        name:       профиль.name,
+        tagline:    профиль.tagline,
+        avatar:     профиль.avatar,
+        xp:         профиль.xp,
+        level:      профиль.level,
+        streak:     профиль.streak,
+        lastActive: профиль.last_active,
       }));
-      if (profile.data.rpg_stats) {
-        localStorage.setItem('lifeos_rpgStats', JSON.stringify(profile.data.rpg_stats));
+      if (профиль.rpg_stats) {
+        localStorage.setItem('lifeos_rpgStats', JSON.stringify(профиль.rpg_stats));
       }
     }
-    if (dailyLog.data) {
+    const dailyЗап = dailyАрр?.[0];
+    if (dailyЗап) {
       localStorage.setItem('lifeos_dailyLog', JSON.stringify({
-        energy: dailyLog.data.energy_level,
-        mood:   dailyLog.data.mood,
-        focus:  dailyLog.data.focus_h,
-        note:   dailyLog.data.note,
+        energy: dailyЗап.energy_level,
+        mood:   dailyЗап.mood,
+        focus:  dailyЗап.focus_h,
+        note:   dailyЗап.note,
       }));
     }
-    if (quests.data?.length) {
-      localStorage.setItem('lifeos_quests', JSON.stringify(quests.data.map(q => ({
+    if (quests?.length) {
+      localStorage.setItem('lifeos_quests', JSON.stringify(quests.map(q => ({
         id: q.id, title: q.title, icon: q.icon, xp: q.xp_reward, done: q.completed
       }))));
     }
-    if (achievements.data?.length) {
+    if (achievements?.length) {
       const локальные = JSON.parse(localStorage.getItem('lifeos_achievements') || '[]');
-      const разблокированные = new Set(achievements.data.map(a => a.achievement_key));
-      локальные.forEach(a => {
-        if (разблокированные.has(a.key)) a.unlocked = true;
-      });
+      const разблокированные = new Set(achievements.map(a => a.achievement_key));
+      локальные.forEach(a => { if (разблокированные.has(a.key)) a.unlocked = true; });
       localStorage.setItem('lifeos_achievements', JSON.stringify(локальные));
     }
+    console.log(`[Supabase] подтянул: задач=${tasks?.length||0} проектов=${projects?.length||0} людей=${people?.length||0}`);
     return true;
   } catch (err) {
     console.warn('[Supabase] не удалось загрузить:', err);
@@ -102,102 +136,90 @@ export async function загрузитьВсё() {
 // ── PUSH: отправляем изменения в облако ──────────────────────────────────────
 export async function сохранитьЗадачу(задача) {
   if (!активен()) return;
-  try {
-    await клиент.from('tasks').upsert({
-      id:          задача.id?.startsWith('t') ? undefined : задача.id, // UUID только
-      owner:       владелец,
-      text:        задача.text,
-      quadrant:    задача.quadrant,
-      cat:         задача.cat,
-      time_label:  задача.time,
-      done:        задача.done,
-      xp_value:    задача.xpValue,
-    }, { onConflict: 'id' });
-  } catch (err) { console.warn('[Supabase] task save:', err); }
+  await запросUpsert('tasks', {
+    ...(uuidValid(задача.id) ? { id: задача.id } : {}),
+    owner:      владелец,
+    text:       задача.text,
+    quadrant:   задача.quadrant,
+    cat:        задача.cat,
+    time_label: задача.time,
+    done:       задача.done,
+    xp_value:   задача.xpValue,
+  });
 }
 
 export async function сохранитьПроект(проект) {
   if (!активен()) return;
-  try {
-    await клиент.from('projects').upsert({
-      id:           проект.id?.startsWith('p') ? undefined : проект.id,
-      owner:        владелец,
-      name:         проект.name,
-      emoji:        проект.emoji,
-      target:       проект.target,
-      current:      проект.current,
-      progress:     проект.progress,
-      color:        проект.color,
-      stage:        проект.stage,
-      tasks_count:  проект.tasksCount,
-    }, { onConflict: 'id' });
-  } catch (err) { console.warn('[Supabase] project save:', err); }
+  await запросUpsert('projects', {
+    ...(uuidValid(проект.id) ? { id: проект.id } : {}),
+    owner:        владелец,
+    name:         проект.name,
+    emoji:        проект.emoji,
+    target:       проект.target,
+    current:      проект.current,
+    progress:     проект.progress,
+    color:        проект.color,
+    stage:        проект.stage,
+    tasks_count:  проект.tasksCount,
+  });
 }
 
 export async function сохранитьПрофиль(профиль) {
   if (!активен()) return;
-  try {
-    await клиент.from('profile').upsert({
-      owner:       владелец,
-      name:        профиль.name,
-      tagline:     профиль.tagline,
-      avatar:      профиль.avatar,
-      xp:          профиль.xp,
-      level:       профиль.level,
-      streak:      профиль.streak,
-      last_active: профиль.lastActive,
-      updated_at:  new Date().toISOString(),
-    }, { onConflict: 'owner' });
-  } catch (err) { console.warn('[Supabase] profile save:', err); }
+  await запросUpsert('profile', {
+    owner:       владелец,
+    name:        профиль.name,
+    tagline:     профиль.tagline,
+    avatar:      профиль.avatar,
+    xp:          профиль.xp,
+    level:       профиль.level,
+    streak:      профиль.streak,
+    last_active: профиль.lastActive,
+    updated_at:  new Date().toISOString(),
+  }, 'owner');
 }
 
 export async function сохранитьДневник(д) {
   if (!активен()) return;
-  try {
-    await клиент.from('daily_log').upsert({
-      owner: владелец,
-      date:  new Date().toISOString().split('T')[0],
-      energy_level: д.energy,
-      mood: д.mood,
-      focus_h: д.focus,
-      note: д.note,
-    }, { onConflict: 'owner,date' });
-  } catch (err) { console.warn('[Supabase] daily_log:', err); }
+  await запросUpsert('daily_log', {
+    owner: владелец,
+    date:  new Date().toISOString().split('T')[0],
+    energy_level: д.energy,
+    mood: д.mood,
+    focus_h: д.focus,
+    note: д.note,
+  }, 'owner,date');
 }
 
 export async function сохранитьЗдоровье(h) {
   if (!активен()) return;
-  try {
-    await клиент.from('health_metrics').upsert({
-      owner: владелец,
-      date:  new Date().toISOString().split('T')[0],
-      sleep_h:           h.sleep?.hours,
-      sleep_quality_pct: h.sleep?.quality,
-      deep_pct:          h.sleep?.deep,
-      rem_pct:           h.sleep?.rem,
-      hrv_ms:            h.hrv,
-      resting_hr:        h.restingHr,
-      steps:             h.steps,
-      calories_burned:   h.calories,
-      km:                h.km,
-      move_pct:          h.move,
-      exercise_pct:      h.exercise,
-      stand_pct:         h.stand,
-    }, { onConflict: 'owner,date' });
-  } catch (err) { console.warn('[Supabase] health:', err); }
+  await запросUpsert('health_metrics', {
+    owner: владелец,
+    date:  new Date().toISOString().split('T')[0],
+    sleep_h:           h.sleep?.hours,
+    sleep_quality_pct: h.sleep?.quality,
+    deep_pct:          h.sleep?.deep,
+    rem_pct:           h.sleep?.rem,
+    hrv_ms:            h.hrv,
+    resting_hr:        h.restingHr,
+    steps:             h.steps,
+    calories_burned:   h.calories,
+    km:                h.km,
+    move_pct:          h.move,
+    exercise_pct:      h.exercise,
+    stand_pct:         h.stand,
+  }, 'owner,date');
 }
 
 export async function разблокироватьДостижение(key) {
   if (!активен()) return;
-  try {
-    await клиент.from('achievements').upsert({
-      owner: владелец,
-      achievement_key: key,
-    }, { onConflict: 'owner,achievement_key' });
-  } catch (err) { console.warn('[Supabase] ach:', err); }
+  await запросUpsert('achievements', {
+    owner: владелец,
+    achievement_key: key,
+  }, 'owner,achievement_key');
 }
 
-// ── МАППИНГ КОЛОНОК БД → СВОЙСТВА UI ─────────────────────────────────────────
+// ── МАППИНГ snake_case → camelCase ───────────────────────────────────────────
 function маппингЗадачи(t) {
   return {
     id: t.id, text: t.text, cat: t.cat, time: t.time_label,
@@ -221,4 +243,8 @@ function маппингЧеловека(p) {
     urgency: p.urgency, border: p.border, avatar: p.avatar,
     last: p.last_contact, notes: p.notes, log: p.log,
   };
+}
+
+function uuidValid(s) {
+  return typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 }
