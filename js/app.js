@@ -7,6 +7,7 @@ import { renderTasks }        from './screens/tasks.js';
 import { renderHealth }       from './screens/health.js';
 import { renderProjects }     from './screens/projects.js';
 import { renderPeople }       from './screens/people.js';
+import { renderContent }      from './screens/content.js';
 import { renderAchievements } from './screens/achievements.js';
 import { renderOnboarding }   from './screens/onboarding.js';
 import * as Sync              from './supabaseSync.js';
@@ -50,6 +51,7 @@ const ЭКРАНЫ = {
   dash:         renderDash,
   tasks:        renderTasks,
   health:       renderHealth,
+  content:      renderContent,
   projects:     renderProjects,
   people:       renderPeople,
   achievements: renderAchievements,
