@@ -4,15 +4,30 @@ import { onTaskToggled } from '../gamification.js';
 import { TG } from '../telegram.js';
 
 const CAT_COLOR = {
-  'Бизнес':'#00F5D4','Деньги':'#FFD700','Клуб':'#7B61FF','Стратегия':'#00E396',
-  'Здоровье':'#FF6B6B','Контент':'#FF9F43','Юрид.':'#C8D6E5','Ловушка':'rgba(232,237,245,.3)',
-  'Семья':'#FF9F43','Личное':'#00C9FF',
+  // Основные категории (соответствуют твоим календарям)
+  'Работа':       '#00F5D4',
+  'Контент':      '#FF9F43',
+  'Эксперименты': '#7B61FF',
+  'Семья':        '#FF6B6B',
+  'Встречи':      '#00C9FF',
+  'Быт':          '#FFD700',
+  'Стратегия':    '#00E396',
+  'Обучение':     '#FFD58A',
+  'Деньги':       '#FFD700',
+  'Здоровье':     '#FF6B6B',
+  'Chill':        '#7B61FF',
+  // Совместимость со старыми категориями
+  'Бизнес':       '#00F5D4',
+  'Клуб':         '#7B61FF',
+  'Юрид.':        '#C8D6E5',
+  'Ловушка':      'rgba(232,237,245,.3)',
+  'Личное':       '#00C9FF',
 };
 
 const QUADS = [
-  { key:'do',       label:'🔥 ОГОНЬ',    sub:'Делать сейчас',     color:'#FF4560', cls:'accent-red'    },
-  { key:'schedule', label:'🎯 ИГЛА',     sub:'Двигает к цели',    color:'#00F5D4', cls:'accent-teal'   },
-  { key:'delegate', label:'🤝 СКИНУТЬ',  sub:'Чужими руками',     color:'#7B61FF', cls:'accent-violet' },
+  { key:'do',       label:'⚡ ШТУРМ',    sub:'Важно · срочно',    color:'#FF4560', cls:'accent-red'    },
+  { key:'schedule', label:'🏔️ РОСТ',     sub:'Двигает к цели',    color:'#00F5D4', cls:'accent-teal'   },
+  { key:'delegate', label:'⚙️ РУТИНА',   sub:'Бытовая механика',  color:'#7B61FF', cls:'accent-violet' },
   { key:'eliminate',label:'🌀 ЛОВУШКА',  sub:'Ворует время',      color:'rgba(232,237,245,.35)',cls:'accent-gray'},
 ];
 
