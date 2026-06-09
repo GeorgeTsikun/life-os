@@ -25,9 +25,12 @@ Sync.инициализироватьSupabase().then(async (ок) => {
   if (ок) {
     // Подтягиваем актуальные данные из облака
     await Sync.загрузитьВсё();
-    // Если уже отрисован экран — перерисовываем с обновлёнными данными
-    const активныйТаб = document.querySelector('.nav-btn.active')?.dataset?.tab;
-    if (активныйТаб && window.goTab) window.goTab(null, активныйТаб);
+    // Перерисовываем активный таб ТОЛЬКО если онбординг уже пройден
+    // (иначе пользователь сейчас в форме — не трогаем его UI)
+    if (ОНБОРДИНГ_ПРОЙДЕН) {
+      const активныйТаб = document.querySelector('.nav-btn.active')?.dataset?.tab;
+      if (активныйТаб && window.goTab) window.goTab(null, активныйТаб);
+    }
     показатьТост('☁️', 'Облако подключено', 'Синхронизация с Supabase активна', '');
   }
 });
@@ -64,6 +67,12 @@ const ЭКРАНЫ = {
 
 // ── НАВИГАЦИЯ ─────────────────────────────────────────────────────────────────
 window.goTab = function(кнопка, таб) {
+  // Гарантируем что nav и fab видны (защита от bfcache и инлайн-стилей онбординга)
+  const _nav = document.querySelector('nav');
+  const _fab = document.getElementById('fab');
+  if (_nav) _nav.style.display = '';
+  if (_fab) _fab.style.display = '';
+
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   if (кнопка) {
     кнопка.classList.add('active');
