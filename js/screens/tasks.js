@@ -10,10 +10,10 @@ const CAT_COLOR = {
 };
 
 const QUADS = [
-  { key:'do',       label:'🔴 ВАЖНО · СРОЧНО',     sub:'Делай сейчас',  color:'#FF4560', cls:'accent-red'    },
-  { key:'schedule', label:'🟢 ВАЖНО · НЕ СРОЧНО',  sub:'Запланируй',    color:'#00F5D4', cls:'accent-teal'   },
-  { key:'delegate', label:'🟡 НЕ ВАЖНО · СРОЧНО',  sub:'Делегируй',     color:'#7B61FF', cls:'accent-violet' },
-  { key:'eliminate',label:'⚫ НЕ ВАЖНО · НЕ СРОЧНО',sub:'Удали',        color:'rgba(232,237,245,.35)',cls:'accent-gray'},
+  { key:'do',       label:'🔥 ОГОНЬ',    sub:'Делать сейчас',     color:'#FF4560', cls:'accent-red'    },
+  { key:'schedule', label:'🎯 ИГЛА',     sub:'Двигает к цели',    color:'#00F5D4', cls:'accent-teal'   },
+  { key:'delegate', label:'🤝 СКИНУТЬ',  sub:'Чужими руками',     color:'#7B61FF', cls:'accent-violet' },
+  { key:'eliminate',label:'🌀 ЛОВУШКА',  sub:'Ворует время',      color:'rgba(232,237,245,.35)',cls:'accent-gray'},
 ];
 
 let viewMode = 'list'; // 'list' | 'matrix'
