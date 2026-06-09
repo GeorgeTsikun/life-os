@@ -42,6 +42,11 @@ window._дбHook = function(тип, объект) {
     case 'daily':    Sync.сохранитьДневник(объект);    break;
     case 'health':   Sync.сохранитьЗдоровье(объект);   break;
     case 'ach':      Sync.разблокироватьДостижение(объект); break;
+    case 'content_item':
+      Sync.сохранитьКонтентЭлемент(объект); break;
+    case 'content':  // массив целиком — пуш по одному элементу
+      if (Array.isArray(объект)) объект.forEach(x => Sync.сохранитьКонтентЭлемент(x));
+      break;
   }
 };
 

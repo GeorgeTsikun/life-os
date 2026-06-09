@@ -71,7 +71,7 @@ export async function загрузитьВсё() {
   if (!активен()) return false;
   try {
     const сегодня = new Date().toISOString().split('T')[0];
-    const [tasks, projects, people, profileАрр, dailyАрр, quests, achievements] = await Promise.all([
+    const [tasks, projects, people, profileАрр, dailyАрр, quests, achievements, contentItems] = await Promise.all([
       запросSelect('tasks', 'order=created_at.asc'),
       запросSelect('projects'),
       запросSelect('people'),
@@ -79,6 +79,7 @@ export async function загрузитьВсё() {
       запросSelect('daily_log', `date=eq.${сегодня}`),
       запросSelect('quests', `date=eq.${сегодня}`),
       запросSelect('achievements'),
+      запросSelect('content_items', 'order=created_at.desc').catch(() => []),
     ]);
 
     if (tasks?.length) {
@@ -125,7 +126,10 @@ export async function загрузитьВсё() {
       локальные.forEach(a => { if (разблокированные.has(a.key)) a.unlocked = true; });
       localStorage.setItem('lifeos_achievements', JSON.stringify(локальные));
     }
-    console.log(`[Supabase] подтянул: задач=${tasks?.length||0} проектов=${projects?.length||0} людей=${people?.length||0}`);
+    if (contentItems?.length) {
+      localStorage.setItem('lifeos_content', JSON.stringify(contentItems.map(маппингКонтента)));
+    }
+    console.log(`[Supabase] подтянул: задач=${tasks?.length||0} проектов=${projects?.length||0} людей=${people?.length||0} контента=${contentItems?.length||0}`);
     return true;
   } catch (err) {
     console.warn('[Supabase] не удалось загрузить:', err);
@@ -219,6 +223,25 @@ export async function разблокироватьДостижение(key) {
   }, 'owner,achievement_key');
 }
 
+export async function сохранитьКонтентЭлемент(c) {
+  if (!активен()) return;
+  await запросUpsert('content_items', {
+    ...(uuidValid(c.id) ? { id: c.id } : {}),
+    owner:        владелец,
+    title:        c.title,
+    text:         c.text,
+    notes:        c.notes,
+    platforms:    c.platforms || [],
+    content_type: c.content_type,
+    status:       c.status || 'idea',
+    publish_date: c.publish_date,
+    refs:         c.refs || [],
+    hashtags:     c.hashtags || [],
+    caption:      c.caption,
+    updated_at:   new Date().toISOString(),
+  });
+}
+
 // ── МАППИНГ snake_case → camelCase ───────────────────────────────────────────
 function маппингЗадачи(t) {
   return {
@@ -242,6 +265,17 @@ function маппингЧеловека(p) {
     commitment: p.commitment, mine: p.mine, due: p.due_label,
     urgency: p.urgency, border: p.border, avatar: p.avatar,
     last: p.last_contact, notes: p.notes, log: p.log,
+  };
+}
+
+function маппингКонтента(c) {
+  return {
+    id: c.id, title: c.title, text: c.text, notes: c.notes,
+    platforms: c.platforms || [], content_type: c.content_type,
+    status: c.status || 'idea',
+    publish_date: c.publish_date, scheduled_at: c.scheduled_at,
+    refs: c.refs || [], hashtags: c.hashtags || [], caption: c.caption,
+    created_at: c.created_at ? new Date(c.created_at).getTime() : Date.now(),
   };
 }
 
