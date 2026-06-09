@@ -1,65 +1,28 @@
-const CACHE = 'life-os-v1';
-const STATIC = [
-  '/',
-  '/index.html',
-  '/css/base.css',
-  '/css/components.css',
-  '/css/screens.css',
-  '/js/app.js',
-  '/js/db.js',
-  '/js/gamification.js',
-  '/js/telegram.js',
-  '/js/screens/dash.js',
-  '/js/screens/tasks.js',
-  '/js/screens/health.js',
-  '/js/screens/projects.js',
-  '/js/screens/people.js',
-  '/js/screens/achievements.js',
-];
+// ── Service Worker — ВРЕМЕННО ОТКЛЮЧЁН ──────────────────────────────────────
+// Старая версия слишком жёстко кэшировала и не давала видеть новые экраны.
+// Этот пустой SW заменяет старый, чистит все его кэши, и unregister-ит себя.
+// После активации страница загружается напрямую с сети.
 
 self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(STATIC)).then(() => self.skipWaiting())
-  );
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
-  );
+  e.waitUntil((async () => {
+    // Удаляем все старые кэши
+    const ключи = await caches.keys();
+    await Promise.all(ключи.map(k => caches.delete(k)));
+    // Берём контроль над всеми вкладками
+    await self.clients.claim();
+    // Само-разрегистрация — следующий заход уже без SW
+    await self.registration.unregister();
+    // Заставляем все открытые вкладки перезагрузиться
+    const клиенты = await self.clients.matchAll({ type: 'window' });
+    клиенты.forEach(c => c.navigate(c.url));
+  })());
 });
 
+// Все fetch-запросы идут напрямую в сеть (никакого кэширования)
 self.addEventListener('fetch', e => {
-  const url = new URL(e.request.url);
-  // Network-first for Supabase API
-  if (url.hostname.includes('supabase')) {
-    e.respondWith(
-      fetch(e.request).catch(() => new Response('{"error":"offline"}', { headers: { 'Content-Type': 'application/json' } }))
-    );
-    return;
-  }
-  // Cache-first for everything else
-  e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).then(resp => {
-      if (resp.ok) {
-        const clone = resp.clone();
-        caches.open(CACHE).then(c => c.put(e.request, clone));
-      }
-      return resp;
-    }))
-  );
+  // ничего не делаем — браузер сам обработает
 });
-
-// Background sync for offline task creation
-self.addEventListener('sync', e => {
-  if (e.tag === 'sync-tasks') {
-    e.waitUntil(syncPendingTasks());
-  }
-});
-
-async function syncPendingTasks() {
-  // Tasks saved offline will be synced when connection returns
-  // Implementation handled in db.js
-}

@@ -163,9 +163,10 @@ window.addEventListener('beforeinstallprompt', e => {
   }, 30000);
 });
 
-// ── СЕРВИС-ВОРКЕР ─────────────────────────────────────────────────────────────
+// ── СЕРВИС-ВОРКЕР: разрегистрировать если был ─────────────────────────────────
+// SW отключён временно — он кэшировал слишком жёстко и не давал видеть новые версии.
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));
 }
 
 // ── ДИПЛИНК ИЗ URL ────────────────────────────────────────────────────────────
