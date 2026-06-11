@@ -26,12 +26,44 @@ Sync.инициализироватьSupabase().then(async (ок) => {
     // Подтягиваем актуальные данные из облака
     await Sync.загрузитьВсё();
     // Перерисовываем активный таб ТОЛЬКО если онбординг уже пройден
-    // (иначе пользователь сейчас в форме — не трогаем его UI)
     if (ОНБОРДИНГ_ПРОЙДЕН) {
       const активныйТаб = document.querySelector('.nav-btn.active')?.dataset?.tab;
       if (активныйТаб && window.goTab) window.goTab(null, активныйТаб);
     }
     показатьТост('☁️', 'Облако подключено', 'Синхронизация с Supabase активна', '');
+
+    // ── ПЕРИОДИЧЕСКАЯ СИНХРОНИЗАЦИЯ каждые 25 секунд ────────────────────
+    // Чтобы новые задачи от бота автоматом появлялись без перезагрузки
+    setInterval(async () => {
+      if (document.hidden) return;          // вкладка не видна — не дёргаем
+      const активныйТаб = document.querySelector('.nav-btn.active')?.dataset?.tab;
+      const доЗадач = JSON.parse(localStorage.getItem('lifeos_tasks') || '[]').length;
+      await Sync.загрузитьВсё();
+      const послеЗадач = JSON.parse(localStorage.getItem('lifeos_tasks') || '[]').length;
+      // Перерисовываем только если что-то реально поменялось
+      if (доЗадач !== послеЗадач && активныйТаб && window.goTab) {
+        window.goTab(null, активныйТаб);
+        if (послеЗадач > доЗадач) {
+          показатьТост('☁️', 'Синхронизация', `+${послеЗадач - доЗадач} новых задач из бота`, '');
+        }
+      }
+    }, 25000);
+
+    // ── СВАЙП-ВНИЗ ДЛЯ PULL-TO-REFRESH ─────────────────────────────────
+    let startY = 0;
+    const контент = document.getElementById('content');
+    if (контент) {
+      контент.addEventListener('touchstart', e => { startY = e.touches[0].clientY; }, { passive: true });
+      контент.addEventListener('touchend', async e => {
+        const ΔY = e.changedTouches[0].clientY - startY;
+        if (ΔY > 120 && контент.scrollTop === 0) {
+          показатьТост('⏳', 'Синхронизация…', '', '');
+          await Sync.загрузитьВсё();
+          const активныйТаб = document.querySelector('.nav-btn.active')?.dataset?.tab;
+          if (активныйТаб && window.goTab) window.goTab(null, активныйТаб);
+        }
+      }, { passive: true });
+    }
   }
 });
 
