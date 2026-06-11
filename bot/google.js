@@ -73,6 +73,23 @@ async function календарьПоКатегории(категория, owne
   return data || null;
 }
 
+// ── Цвета событий Google Calendar по категории ──────────────────────────────
+// Используется как fallback если все категории мапятся на один календарь.
+// Google поддерживает 11 цветов событий (colorId 1-11)
+const ЦВЕТА_ПО_КАТЕГОРИИ = {
+  'Работа':       '9',  // Blueberry — синий
+  'Контент':      '6',  // Tangerine — оранжевый
+  'Эксперименты': '3',  // Grape — фиолетовый
+  'Семья':        '4',  // Flamingo — розовый
+  'Встречи':      '7',  // Peacock — бирюзовый
+  'Быт':          '5',  // Banana — жёлтый
+  'Стратегия':    '11', // Tomato — красный
+  'Обучение':     '10', // Basil — зелёный
+  'Деньги':       '2',  // Sage — мятный зелёный
+  'Здоровье':     '8',  // Graphite — серый
+  'Chill':        '1',  // Lavender — лавандовый
+};
+
 // ── Создать событие в нужном календаре ──────────────────────────────────────
 export async function создатьСобытие(задача) {
   if (!googleАктивен()) return { skipped: 'Google не настроен' };
@@ -98,10 +115,14 @@ export async function создатьСобытие(задача) {
     const start = isDateOnly ? { date: задача.start_iso } : { dateTime: startDate.toISOString(), timeZone: 'Europe/Moscow' };
     const end   = isDateOnly ? { date: задача.start_iso } : { dateTime: endDate.toISOString(),   timeZone: 'Europe/Moscow' };
 
+    const colorId = ЦВЕТА_ПО_КАТЕГОРИИ[задача.cat];
+    const тело = { summary: задача.text || 'Задача', description: описание, start, end };
+    if (colorId) тело.colorId = colorId;
+
     const res = await fetch(url, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ summary: задача.text || 'Задача', description: описание, start, end }),
+      body: JSON.stringify(тело),
     });
     const event = await res.json();
     if (event.error) throw new Error(event.error.message);
