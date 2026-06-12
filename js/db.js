@@ -414,9 +414,10 @@ export const DB = {
     const задачи = this.getTasks();
     const т = задачи.find(x => x.id === id);
     if (т) {
-      т.cancelled = true;
-      т.done = true;
-      т.cancelledAt = new Date().toISOString();
+      т.cancelled    = true;
+      т.done         = true;
+      т.cancelledAt  = new Date().toISOString();
+      т.completedAt  = т.completedAt || new Date().toISOString(); // для группировки по дате
       this.saveTasks(задачи);
       window._дбHook?.('task', т);
     }

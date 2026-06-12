@@ -168,6 +168,8 @@ export async function сохранитьЗадачу(задача) {
     due_date:     задача.due_date    || null,
     start_iso:    задача.start_iso   || null,
     completed_at: задача.completedAt || null,
+    cancelled:    задача.cancelled   || false,
+    cancelled_at: задача.cancelledAt || null,
     notes:        задача.notes       || null,
     subtasks:     задача.subtasks    || [],
     duration_min: задача.duration_min || 60,
@@ -284,6 +286,8 @@ function маппингЗадачи(t) {
     due_date:    t.due_date     || null,
     start_iso:   t.start_iso    || null,
     completedAt: t.completed_at || null,
+    cancelled:   t.cancelled    || false,   // ← не затирать при синке
+    cancelledAt: t.cancelled_at || null,
     notes:       t.notes        || '',
     subtasks:    t.subtasks     || [],
     duration_min: t.duration_min || 60,
