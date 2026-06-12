@@ -80,6 +80,17 @@ function разметка() {
     </div>
     <input id="td-date" type="datetime-local" class="input" value="${датаVal}" style="margin-bottom:14px;font-size:12px">
 
+    <!-- Ценность задачи (баллы) -->
+    <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:6px">Ценность задачи</div>
+    <div class="cat-pills" id="td-points" style="margin-bottom:14px">
+      ${[5,10,15,20,25,50].map(pts => `
+        <button class="cat-pill ${(t.xpValue||10)===pts?'active':''}" data-pts="${pts}"
+                onclick="window.tdВыбPts(${pts})"
+                style="--cc:${pts>=25?'#FFD700':pts>=15?'#00F5D4':'rgba(232,237,245,.5)'}">
+          ${pts} ${pts===5?'· мелкое':pts===10?'· полезное':pts===15?'· важное':pts===20?'· дорогое':pts===25?'· крутое':'· огромное'}
+        </button>`).join('')}
+    </div>
+
     <!-- Заметки -->
     <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Заметки</div>
     <textarea id="td-notes" class="input" rows="2" placeholder="Дополнительные мысли, ссылки..." style="margin-bottom:14px;resize:vertical;font-size:12px">${escapeHtml(t.notes || '')}</textarea>
@@ -157,6 +168,13 @@ window.tdУст = function(когда) {
   TG.hapticSelection();
 };
 
+window.tdВыбPts = function(pts) {
+  _текущая.xpValue = pts;
+  document.querySelectorAll('#td-points .cat-pill').forEach(b => b.classList.remove('active'));
+  document.querySelector(`#td-points [data-pts="${pts}"]`)?.classList.add('active');
+  TG.hapticSelection();
+};
+
 window.tdДобПод = function() {
   if (!_текущая.subtasks) _текущая.subtasks = [];
   _текущая.subtasks.push({ text: '', done: false });
@@ -191,6 +209,7 @@ window.tdСохранить = async function() {
     text: текст,
     quadrant: _текущая.quadrant,
     cat: _текущая.cat,
+    xpValue: _текущая.xpValue || 10,
     notes: заметки,
     subtasks: (_текущая.subtasks || []).filter(s => s.text?.trim()),
   };

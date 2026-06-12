@@ -24,16 +24,12 @@ const ДАННЫЕ = {
     lastActive: new Date().toDateString(),
   },
   tasks: [
-    {id:'t1',text:'Созвон с CTO — архитектура VAIB',cat:'Бизнес',time:'14:00',quadrant:'do',done:false,xpValue:75,createdAt:Date.now()},
-    {id:'t2',text:'Отправить КП клиенту Growise',cat:'Деньги',time:'до 17:00',quadrant:'do',done:false,xpValue:75,createdAt:Date.now()},
-    {id:'t3',text:'Записать урок по ИИ для клуба',cat:'Клуб',time:'эта нед.',quadrant:'schedule',done:false,xpValue:50,createdAt:Date.now()},
-    {id:'t4',text:'Стратегия ИИЗИ на Q3',cat:'Стратегия',time:'эта нед.',quadrant:'schedule',done:false,xpValue:50,createdAt:Date.now()},
-    {id:'t5',text:'Чекап у терапевта',cat:'Здоровье',time:'июль',quadrant:'schedule',done:false,xpValue:50,createdAt:Date.now()},
-    {id:'t6',text:'Онбординг новых участников',cat:'Клуб',time:'след. нед.',quadrant:'schedule',done:false,xpValue:50,createdAt:Date.now()},
-    {id:'t7',text:'Монтаж видео → Артём',cat:'Контент',time:'пт',quadrant:'delegate',done:false,xpValue:25,createdAt:Date.now()},
-    {id:'t8',text:'Юр. документы → юрист',cat:'Юрид.',time:'пн',quadrant:'delegate',done:false,xpValue:25,createdAt:Date.now()},
-    {id:'t9',text:'Бесполезный скролл новостей',cat:'Ловушка',time:'—',quadrant:'eliminate',done:false,xpValue:25,createdAt:Date.now()},
-    {id:'t10',text:'Встречи без чёткого результата',cat:'Ловушка',time:'—',quadrant:'eliminate',done:false,xpValue:25,createdAt:Date.now()},
+    {id:'t1',text:'Созвон с командой — архитектура VAIB',cat:'Операционка',time:'14:00',quadrant:'do',done:false,xpValue:20,createdAt:Date.now()},
+    {id:'t2',text:'Отправить КП клиенту Growise',cat:'Привлечение клиентов',time:'до 17:00',quadrant:'do',done:false,xpValue:15,createdAt:Date.now()},
+    {id:'t3',text:'Записать урок по ИИ для клуба',cat:'Развитие',time:'эта нед.',quadrant:'schedule',done:false,xpValue:15,createdAt:Date.now()},
+    {id:'t4',text:'Стратегия ИИЗИ на Q3',cat:'Развитие',time:'эта нед.',quadrant:'schedule',done:false,xpValue:25,createdAt:Date.now()},
+    {id:'t5',text:'Чекап у терапевта',cat:'Личное',time:'июль',quadrant:'schedule',done:false,xpValue:10,createdAt:Date.now()},
+    {id:'t6',text:'Утренняя тренировка',cat:'Эффективность',time:'сегодня',quadrant:'do',done:false,xpValue:15,createdAt:Date.now()},
   ],
   projects: [
     {id:'p1',name:'ИИЗИ Клуб',emoji:'💎',progress:65,target:500000,current:310000,color:'#00F5D4',stage:'Активно',tasksCount:8},
@@ -87,6 +83,32 @@ const ДАННЫЕ = {
     {id:'q2',title:'Выпить 2.5л воды',icon:'💧',xp:150,done:false},
     {id:'q3',title:'Сделать тренировку',icon:'💪',xp:150,done:false},
   ],
+
+  // ── КАТАЛОГ УДОВОЛЬСТВИЙ (из твоей таблицы GAMECHANGER) ──────────────────
+  pleasureCatalog: [
+    { id:'pl1',  icon:'📱', name:'Соцсети / скроллинг',     cost:15,  category:'быстрый_дофамин' },
+    { id:'pl2',  icon:'🎬', name:'Фильм / сериал',           cost:20,  category:'развлечение' },
+    { id:'pl3',  icon:'🛋️', name:'Просто релакс',            cost:20,  category:'отдых' },
+    { id:'pl4',  icon:'🎥', name:'Кино / выход',              cost:30,  category:'развлечение' },
+    { id:'pl5',  icon:'💨', name:'Кальян',                   cost:25,  category:'быстрый_дофамин' },
+    { id:'pl6',  icon:'🍽️', name:'Ресторан / доставка',      cost:20,  category:'удовольствие' },
+    { id:'pl7',  icon:'💆', name:'Массаж',                   cost:15,  category:'отдых' },
+    { id:'pl8',  icon:'🧖', name:'Сауна / баня',              cost:5,   category:'здоровье' },
+    { id:'pl9',  icon:'🛁', name:'Ванна',                    cost:10,  category:'отдых' },
+    { id:'pl10', icon:'📚', name:'Читать книгу',              cost:5,   category:'развитие' },
+    { id:'pl11', icon:'🧠', name:'Обучающий YouTube',         cost:10,  category:'развитие' },
+    { id:'pl12', icon:'📊', name:'Бизнес-новости',            cost:5,   category:'развитие' },
+    { id:'pl13', icon:'📰', name:'Политические новости',      cost:15,  category:'быстрый_дофамин' },
+    { id:'pl14', icon:'🎮', name:'Игры',                      cost:25,  category:'быстрый_дофамин' },
+    { id:'pl15', icon:'🏖️', name:'Поездка / отпуск',          cost:100, category:'большой_приз' },
+  ],
+
+  // ── ИСТОРИЯ ТРАТ УДОВОЛЬСТВИЙ ─────────────────────────────────────────────
+  pleasureLog: [],
+
+  // ── БАЛАНС (отдельно от XP — трачимый/накопительный) ─────────────────────
+  // balance = сумма xpValue выполненных задач − сумма потраченных удовольствий
+  // Пересчитывается из pleasureLog и tasks при каждом запросе
   achievements: [
     {key:'streak7',icon:'🔥',name:'7-дн. страйк',unlocked:true,color:'#FFD700'},
     {key:'first_client',icon:'🚀',name:'Первый клиент',unlocked:true,color:'#00F5D4'},
@@ -200,30 +222,83 @@ export const DB = {
       т.done = !т.done;
       т.completedAt = т.done ? new Date().toISOString() : null;
       this.saveTasks(задачи);
-      // Начисляем XP + монеты при выполнении (отнимаем при откате)
-      const величина = т.xpValue || 25;
-      const профиль = this.getProfile();
-      const знак = сталоВыполненным ? 1 : -1;
-      профиль.xp = Math.max(0, (профиль.xp || 0) + знак * величина);
-      профиль.coins = Math.max(0, (профиль.coins || 0) + знак * величина);
-      this.saveProfile(профиль);
+      // Начисляем XP за выполнение (XP — только вверх, для уровней)
+      if (сталоВыполненным) {
+        const профиль = this.getProfile();
+        профиль.xp = (профиль.xp || 0) + (т.xpValue || 10);
+        this.saveProfile(профиль);
+      }
+      // Баланс (дофамин-механика) пересчитывается из данных через getBalance()
       window._дбHook?.('task', т);
     }
     return т;
   },
 
-  // ── МОНЕТЫ (трачимая валюта) ────────────────────────────────────────────────
-  потратитьМонеты(сумма, причина = 'развлечение') {
-    const p = this.getProfile();
-    if ((p.coins || 0) < сумма) return { ok: false, reason: 'Недостаточно монет', balance: p.coins || 0 };
-    p.coins = (p.coins || 0) - сумма;
-    p.coinsSpent = (p.coinsSpent || 0) + сумма;
-    this.saveProfile(p);
-    // Журнал трат
-    const журнал = this.get('coinsLog') || [];
-    журнал.unshift({ at: new Date().toISOString(), amount: -сумма, reason: причина, balance: p.coins });
-    this.set('coinsLog', журнал.slice(0, 100));
-    return { ok: true, balance: p.coins };
+  // ── ДОФАМИН-БАЛАНС (механика GAMECHANGER) ───────────────────────────────────
+  // Каталог удовольствий
+  getPleasureCatalog()  { return this.get('pleasureCatalog') || ДАННЫЕ.pleasureCatalog; },
+  getPleasureLog()      { return this.get('pleasureLog') || []; },
+
+  // Заработано баллов из задач (выполненных)
+  getEarned() {
+    return this.getTasks()
+      .filter(t => t.done)
+      .reduce((s, t) => s + (t.xpValue || 10), 0);
+  },
+
+  // Потрачено на удовольствия
+  getSpent() {
+    return this.getPleasureLog().reduce((s, p) => s + (p.cost || 0), 0);
+  },
+
+  // Итоговый баланс (может быть < 0 — это сигнал стоп)
+  getBalance() {
+    return this.getEarned() - this.getSpent();
+  },
+
+  // Доля удовольствий (0..1) — если > 0.7 уже зона риска
+  getPleasureRatio() {
+    const earned = this.getEarned();
+    if (!earned) return 0;
+    return Math.min(1, this.getSpent() / earned);
+  },
+
+  // Статистика за сегодня
+  getTodayStats() {
+    const сегодня = new Date().toDateString();
+    const earned = this.getTasks()
+      .filter(t => t.done && new Date(t.completedAt || t.createdAt).toDateString() === сегодня)
+      .reduce((s, t) => s + (t.xpValue || 10), 0);
+    const spent = this.getPleasureLog()
+      .filter(p => new Date(p.at).toDateString() === сегодня)
+      .reduce((s, p) => s + (p.cost || 0), 0);
+    return { earned, spent, balance: earned - spent };
+  },
+
+  // Потратить удовольствие
+  потратитьУдовольствие(pleasureId, кастомИмя = null, кастомСтоимость = null) {
+    const каталог = this.getPleasureCatalog();
+    const элемент = каталог.find(p => p.id === pleasureId) ||
+      (кастомИмя ? { id: 'custom', icon:'✨', name: кастомИмя, cost: кастомСтоимость || 10 } : null);
+    if (!элемент) return { ok: false, reason: 'Не найдено' };
+
+    const баланс = this.getBalance();
+    if (баланс < элемент.cost) {
+      return { ok: false, reason: `Нужно ещё ${элемент.cost - баланс} баллов`, balance: баланс };
+    }
+
+    const журнал = this.getPleasureLog();
+    журнал.unshift({
+      id: 'pl_' + Date.now(),
+      pleasureId: элемент.id,
+      icon: элемент.icon,
+      name: элемент.name,
+      cost: элемент.cost,
+      at: new Date().toISOString(),
+    });
+    this.set('pleasureLog', журнал.slice(0, 500));
+
+    return { ok: true, balance: баланс - элемент.cost, item: элемент };
   },
 
   deleteTask(id) {
