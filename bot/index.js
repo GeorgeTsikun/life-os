@@ -8,9 +8,11 @@ import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
 import * as Notion from './notion.js';
 import * as GCal from './google.js';
+import { запуститьРасписание, зарегистрироватьОбработчики, утреннийАвтоБрифинг, отправитьКарточкуПереноса } from './scheduling.js';
 
 // ── КОНФИГ ────────────────────────────────────────────────────────────────────
-const TOKEN         = process.env.TELEGRAM_BOT_TOKEN;
+const TOKEN           = process.env.TELEGRAM_BOT_TOKEN;
+const OWNER_TG_ID     = process.env.OWNER_TELEGRAM_ID || '';
 const OPENAI_KEY    = process.env.OPENAI_API_KEY;
 const WEBAPP_BASE   = process.env.TELEGRAM_WEBAPP_URL || 'https://life-os-chi-rose.vercel.app';
 // Каждая кнопка с уникальным URL — обход кэша Telegram WebApp
@@ -190,31 +192,29 @@ bot.command('start', async (ctx) => {
 });
 
 // ── /today ────────────────────────────────────────────────────────────────────
-bot.command('today', async (ctx) => утреннийБрифинг(ctx));
-bot.callbackQuery('today',  async (ctx) => { await ctx.answerCallbackQuery(); утреннийБрифинг(ctx); });
-
-async function утреннийБрифинг(ctx) {
+bot.command('today', async (ctx) => {
   await ctx.replyWithChatAction('typing');
-  const userId   = ctx.from.id.toString();
-  const контекст = await загрузитьКонтекст(userId);
-
-  const ответ = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [
-      { role: 'system', content: ДИРЕКТОР_ПРОМТ },
-      { role: 'system', content: `Сейчас утро. Дай план дня. Контекст:\n${JSON.stringify(контекст, null, 2)}` },
-      { role: 'user',   content: 'Что сегодня?' },
-    ],
-    temperature: 0.7,
-    max_tokens: 400,
+  await утреннийАвтоБрифинг({
+    bot,
+    supa,
+    openai,
+    ownerTgId: ctx.from.id.toString(),
+    безКэша,
+    ДИРЕКТОР_ПРОМТ,
   });
-
-  const клавиатура = new InlineKeyboard().webApp('Открыть LIFE OS', безКэша());
-  await ctx.reply(`☀️ *Утренний брифинг*\n\n${ответ.choices[0].message.content}`, {
-    parse_mode: 'Markdown',
-    reply_markup: клавиатура,
+});
+bot.callbackQuery('today', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  await ctx.replyWithChatAction('typing');
+  await утреннийАвтоБрифинг({
+    bot,
+    supa,
+    openai,
+    ownerTgId: ctx.from.id.toString(),
+    безКэша,
+    ДИРЕКТОР_ПРОМТ,
   });
-}
+});
 
 // ── /summary — вечерний чек-ин ────────────────────────────────────────────────
 bot.command('summary', async (ctx) => {
@@ -737,6 +737,17 @@ async function запустить() {
   } else {
     console.log('📓 Notion: НЕ настроен (нет NOTION_TOKEN или NOTION_ROOT_PAGE_ID)');
   }
+
+  // Регистрируем обработчики defer/mirror/checkin callback-кнопок
+  зарегистрироватьОбработчики({ bot, supa, openai, ownerTgId: OWNER_TG_ID });
+
+  // Запускаем cron-расписание (8:00 брифинг + 21:00 чекин)
+  запуститьРасписание({
+    bot, supa, openai,
+    ownerTgId: OWNER_TG_ID,
+    безКэша,
+    ДИРЕКТОР_ПРОМТ,
+  });
 
   await bot.start({
     drop_pending_updates: true,    // не обрабатывать старые сообщения при старте
