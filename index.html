@@ -19,9 +19,9 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
 <!-- Styles -->
-<link rel="stylesheet" href="css/base.css?v=24">
-<link rel="stylesheet" href="css/components.css?v=24">
-<link rel="stylesheet" href="css/screens.css?v=24">
+<link rel="stylesheet" href="css/base.css?v=25">
+<link rel="stylesheet" href="css/components.css?v=25">
+<link rel="stylesheet" href="css/screens.css?v=25">
 
 <style>body{background:#03030A}</style>
 </head>
@@ -59,8 +59,29 @@
 <!-- Toast container -->
 <div id="toast-container"></div>
 
+<!-- Глобальный error-показ (для отладки на телефоне без DevTools) -->
+<script>
+  window.addEventListener('error', e => {
+    const c = document.getElementById('content');
+    if (c) c.innerHTML = `<div style="padding:20px;color:#FF4560;font-family:monospace;font-size:11px;word-break:break-word">
+      <div style="font-weight:700;margin-bottom:8px">⚠️ JS ERROR</div>
+      <div style="margin-bottom:6px">${e.message}</div>
+      <div style="color:#999;font-size:10px">${e.filename?.split('/').pop()}:${e.lineno}:${e.colno}</div>
+      <div style="margin-top:10px;font-size:10px;color:#666;white-space:pre-wrap">${e.error?.stack || ''}</div>
+    </div>`;
+  });
+  window.addEventListener('unhandledrejection', e => {
+    const c = document.getElementById('content');
+    if (c) c.innerHTML = `<div style="padding:20px;color:#FF9F43;font-family:monospace;font-size:11px;word-break:break-word">
+      <div style="font-weight:700;margin-bottom:8px">⚠️ PROMISE REJECTED</div>
+      <div>${e.reason?.message || e.reason}</div>
+      <div style="margin-top:10px;font-size:10px;color:#666;white-space:pre-wrap">${e.reason?.stack || ''}</div>
+    </div>`;
+  });
+</script>
+
 <!-- App bootstrap -->
-<script type="module" src="js/app.js?v=24"></script>
+<script type="module" src="js/app.js?v=25"></script>
 <script>
   // Stub until module loads (module will override with real implementation)
   window.goTab = function(btn, tab) {};
