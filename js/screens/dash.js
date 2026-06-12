@@ -604,6 +604,26 @@ function renderFocusBlock(allTasks, health, profile) {
   const q1Done = allTasks.filter(t => t.quadrant === 'do'       && t.done);
   const allQ1Done = q1All.length === 0 && q1Done.length > 0;
 
+  // Применяем фильтр
+  function applyFilter(tasks) {
+    if (focusFilter === 'work')    return tasks.filter(t => WORK_CATS.has(t.cat));
+    if (focusFilter === 'personal') return tasks.filter(t => LIFE_CATS.has(t.cat) || (!WORK_CATS.has(t.cat) && !LIFE_CATS.has(t.cat)));
+    if (focusFilter.startsWith('cat:')) return tasks.filter(t => t.cat === focusFilter.slice(4));
+    return tasks;
+  }
+
+  // Фильтр-панель
+  const filterBar = `
+  <div style="display:flex;gap:6px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch">
+    <button onclick="window.setFocusFilter('all')" style="flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ${focusFilter==='all'?'rgba(0,245,212,.5)':'rgba(255,255,255,.12)'};background:${focusFilter==='all'?'rgba(0,245,212,.15)':'rgba(255,255,255,.04)'};color:${focusFilter==='all'?'#00F5D4':'rgba(232,237,245,.5)'}">Все</button>
+    <button onclick="window.setFocusFilter('work')" style="flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ${focusFilter==='work'?'rgba(0,245,212,.5)':'rgba(255,255,255,.12)'};background:${focusFilter==='work'?'rgba(0,245,212,.15)':'rgba(255,255,255,.04)'};color:${focusFilter==='work'?'#00F5D4':'rgba(232,237,245,.5)'}">💼 Работа</button>
+    <button onclick="window.setFocusFilter('personal')" style="flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ${focusFilter==='personal'?'rgba(255,107,107,.5)':'rgba(255,255,255,.12)'};background:${focusFilter==='personal'?'rgba(255,107,107,.1)':'rgba(255,255,255,.04)'};color:${focusFilter==='personal'?'#FF6B6B':'rgba(232,237,245,.5)'}">🏠 Личное</button>
+    <button onclick="window.toggleCatMenu()" style="flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:11px;cursor:pointer;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:rgba(232,237,245,.5)">⚙️</button>
+  </div>
+  <div id="cat-menu" style="display:none;flex-wrap:wrap;gap:5px;margin-bottom:10px">
+    ${ALL_CATS.map(c => `<button onclick="window.setFocusFilter('cat:${c}')" style="padding:3px 9px;border-radius:14px;font-size:10px;cursor:pointer;border:1px solid ${focusFilter==='cat:'+c?'rgba(0,245,212,.5)':'rgba(255,255,255,.1)'};background:${focusFilter==='cat:'+c?'rgba(0,245,212,.15)':'rgba(255,255,255,.03)'};color:${focusFilter==='cat:'+c?'#00F5D4':'rgba(232,237,245,.45)'}">${c}</button>`).join('')}
+  </div>`;
+
   // В LOW режиме RC — только рутина и delegate (не Q1)
   if (mode.key === 'low') {
     const рутина = allTasks.filter(t => !t.done && !t.cancelled && (t.quadrant === 'delegate' || LIFE_CATS.has(t.cat)));
@@ -635,26 +655,6 @@ function renderFocusBlock(allTasks, health, profile) {
         : `<div style="text-align:center;padding:12px 0;font-size:12px;color:rgba(232,237,245,.3)">Отдыхай — задач нет</div>`}
     </div>`;
   }
-
-  // Применяем фильтр
-  function applyFilter(tasks) {
-    if (focusFilter === 'work')    return tasks.filter(t => WORK_CATS.has(t.cat));
-    if (focusFilter === 'personal') return tasks.filter(t => LIFE_CATS.has(t.cat) || (!WORK_CATS.has(t.cat) && !LIFE_CATS.has(t.cat)));
-    if (focusFilter.startsWith('cat:')) return tasks.filter(t => t.cat === focusFilter.slice(4));
-    return tasks;
-  }
-
-  // Фильтр-панель
-  const filterBar = `
-  <div style="display:flex;gap:6px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch">
-    <button onclick="window.setFocusFilter('all')" style="flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ${focusFilter==='all'?'rgba(0,245,212,.5)':'rgba(255,255,255,.12)'};background:${focusFilter==='all'?'rgba(0,245,212,.15)':'rgba(255,255,255,.04)'};color:${focusFilter==='all'?'#00F5D4':'rgba(232,237,245,.5)'}">Все</button>
-    <button onclick="window.setFocusFilter('work')" style="flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ${focusFilter==='work'?'rgba(0,245,212,.5)':'rgba(255,255,255,.12)'};background:${focusFilter==='work'?'rgba(0,245,212,.15)':'rgba(255,255,255,.04)'};color:${focusFilter==='work'?'#00F5D4':'rgba(232,237,245,.5)'}">💼 Работа</button>
-    <button onclick="window.setFocusFilter('personal')" style="flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ${focusFilter==='personal'?'rgba(255,107,107,.5)':'rgba(255,255,255,.12)'};background:${focusFilter==='personal'?'rgba(255,107,107,.1)':'rgba(255,255,255,.04)'};color:${focusFilter==='personal'?'#FF6B6B':'rgba(232,237,245,.5)'}">🏠 Личное</button>
-    <button onclick="window.toggleCatMenu()" style="flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:11px;cursor:pointer;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:rgba(232,237,245,.5)">⚙️</button>
-  </div>
-  <div id="cat-menu" style="display:none;flex-wrap:wrap;gap:5px;margin-bottom:10px">
-    ${ALL_CATS.map(c => `<button onclick="window.setFocusFilter('cat:${c}')" style="padding:3px 9px;border-radius:14px;font-size:10px;cursor:pointer;border:1px solid ${focusFilter==='cat:'+c?'rgba(0,245,212,.5)':'rgba(255,255,255,.1)'};background:${focusFilter==='cat:'+c?'rgba(0,245,212,.15)':'rgba(255,255,255,.03)'};color:${focusFilter==='cat:'+c?'#00F5D4':'rgba(232,237,245,.45)'}">${c}</button>`).join('')}
-  </div>`;
 
   // Если все Q1 выполнены — показываем Q2
   if (allQ1Done) {
