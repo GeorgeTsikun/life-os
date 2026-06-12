@@ -4,6 +4,7 @@
 
 import cron from 'node-cron';
 import { InlineKeyboard } from 'grammy';
+import { sendRichWithFallback, briefingBlocks, checkinBlocks, T, B } from './rich.js';
 
 // Московское смещение в мс (+3ч)
 const MOSCOW_OFFSET = 3 * 60 * 60 * 1000;
@@ -169,28 +170,57 @@ export async function утреннийАвтоБрифинг({ bot, supa, openai
     weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Moscow'
   });
 
-  const части = [
+  // ── Rich Message (Bot API 10.1) ────────────────────────────────────────────
+  const q1List = задачиСегодня.filter(t => t.quadrant === 'do')
+    .map(t => ({ text: t.text, xp: t.xp_value, cat: t.cat }));
+  const q2List = задачиСегодня.filter(t => t.quadrant === 'schedule')
+    .map(t => ({ text: t.text, xp: t.xp_value }));
+  const ожиданияList = ожидания.map(o => {
+    const dDays = o.deadline ? Math.floor((new Date(o.deadline) - Date.now()) / 86400000) : 0;
+    return { what: o.what, ownerName: o.owner_name || '?', daysLeft: dDays };
+  });
+  const overdueList = просроченные.map(t => ({
+    text:        t.text,
+    defer_count: t.defer_count || 0,
+    daysAgo:     t.due_date ? Math.floor((Date.now() - new Date(t.due_date + 'T00:00:00+03:00')) / 86400000) : 1,
+  }));
+
+  const richBlocks = briefingBlocks({
+    date:         дата,
+    health:       здоровье ? {
+      hrv:      здоровье.hrv,
+      sleep:    здоровье.sleep_hours,
+      rc:       здоровье.hrv && здоровье.sleep_hours ? (здоровье.sleep_hours/8) * (здоровье.hrv/55) : null,
+    } : null,
+    q1Tasks:      q1List,
+    q2Tasks:      q2List,
+    aiInsight:    брифингТекст,
+    overdue:      overdueList,
+    expectations: ожиданияList,
+    debuff:       debuffActive,
+  });
+
+  // Markdown fallback (если Rich не поддерживается клиентом)
+  const markdownFallback = [
     `☀️ *Утренний брифинг · ${дата}*`,
     блокЗдоровья ? `\n${блокЗдоровья}` : '',
     `\n${брифингТекст}`,
     ожидания.length ? `\n🕐 *Жду от других:*\n${ожиданийТекст}` : '',
-  ].filter(Boolean);
+    просроченные.length ? `\n🔴 *Висит (${просроченные.length}):* ${просроченные.slice(0,3).map(t=>t.text).join(', ')}` : '',
+  ].filter(Boolean).join('\n');
 
   const клавиатура = new InlineKeyboard()
     .webApp('⚡ Открыть LIFE OS', безКэша())
     .row();
 
-  await bot.api.sendMessage(ownerTgId, части.join('\n'), {
-    parse_mode: 'Markdown',
+  const token = process.env.BOT_TOKEN;
+  await sendRichWithFallback(token, ownerTgId, richBlocks, markdownFallback, {
     reply_markup: клавиатура,
   });
 
-  // Просроченные — отдельными карточками с кнопками
+  // Просроченные — отдельными карточками с inline-кнопками переноса
+  // (оставляем как есть — это интерактивные карточки, не просто форматирование)
   if (просроченные.length > 0) {
-    await bot.api.sendMessage(ownerTgId,
-      `🔴 *Висит со вчера (${просроченные.length}):*\nЧто делаем с каждой?`,
-      { parse_mode: 'Markdown' }
-    );
     for (const задача of просроченные.slice(0, 5)) {
       await отправитьКарточкуПереноса(bot, ownerTgId, задача);
     }
@@ -249,22 +279,55 @@ async function вечернийАвтоЧекин({ bot, ownerTgId, безКэш
     }
   }
 
-  const статБлок = выполнено > 0
-    ? `\n✅ Сегодня закрыто: *${выполнено} задач* (+${заработаноXP} XP)` +
-      (q1Закрыто > 0 ? `\n⚡ Q1 выполнено: *${q1Закрыто}*` : '')
-    : '\n📭 Задач не закрыто — расскажи почему?';
+  // ── Rich Message (Bot API 10.1) ────────────────────────────────────────────
+  // Ищем лучшую задачу на завтра (Q1 с наивысшим XP)
+  let завтраТоп = null;
+  if (supa) {
+    try {
+      const завтра = new Date(Date.now() + 86400000 + 3 * 3600000).toISOString().split('T')[0];
+      const { data: завтраЗадачи } = await supa.from('tasks')
+        .select('text,xp_value,cat')
+        .eq('owner', 'george')
+        .eq('done', false)
+        .eq('quadrant', 'do')
+        .order('xp_value', { ascending: false })
+        .limit(1);
+      завтраТоп = завтраЗадачи?.[0] || null;
+    } catch {}
+  }
+
+  // Считаем стрик из профиля (если есть)
+  let стрик = 0;
+  if (supa) {
+    try {
+      const { data: prof } = await supa.from('profiles').select('streak').eq('owner', 'george').maybeSingle();
+      стрик = prof?.streak || 0;
+    } catch {}
+  }
+
+  const richBlocks = checkinBlocks({
+    done:      выполнено,
+    xp:        заработаноXP,
+    q1closed:  q1Закрыто,
+    streak:    стрик,
+    topTomorrow: завтраТоп ? { text: завтраТоп.text, xp: завтраТоп.xp_value, cat: завтраТоп.cat } : null,
+  });
 
   const клавиатура = new InlineKeyboard()
     .text('🎙️ Голосом',  'checkin:voice')
     .text('📝 Текстом',  'checkin:text').row()
     .webApp('📊 Открыть LIFE OS', безКэша());
 
-  await bot.api.sendMessage(ownerTgId,
-    `🌙 *Вечерний чек-ин*${статБлок}\n\n` +
-    `Как прошёл день? Что сделал, что не успел, как энергия?\n` +
-    `Расскажи голосом или напиши — зафиксирую, начислю XP.`,
-    { parse_mode: 'Markdown', reply_markup: клавиатура }
-  );
+  // Markdown fallback
+  const статБлок = выполнено > 0
+    ? `✅ Сегодня: *${выполнено} задач* (+${заработаноXP} XP)${q1Закрыто > 0 ? ` · Q1: ${q1Закрыто}` : ''}`
+    : '📭 Задач не закрыто — расскажи почему?';
+  const markdownFallback = `🌙 *Вечерний чек-ин*\n${статБлок}\n\nКак прошёл день? Расскажи голосом или напиши.`;
+
+  const token = process.env.BOT_TOKEN;
+  await sendRichWithFallback(token, ownerTgId, richBlocks, markdownFallback, {
+    reply_markup: клавиатура,
+  });
 }
 
 // ── ДЕТЕКТОР ИЗБЕГАНИЯ (вызывается при каждом переносе) ───────────────────────
