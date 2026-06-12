@@ -83,7 +83,44 @@ export async function загрузитьВсё() {
     ]);
 
     if (tasks?.length) {
-      localStorage.setItem('lifeos_tasks', JSON.stringify(tasks.map(маппингЗадачи)));
+      // ── УМНЫЙ MERGE: не затираем локальные изменения ──────────────────────────
+      // Проблема: toggleTask() пушит в Supabase асинхронно (fire-and-forget).
+      // Если pull пришёл раньше чем push долетел → Supabase вернёт done=false
+      // и затрёт только что выполненную задачу.
+      //
+      // Решение: для каждой задачи из Supabase сравниваем с локальной версией.
+      // Если локально done=true, а с сервера done=false → берём локальную версию
+      // и сразу принудительно перепушиваем её в Supabase.
+      const localRaw = JSON.parse(localStorage.getItem('lifeos_tasks') || '[]');
+      const localMap = new Map(localRaw.map(t => [t.id, t]));
+
+      // Дедупликация: если несколько строк с одним текстом — берём ту, где done=true
+      const deduped = new Map();
+      for (const t of tasks) {
+        const key = t.id;
+        if (!deduped.has(key)) {
+          deduped.set(key, t);
+        } else {
+          // Предпочитаем выполненную версию
+          if (t.done) deduped.set(key, t);
+        }
+      }
+
+      const merged = Array.from(deduped.values()).map(serverTask => {
+        const mapped  = маппингЗадачи(serverTask);
+        const local   = localMap.get(mapped.id);
+        if (!local) return mapped;
+
+        // Если локально задача выполнена/отменена, а с сервера нет → доверяем локалу
+        if ((local.done && !mapped.done) || (local.cancelled && !mapped.cancelled)) {
+          // Перепушиваем в фоне чтобы синхронизировать Supabase
+          setTimeout(() => сохранитьЗадачу(local), 0);
+          return local;
+        }
+        return mapped;
+      });
+
+      localStorage.setItem('lifeos_tasks', JSON.stringify(merged));
     }
     if (projects?.length) {
       localStorage.setItem('lifeos_projects', JSON.stringify(projects.map(маппингПроекта)));
