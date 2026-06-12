@@ -11,6 +11,7 @@ import { renderContent }      from './screens/content.js';
 import { renderAchievements } from './screens/achievements.js';
 import { renderOnboarding }   from './screens/onboarding.js';
 import * as Sync              from './supabaseSync.js';
+import { openVoiceCapture }  from './voiceCapture.js';
 
 // ── ИНИЦИАЛИЗАЦИЯ ─────────────────────────────────────────────────────────────
 const ОНБОРДИНГ_ПРОЙДЕН = localStorage.getItem('lifeos_onboarded') === 'true'
@@ -117,6 +118,8 @@ window.goTab = function(кнопка, таб) {
 
   уничтожитьВсеГрафики();
   текущийТаб = таб;
+  window._текущийТаб = таб; // доступен глобально (для voiceCapture и др.)
+  window.ЭКРАНЫ = ЭКРАНЫ;   // доступен глобально
   const фн = ЭКРАНЫ[таб];
   if (фн) фн();
   TG.hapticSelection();
@@ -172,16 +175,13 @@ function показатьXpFloat(текст) {
   setTimeout(() => эл.remove(), 1000);
 }
 
-// ── FAB — БЫСТРОЕ ДОБАВЛЕНИЕ ──────────────────────────────────────────────────
+// ── FAB — ГОЛОСОВОЙ ЗАХВАТ (с любого экрана) ──────────────────────────────────
 document.getElementById('fab')?.addEventListener('click', () => {
-  if (текущийТаб === 'tasks')    { window.openAddTask();    return; }
-  if (текущийТаб === 'people')   { window.openAddPerson();  return; }
-  if (текущийТаб === 'projects') { window.openAddProject(); return; }
-  // По умолчанию — открыть задачи
-  window.goTab(null, 'tasks');
-  document.querySelector('[data-tab="tasks"]')?.classList.add('active');
-  document.querySelector('[data-tab="dash"]')?.classList.remove('active');
-  setTimeout(() => window.openAddTask(), 50);
+  // На экране людей и проектов — специфичное действие
+  if (текущийТаб === 'people')   { window.openAddPerson?.();  return; }
+  if (текущийТаб === 'projects') { window.openAddProject?.(); return; }
+  // Везде остальное — голосовой захват
+  openVoiceCapture();
 });
 
 // ── ВЫПОЛНЕНИЕ КВЕСТА ─────────────────────────────────────────────────────────
