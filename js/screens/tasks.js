@@ -72,6 +72,7 @@ export function renderTasks() {
     <button class="toggle-btn${viewMode==='dates'?' active':''}"  onclick="window.setTaskView('dates')">📅 По датам</button>
     <button class="toggle-btn${viewMode==='matrix'?' active':''}" onclick="window.setTaskView('matrix')">🔲 Матрица</button>
     <button class="toggle-btn${viewMode==='done'?' active':''}"   onclick="window.setTaskView('done')">✅ Готово</button>
+    <button class="toggle-btn${viewMode==='ideas'?' active':''}"  onclick="window.setTaskView('ideas')" style="color:#FFD700">💡 Идеи</button>
   </div>
 
   ${viewMode !== 'done' ? `
@@ -87,6 +88,7 @@ export function renderTasks() {
 
   ${viewMode === 'matrix' ? renderMatrix(filtered)
    : viewMode === 'done'  ? renderDone(готовые)
+   : viewMode === 'ideas' ? renderIdeaBank()
    : renderByDates(filtered)}
 
   <div style="height:8px"></div>
@@ -208,6 +210,36 @@ function doneItemHTML(t) {
       <span class="badge" style="background:${cc}18;color:${cc};border:1px solid ${cc}30">${t.cat || '—'}</span>
       <button class="btn btn-ghost" style="font-size:9px;padding:2px 6px" onclick="window.toggleTask('${t.id}')">↩ Вернуть</button>
     </div>
+  </div>`;
+}
+
+function renderIdeaBank() {
+  const ideas = DB.getIdeaBank();
+  if (!ideas.length) return `<div class="card" style="text-align:center;padding:32px 16px">
+    <div style="font-size:36px;margin-bottom:8px">💡</div>
+    <div style="font-size:13px;font-weight:700;margin-bottom:4px">Банк идей пуст</div>
+    <div style="font-size:11px;color:rgba(232,237,245,.4)">Q4-задачи старше 48ч автоматически<br>попадают сюда</div>
+  </div>`;
+
+  return `<div class="card" style="margin-bottom:12px">
+    <div class="row" style="justify-content:space-between;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700">💡 Банк идей</div>
+      <span style="font-size:10px;color:rgba(232,237,245,.4)">${ideas.length} идей</span>
+    </div>
+    <div style="font-size:10px;color:rgba(232,237,245,.35);margin-bottom:10px">Q4-задачи, которые не взяли в работу 48ч. Превратите в задачу или удалите.</div>
+    ${ideas.map(idea => `
+    <div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);display:flex;align-items:flex-start;gap:10px">
+      <div style="font-size:18px;flex-shrink:0;padding-top:1px">💡</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:#E8EDF5;margin-bottom:2px">${idea.text}</div>
+        ${idea.cat ? `<span style="font-size:9px;color:#FFD700;background:rgba(255,215,0,.07);padding:2px 7px;border-radius:10px">${idea.cat}</span>` : ''}
+        ${idea.notes ? `<div style="font-size:10px;color:rgba(232,237,245,.4);margin-top:3px">${idea.notes}</div>` : ''}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">
+        <button onclick="window.ideaBankRevive('${idea.id}')" style="font-size:9px;padding:3px 7px;border-radius:8px;border:1px solid rgba(0,245,212,.3);background:rgba(0,245,212,.06);color:#00F5D4;cursor:pointer">▶ Q1</button>
+        <button onclick="window.ideaBankDelete('${idea.id}')" style="font-size:9px;padding:3px 7px;border-radius:8px;border:1px solid rgba(255,69,96,.2);background:rgba(255,69,96,.05);color:#FF4560;cursor:pointer">✕</button>
+      </div>
+    </div>`).join('')}
   </div>`;
 }
 
@@ -380,6 +412,21 @@ window.openTaskDetail = function(id) {
 
 window.setTaskView = function(mode) {
   viewMode = mode;
+  renderTasks();
+};
+
+window.ideaBankRevive = function(id) {
+  const idea = DB.getIdeaBank().find(x => x.id === id);
+  if (!idea) return;
+  DB.removeFromIdeaBank(id);
+  DB.addTask({ text: idea.text, cat: idea.cat || 'Работа', quadrant: 'do', notes: idea.notes || '', _forceQ1: true });
+  window.showToast?.('⚡ Идея → Q1!', 'success');
+  renderTasks();
+};
+
+window.ideaBankDelete = function(id) {
+  DB.removeFromIdeaBank(id);
+  window.showToast?.('🗑 Удалено из банка идей', 'info');
   renderTasks();
 };
 

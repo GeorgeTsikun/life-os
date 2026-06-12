@@ -214,6 +214,8 @@ export const DB = {
     инициализировать();
     this.applyDailyDecay();
     this.resetDailyQuests();
+    const moved = this.sweepQ4toIdeaBank();
+    if (moved > 0) window.showToast?.(`💡 ${moved} идей из Q4 → Банк идей`, 'info');
   },
 
   get(ключ)       { return хранилищеПолучить(ключ) ?? ДАННЫЕ[ключ]; },
@@ -224,6 +226,15 @@ export const DB = {
   saveTasks(t)    { this.set('tasks', t); },
 
   addTask(задача) {
+    // §3.1 — HRV < 30 три дня подряд → блок новых Q1
+    if (задача.quadrant === 'do' && !задача._forceQ1) {
+      const h = this.getHealth();
+      const hrvArr = (h?.hrvData || []).slice(-3);
+      if (hrvArr.length >= 3 && hrvArr.every(v => v < 30)) {
+        window.showToast?.('⚠️ HRV < 30 три дня. Новые Q1 заблокированы — сначала восстановись.', 'error');
+        return null;
+      }
+    }
     const задачи = this.getTasks();
     const новая = {
       id: 't' + Date.now(),
@@ -238,6 +249,36 @@ export const DB = {
     this.saveTasks(задачи);
     window._дбHook?.('task', новая);
     return новая;
+  },
+
+  // §3.2 — Q4 (eliminate) задачи → Idea Bank через 48ч
+  getIdeaBank() { return this.get('ideaBank') || []; },
+  saveIdeaBank(arr) { this.set('ideaBank', arr); },
+  addToIdeaBank(obj) {
+    const arr = this.getIdeaBank();
+    arr.unshift({ id:'idea_'+Date.now(), createdAt:new Date().toISOString(), ...obj });
+    this.saveIdeaBank(arr);
+  },
+  removeFromIdeaBank(id) {
+    this.saveIdeaBank(this.getIdeaBank().filter(x => x.id !== id));
+  },
+
+  // Перемещает Q4-задачи старше 48ч в Idea Bank
+  sweepQ4toIdeaBank() {
+    const задачи = this.getTasks();
+    const cutoff = Date.now() - 48 * 3600 * 1000;
+    const toMove = задачи.filter(t =>
+      t.quadrant === 'eliminate' && !t.done && !t.cancelled &&
+      t.createdAt < cutoff
+    );
+    if (!toMove.length) return 0;
+    toMove.forEach(t => {
+      this.addToIdeaBank({ text: t.text, cat: t.cat, sourceTaskId: t.id, notes: t.notes });
+      t.done = true; t.movedToIdeaBank = true;
+      t.completedAt = new Date().toISOString();
+    });
+    this.saveTasks(задачи);
+    return toMove.length;
   },
 
   // Полное обновление задачи (patch-merge)
