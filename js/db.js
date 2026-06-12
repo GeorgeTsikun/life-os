@@ -212,10 +212,32 @@ function инициализировать() {
 export const DB = {
   init() {
     инициализировать();
+    this.migrateTaskIdsToUUID();   // §migration: t-id → UUID для корректного upsert
     this.applyDailyDecay();
     this.resetDailyQuests();
     const moved = this.sweepQ4toIdeaBank();
     if (moved > 0) window.showToast?.(`💡 ${moved} идей из Q4 → Банк идей`, 'info');
+  },
+
+  // ── МИГРАЦИЯ: не-UUID id → UUID ──────────────────────────────────────────────
+  // Старые задачи имели id вида 't1718...'. Supabase upsert требует UUID, иначе
+  // INSERT создавал дубль, а при следующем pull старая запись с done=false
+  // "возвращала" уже выполненные задачи. Эта миграция одноразовая.
+  migrateTaskIdsToUUID() {
+    if (localStorage.getItem('lifeos_uuid_migrated_v1') === '1') return;
+    const isUuid = s => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+    const newUuid = () => (crypto?.randomUUID?.() || ('t' + Date.now() + Math.random().toString(36).slice(2,10)));
+
+    const задачи = this.getTasks();
+    let counter = 0;
+    задачи.forEach(t => {
+      if (!isUuid(t.id)) { t.id = newUuid(); counter++; }
+    });
+    if (counter > 0) {
+      this.saveTasks(задачи);
+      console.log(`[migration] обновил ${counter} task id → UUID`);
+    }
+    localStorage.setItem('lifeos_uuid_migrated_v1', '1');
   },
 
   get(ключ)       { return хранилищеПолучить(ключ) ?? ДАННЫЕ[ключ]; },
@@ -257,7 +279,7 @@ export const DB = {
     const задачи = this.getTasks();
     const difficulty = задача.difficulty || 2;
     const новая = {
-      id: 't' + Date.now(),
+      id: (crypto?.randomUUID?.() || ('t' + Date.now() + Math.random().toString(36).slice(2,10))),
       difficulty,
       xpValue: this.calcBaseXP(difficulty, задача.quadrant || 'schedule'),
       done: false,

@@ -30,7 +30,7 @@
     },
     {
       "source": "/js/(.*)",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=60, must-revalidate" }]
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
     }
   ]
 }

@@ -159,8 +159,14 @@ export async function загрузитьВсё() {
 // ── PUSH: отправляем изменения в облако ──────────────────────────────────────
 export async function сохранитьЗадачу(задача) {
   if (!активен()) return;
+  // Без UUID не пушим — иначе Supabase создаст дубль, и при следующем pull
+  // старая запись с done=false "вернёт" уже выполненную задачу обратно.
+  if (!uuidValid(задача.id)) {
+    console.warn('[Supabase] task без UUID — skip push:', задача.id, задача.text);
+    return;
+  }
   await запросUpsert('tasks', {
-    ...(uuidValid(задача.id) ? { id: задача.id } : {}),
+    id: задача.id,
     owner:        владелец,
     text:         задача.text,
     quadrant:     задача.quadrant,
