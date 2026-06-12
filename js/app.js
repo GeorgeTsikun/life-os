@@ -1,6 +1,6 @@
 // ── LIFE OS — ГЛАВНЫЙ МОДУЛЬ ──────────────────────────────────────────────────
 import { DB } from './db.js';
-import { injectUI, checkAchievements, onQuestCompleted } from './gamification.js';
+import { injectUI, checkAchievements, onQuestCompleted, applyDebuffMode } from './gamification.js';
 import { TG } from './telegram.js';
 import { renderDash }         from './screens/dash.js';
 import { renderTasks }        from './screens/tasks.js';
@@ -16,7 +16,10 @@ import * as Sync              from './supabaseSync.js';
 const ОНБОРДИНГ_ПРОЙДЕН = localStorage.getItem('lifeos_onboarded') === 'true'
                        || localStorage.getItem('lifeos_onboarding_skipped') === 'true';
 
-if (ОНБОРДИНГ_ПРОЙДЕН) DB.init();
+if (ОНБОРДИНГ_ПРОЙДЕН) {
+  DB.init();           // инициализация + ежедневная деградация шкал
+  applyDebuffMode();   // debuff-режим если шкала < 30
+}
 TG.init();
 injectUI(показатьТост, показатьXpFloat);
 

@@ -139,10 +139,9 @@ const ДАННЫЕ = {
   rpgStats: {
     STR: 62,
     VIT: 70,
-    INT: 58,
-    CHA: 55,
+    SOC: 55,  // CHA→SOC (Социум)
     WIS: 48,
-    FOC: 52,
+    ENG: 52,  // FOC→ENG (Энергобаланс, динамический от HRV)
   },
 };
 
@@ -173,11 +172,25 @@ function инициализировать() {
     хранилищеСохранить('profile', profile);
     хранилищеСохранить('migrated_v2_level1', true);
   }
+  // Миграция v3: переименование RPG-шкал INT→убрать, CHA→SOC, FOC→ENG
+  if (!хранилищеПолучить('migrated_v3_rpg_stats')) {
+    const rpg = хранилищеПолучить('rpgStats') || {};
+    if ('INT' in rpg) delete rpg.INT;
+    if ('FOC' in rpg) { rpg.ENG = rpg.FOC; delete rpg.FOC; }
+    if ('CHA' in rpg) { rpg.SOC = rpg.CHA; delete rpg.CHA; }
+    rpg.ENG = rpg.ENG ?? 52;
+    rpg.SOC = rpg.SOC ?? 55;
+    хранилищеСохранить('rpgStats', rpg);
+    хранилищеСохранить('migrated_v3_rpg_stats', true);
+  }
 }
 
 // ── ПУБЛИЧНОЕ API ─────────────────────────────────────────────────────────────
 export const DB = {
-  init() { инициализировать(); },
+  init() {
+    инициализировать();
+    this.applyDailyDecay();
+  },
 
   get(ключ)       { return хранилищеПолучить(ключ) ?? ДАННЫЕ[ключ]; },
   set(ключ, знач) { хранилищеСохранить(ключ, знач); },
@@ -380,7 +393,32 @@ export const DB = {
   },
 
   // RPG характеристики
-  getRpgStats()   { return this.get('rpgStats'); },
+  getRpgStats() {
+    const шкалы = this.get('rpgStats') || ДАННЫЕ.rpgStats;
+    // ENG — динамический: рассчитывается из HRV (clamp 0–100)
+    const hrv = this.getHealth().hrv || 60;
+    шкалы.ENG = Math.min(100, Math.max(0, Math.round((hrv / 80) * 100)));
+    return шкалы;
+  },
+
+  // Ежедневная деградация шкал (вызывается при init)
+  // STR −5, VIT −8, SOC −4, WIS −3 если прошли сутки
+  applyDailyDecay() {
+    const сегодня = new Date().toDateString();
+    const profile = this.getProfile();
+    if (profile.lastDecayDate === сегодня) return; // уже применяли сегодня
+
+    const шкалы = this.get('rpgStats') || ДАННЫЕ.rpgStats;
+    const деградация = { STR: 5, VIT: 8, SOC: 4, WIS: 3 }; // ENG — только HRV
+    for (const [ключ, убыль] of Object.entries(деградация)) {
+      if (ключ in шкалы) {
+        шкалы[ключ] = Math.max(0, (шкалы[ключ] || 50) - убыль);
+      }
+    }
+    this.set('rpgStats', шкалы);
+    profile.lastDecayDate = сегодня;
+    this.saveProfile(profile);
+  },
 
   // Дневник
   getDailyLog()   { return this.get('dailyLog'); },

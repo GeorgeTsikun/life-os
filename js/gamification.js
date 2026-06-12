@@ -61,13 +61,13 @@ export const XP_SOURCES = {
 };
 
 // RPG-характеристики: ключ, ярлык, цвет, описание
+// Соответствует спеку §4.3: STR / VIT / SOC / WIS / ENG
 export const RPG_STATS = [
-  { key:'STR', label:'СИЛ', color:'#FF6B6B', desc:'Спорт и тренировки' },
-  { key:'VIT', label:'ВИТ', color:'#00E396', desc:'Сон, HRV и питание' },
-  { key:'INT', label:'ИНТ', color:'#7B61FF', desc:'Задачи Q2 и проекты' },
-  { key:'CHA', label:'ХАР', color:'#FF9F43', desc:'Люди и обязательства' },
-  { key:'WIS', label:'МУД', color:'#00C9FF', desc:'Журнал энергии и ревью' },
-  { key:'FOC', label:'ФОК', color:'#00F5D4', desc:'Часы глубокой работы' },
+  { key:'STR', label:'СИЛ', color:'#FF6B6B', desc:'Спорт и тренировки',       decay: 5 },
+  { key:'VIT', label:'ВИТ', color:'#00E396', desc:'Сон, HRV и питание',        decay: 8 },
+  { key:'SOC', label:'СОЦ', color:'#FF9F43', desc:'Люди и обязательства',      decay: 4 },
+  { key:'WIS', label:'МУД', color:'#00C9FF', desc:'Журнал энергии и ревью',    decay: 3 },
+  { key:'ENG', label:'ЭНГ', color:'#00F5D4', desc:'Энергия (HRV + задачи Q2)', decay: 0 }, // динамический
 ];
 
 // Начисляем XP и обновляем профиль
@@ -150,12 +150,29 @@ export function проверитьДостижения() {
 // Псевдоним для импортов
 export const checkAchievements = проверитьДостижения;
 
-// XP за выполненную задачу
+// Debuff-режим: если любая шкала < 30 → класс на body
+export function applyDebuffMode() {
+  const шкалы = DB.getRpgStats();
+  const вДебаффе = RPG_STATS.some(s => (шкалы[s.key] ?? 50) < 30);
+  document.body.classList.toggle('debuff', вДебаффе);
+}
+
+// XP за выполненную задачу (с Energy_Factor при низком HRV)
 export function onTaskToggled(задача) {
   if (задача.done) {
     const карта = { do:'task_q1', schedule:'task_q2', delegate:'task_q3', eliminate:'task_q4' };
     const источник = карта[задача.quadrant] || 'task_q2';
-    awardXP(XP_SOURCES[источник] || 50, источник);
+    const base = задача.xpValue || XP_SOURCES[источник] || 50;
+
+    // Energy_Factor: при HRV < 30 + сложная задача (≥15 XP) → бонус ×1.5 за сверхусилие
+    const hrv = DB.getHealth().hrv || 60;
+    const ef  = (hrv < 30 && base >= 15) ? 1.5 : 1.0;
+    const итогоXP = Math.round(base * ef);
+
+    awardXP(итогоXP, источник);
+    if (ef > 1) {
+      показатьXpFloat(`+${итогоXP} XP ×1.5 💪`);
+    }
 
     // Обновляем прогресс еженедельного челленджа
     if (задача.quadrant === 'do') {

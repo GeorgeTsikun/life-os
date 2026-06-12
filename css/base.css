@@ -254,3 +254,33 @@ canvas  { max-width: 100% !important; }
   font-weight: 700;
   margin-bottom: 16px;
 }
+
+/* ── DEBUFF-РЕЖИМ: шкала < 30 ─────────────────────────────────────────────── */
+body.debuff .hero-card,
+body.debuff [class*="stat-"] {
+  box-shadow: 0 0 0 2px rgba(255,70,80,.6) !important;
+}
+body.debuff .hero-card::after {
+  content: '⚠️ ШКАЛА В КРИТИЧЕСКОЙ ЗОНЕ';
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 700;
+  color: #FF4560;
+  letter-spacing: .06em;
+  pointer-events: none;
+}
+body.debuff .nav-btn,
+body.debuff .card {
+  opacity: .88;
+}
+body.debuff #app::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse at top, rgba(255,70,80,.06) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
