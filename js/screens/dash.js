@@ -311,7 +311,7 @@ function mountRadar(rpg) {
   radarChart = new Chart(ctx, {
     type: 'radar',
     data: {
-      labels: ['СИЛ','ВИТ','СОЦ','МУД','ЭНГ'],
+      labels: ['ТЕЛО','СОН','ЛЮДИ','РАЗУМ','ЗАРЯД'],
       datasets: [{
         data: [rpg.STR, rpg.VIT, rpg.SOC, rpg.WIS, rpg.ENG],
         backgroundColor: 'rgba(0,245,212,.12)',
