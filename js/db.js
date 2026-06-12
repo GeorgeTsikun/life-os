@@ -485,7 +485,15 @@ export const DB = {
 
   // Дневник
   getDailyLog()   { return this.get('dailyLog'); },
-  saveDailyLog(d) { this.set('dailyLog', d); window._дбHook?.('daily', d); },
+  saveDailyLog(d) {
+    d.lastCheckinDate = new Date().toDateString(); // фиксируем дату чекина
+    this.set('dailyLog', d);
+    window._дбHook?.('daily', d);
+  },
+  isCheckinDoneToday() {
+    const d = this.get('dailyLog') || {};
+    return d.lastCheckinDate === new Date().toDateString();
+  },
 
   // Инбокс (голосовые записи из бота)
   getInbox()      { return this.get('inbox') || []; },

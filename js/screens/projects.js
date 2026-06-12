@@ -91,13 +91,19 @@ export function renderProjects() {
 }
 
 function projectCardHTML(p) {
+  const задачиПроекта = DB.getTasks().filter(t => t.project_id === p.id && !t.done && !t.cancelled);
+  const realCount     = задачиПроекта.length;
+  const topTask       = задачиПроекта.find(t => t.quadrant === 'do') || задачиПроекта[0];
+
   return `<div class="project-card" onclick="window.openProjectDetail('${p.id}')">
     <div class="row" style="justify-content:space-between;margin-bottom:10px">
       <div class="row" style="gap:8px">
         <span style="font-size:24px">${p.emoji}</span>
         <div>
           <div style="font-weight:600;font-size:14px">${p.name}</div>
-          <div style="font-size:9px;color:rgba(232,237,245,.4);margin-top:1px">${p.tasksCount || 0} задач</div>
+          <div style="font-size:9px;color:rgba(232,237,245,.4);margin-top:1px">
+            ${realCount > 0 ? `${realCount} активных задач` : 'Нет задач'}
+          </div>
         </div>
       </div>
       <div style="text-align:right">
@@ -113,6 +119,10 @@ function projectCardHTML(p) {
       <div class="prog-fill" style="width:${p.progress}%;background:${p.color};box-shadow:0 0 8px ${p.color}80"></div>
     </div>
     <div class="num" style="font-size:12px;color:${p.color};margin-top:4px">${p.progress}%</div>
+    ${topTask ? `<div style="margin-top:8px;padding:7px 10px;background:rgba(255,255,255,.03);border-radius:8px;border-left:2px solid ${p.color}60;display:flex;align-items:center;gap:8px">
+      <span style="font-size:10px">⚡</span>
+      <div style="font-size:11px;color:rgba(232,237,245,.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${topTask.text}</div>
+    </div>` : ''}
   </div>`;
 }
 
@@ -163,6 +173,25 @@ window.openProjectDetail = function(id) {
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
       ${['Идея','Разработка','Активно','Доставка','На паузе'].map(s=>`<button class="cat-pill${s===p.stage?' active':''}" onclick="window._projStage='${s}';document.querySelectorAll('#proj-stages .cat-pill').forEach(b=>b.classList.remove('active'));this.classList.add('active');TG.hapticSelection()" id="proj-stages" style="--cc:#00F5D4">${s}</button>`).join('')}
     </div>
+    <!-- Задачи проекта -->
+    ${(()=>{
+      const задачи = DB.getTasks().filter(t => t.project_id === p.id);
+      const active = задачи.filter(t => !t.done && !t.cancelled);
+      const done   = задачи.filter(t => t.done && !t.cancelled);
+      if (!задачи.length) return `<div style="font-size:11px;color:rgba(232,237,245,.3);text-align:center;padding:12px 0">Нет привязанных задач.<br>Открой задачу → выбери проект.</div>`;
+      return `<div style="margin-bottom:16px">
+        <div style="font-size:9px;color:rgba(232,237,245,.35);letter-spacing:.08em;margin-bottom:8px">ЗАДАЧИ (${active.length} активных · ${done.length} готовых)</div>
+        ${active.slice(0,5).map(t=>`<div onclick="window.openTaskDetail?.('${t.id}')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+          <div style="width:6px;height:6px;border-radius:50%;background:${p.color};flex-shrink:0"></div>
+          <div style="flex:1;font-size:12px;color:#E8EDF5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.text}</div>
+          <span style="font-size:9px;padding:2px 6px;border-radius:8px;background:rgba(255,69,96,.12);color:#FF4560">${t.quadrant==='do'?'Q1':t.quadrant==='schedule'?'Q2':'Q3'}</span>
+        </div>`).join('')}
+        ${done.slice(0,3).map(t=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;opacity:.4">
+          <span style="font-size:10px">✓</span>
+          <div style="font-size:11px;text-decoration:line-through;color:rgba(232,237,245,.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.text}</div>
+        </div>`).join('')}
+      </div>`;
+    })()}
     <div style="display:flex;gap:8px">
       <button class="btn btn-ghost" style="flex:1" onclick="this.closest('.detail-overlay').remove()">Закрыть</button>
       <button class="btn btn-teal" style="flex:2" onclick="window.saveProject('${p.id}')">Сохранить</button>

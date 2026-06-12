@@ -1,6 +1,6 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
 import { DB } from '../db.js';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode } from '../gamification.js';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js';
 import { TG } from '../telegram.js';
 
 let radarChart, energyChart;
@@ -96,6 +96,12 @@ export function renderDash() {
 
   <!-- ── REAL CAPACITY ────────────────────────────────────────────────────────── -->
   ${renderRcBlock(health, profile)}
+
+  <!-- ── DAILY CHECK-IN ────────────────────────────────────────────────────────── -->
+  ${renderCheckinBlock(daily)}
+
+  <!-- ── Q1 ЛИМИТ ──────────────────────────────────────────────────────────────── -->
+  ${renderQ1Alert(tasks)}
 
   <!-- ── КВЕСТЫ ДНЯ ─────────────────────────────────────────────────────────── -->
   <div class="card" style="margin-bottom:12px">
@@ -324,6 +330,36 @@ window.resetQuest = function(id) {
   }
 };
 
+window.ciPickMood = function(m) {
+  window._ciMood = m;
+  document.querySelectorAll('[id^="ci-mood-"]').forEach(b => {
+    const active = b.id === 'ci-mood-' + m;
+    b.style.background = active ? 'rgba(0,245,212,.15)' : 'rgba(255,255,255,.04)';
+    b.style.border = `1px solid ${active ? 'rgba(0,245,212,.4)' : 'rgba(255,255,255,.08)'}`;
+  });
+};
+
+window.submitCheckin = function() {
+  const energy = parseInt(document.getElementById('ci-energy')?.value || '7');
+  const mood   = window._ciMood || DB.getDailyLog()?.mood || '😊';
+  const note   = document.getElementById('ci-note')?.value?.trim() || '';
+
+  const log = { ...DB.getDailyLog(), energy, mood, note };
+  DB.saveDailyLog(log);
+
+  // Обновляем WIS шкалу (+5 за чекин)
+  const шкалы = DB.getRpgStats();
+  шкалы.WIS = Math.min(100, (шкалы.WIS || 48) + 5);
+  DB.set('rpgStats', шкалы);
+
+  // XP за дневник
+  awardXP(10, 'daily_log');
+
+  window.showToast?.('☀️ Чекин записан · +10 XP · MIND +5', 'success');
+  window._ciMood = null;
+  renderDash();
+};
+
 window.setFocusFilter = function(f) {
   focusFilter = f;
   // Скрываем меню категорий при выборе
@@ -346,6 +382,71 @@ window.toggleInboxGroup = function(groupId) {
   блок.style.display = открыт ? 'none' : 'block';
   if (стрелка) стрелка.style.transform = открыт ? 'none' : 'rotate(180deg)';
 };
+
+// ── DAILY CHECK-IN ────────────────────────────────────────────────────────────
+function renderCheckinBlock(daily) {
+  if (DB.isCheckinDoneToday()) return ''; // уже заполнен — не показываем
+
+  const moods = ['😴','😔','😐','🙂','😊','🤩'];
+  return `<div class="card" style="margin-bottom:12px;border:1px solid rgba(0,245,212,.2);background:rgba(0,245,212,.04)">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <div class="sec-label" style="margin:0;color:#00F5D4">☀️ КАК ТЫ СЕГОДНЯ?</div>
+      <span style="font-size:9px;color:rgba(232,237,245,.3)">+10 XP за MIND</span>
+    </div>
+
+    <!-- Энергия: слайдер -->
+    <div style="margin-bottom:12px">
+      <div class="row" style="justify-content:space-between;margin-bottom:6px">
+        <div style="font-size:11px;color:rgba(232,237,245,.5)">Энергия</div>
+        <div id="ci-energy-val" style="font-size:12px;font-weight:700;color:#FFD700">${daily.energy || 7}/10</div>
+      </div>
+      <input type="range" id="ci-energy" min="1" max="10" value="${daily.energy || 7}"
+        oninput="document.getElementById('ci-energy-val').textContent=this.value+'/10'"
+        style="width:100%;accent-color:#FFD700;cursor:pointer">
+    </div>
+
+    <!-- Настроение: emoji-пикер -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;color:rgba(232,237,245,.5);margin-bottom:8px">Настроение</div>
+      <div style="display:flex;gap:8px;justify-content:space-between">
+        ${moods.map(m => `<button onclick="window.ciPickMood('${m}')" id="ci-mood-${m}" style="
+          font-size:22px;background:${(daily.mood||'😊')===m?'rgba(0,245,212,.15)':'rgba(255,255,255,.04)'};
+          border:1px solid ${(daily.mood||'😊')===m?'rgba(0,245,212,.4)':'rgba(255,255,255,.08)'};
+          border-radius:10px;padding:6px 8px;cursor:pointer;flex:1;transition:all .15s
+        ">${m}</button>`).join('')}
+      </div>
+    </div>
+
+    <!-- Заметка -->
+    <textarea id="ci-note" class="input" rows="1" placeholder="Одна фраза о дне (необязательно)…"
+      style="margin-bottom:12px;font-size:12px;resize:none">${daily.note||''}</textarea>
+
+    <button onclick="window.submitCheckin()" class="btn btn-teal" style="width:100%;padding:11px;font-size:12px">
+      Записать ✓
+    </button>
+  </div>`;
+}
+
+// ── Q1 > 5 ПРЕДУПРЕЖДЕНИЕ ────────────────────────────────────────────────────
+function renderQ1Alert(tasks) {
+  const q1 = tasks.filter(t => t.quadrant === 'do' && !t.done && !t.cancelled);
+  if (q1.length <= 5) return '';
+  return `<div style="
+    background:rgba(255,69,96,.08);border:1px solid rgba(255,69,96,.3);
+    border-radius:12px;padding:12px 14px;margin-bottom:12px;
+    display:flex;align-items:center;gap:10px
+  ">
+    <div style="font-size:22px;flex-shrink:0">⚠️</div>
+    <div>
+      <div style="font-size:12px;font-weight:700;color:#FF4560;margin-bottom:2px">
+        Искусственный кризис — ${q1.length} срочных задач
+      </div>
+      <div style="font-size:10px;color:rgba(232,237,245,.5);line-height:1.4">
+        Q1 > 5 — это не приоритеты, это паника. Отмени или делегируй лишние.
+      </div>
+    </div>
+  </div>`;
+}
 
 // ── REAL CAPACITY БЛОК ───────────────────────────────────────────────────────
 function renderRcBlock(health, profile) {
