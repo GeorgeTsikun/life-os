@@ -15,9 +15,12 @@ const ДАННЫЕ = {
     name: 'ДЖОРДЖ',
     tagline: 'ВИЗИОНЕР · СОЗДАТЕЛЬ · ЛИДЕР',
     avatar: '👑',
-    level: 7,
-    xp: 50141,
-    streak: 7,
+    photo: 'assets/avatar.jpg',  // путь к фото (fallback на эмоджи)
+    level: 1,
+    xp: 0,
+    coins: 0,                     // трачимая валюта — на «развлечения» / прокрастинацию
+    coinsSpent: 0,                // всего потрачено за всё время
+    streak: 1,
     lastActive: new Date().toDateString(),
   },
   tasks: [
@@ -137,6 +140,17 @@ function инициализировать() {
     Object.entries(ДАННЫЕ).forEach(([к, в]) => хранилищеСохранить(к, в));
     хранилищеСохранить('initialized', true);
   }
+  // Миграция v2: сброс XP/уровня → старт с Уровня 1, добавление coins/photo
+  if (!хранилищеПолучить('migrated_v2_level1')) {
+    const profile = хранилищеПолучить('profile') || {};
+    profile.level = 1;
+    profile.xp = 0;
+    profile.coins = profile.coins ?? 0;
+    profile.coinsSpent = profile.coinsSpent ?? 0;
+    profile.photo = profile.photo || 'assets/avatar.jpg';
+    хранилищеСохранить('profile', profile);
+    хранилищеСохранить('migrated_v2_level1', true);
+  }
 }
 
 // ── ПУБЛИЧНОЕ API ─────────────────────────────────────────────────────────────
@@ -182,12 +196,34 @@ export const DB = {
     const задачи = this.getTasks();
     const т = задачи.find(x => x.id === id);
     if (т) {
+      const сталоВыполненным = !т.done;
       т.done = !т.done;
       т.completedAt = т.done ? new Date().toISOString() : null;
       this.saveTasks(задачи);
+      // Начисляем XP + монеты при выполнении (отнимаем при откате)
+      const величина = т.xpValue || 25;
+      const профиль = this.getProfile();
+      const знак = сталоВыполненным ? 1 : -1;
+      профиль.xp = Math.max(0, (профиль.xp || 0) + знак * величина);
+      профиль.coins = Math.max(0, (профиль.coins || 0) + знак * величина);
+      this.saveProfile(профиль);
       window._дбHook?.('task', т);
     }
     return т;
+  },
+
+  // ── МОНЕТЫ (трачимая валюта) ────────────────────────────────────────────────
+  потратитьМонеты(сумма, причина = 'развлечение') {
+    const p = this.getProfile();
+    if ((p.coins || 0) < сумма) return { ok: false, reason: 'Недостаточно монет', balance: p.coins || 0 };
+    p.coins = (p.coins || 0) - сумма;
+    p.coinsSpent = (p.coinsSpent || 0) + сумма;
+    this.saveProfile(p);
+    // Журнал трат
+    const журнал = this.get('coinsLog') || [];
+    журнал.unshift({ at: new Date().toISOString(), amount: -сумма, reason: причина, balance: p.coins });
+    this.set('coinsLog', журнал.slice(0, 100));
+    return { ok: true, balance: p.coins };
   },
 
   deleteTask(id) {
