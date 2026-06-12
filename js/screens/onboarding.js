@@ -24,6 +24,14 @@ const БЛОКИ = [
     hint: 'Пример: «Сплю 7-8 часов, тренажёрка 3 раза в неделю, пью БАДы для СДВГ…»',
   },
   {
+    key: 'hrv_baseline',
+    icon: '❤️',
+    title: 'Калибровка HRV',
+    type: 'hrv',
+    prompt: 'Введи свой средний HRV (вариабельность сердечного ритма) из Apple Watch, Garmin или другого устройства. Это нужно для расчёта твоей реальной ёмкости (RC) и бонусов за сверхусилие.',
+    hint: 'Норма: 40–100 мс. Если не знаешь — введи 60. Потом сможешь изменить в настройках здоровья.',
+  },
+  {
     key: 'people',
     icon: '👥',
     title: 'Люди в моей жизни',
@@ -153,7 +161,7 @@ export async function renderOnboarding() {
     </div>
 
     <div id="rec-area">
-      ${ответ ? renderОтвет(ответ) : renderКнопкаЗаписи()}
+      ${блок.type === 'hrv' ? (_hrvVal = parseInt(ответы['hrv_baseline'] || 60), renderHRVInput()) : (ответ ? renderОтвет(ответ) : renderКнопкаЗаписи())}
     </div>
 
     ${сохранёнка ? `<div style="background:rgba(255,215,0,.06);border:1px solid rgba(255,215,0,.2);border-radius:10px;padding:10px 12px;margin-top:14px">
@@ -168,7 +176,7 @@ export async function renderOnboarding() {
       </div>
     </div>` : ''}
 
-    ${!ответ ? `<div style="margin-top:14px">
+    ${!ответ && блок.type !== 'hrv' ? `<div style="margin-top:14px">
       <details style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px 12px">
         <summary style="cursor:pointer;font-size:12px;color:rgba(232,237,245,.7)">✍️ Или вставь текстом</summary>
         <textarea id="manual-text" class="input" rows="4" placeholder="Напиши текстом если так удобнее..." style="margin-top:10px;resize:vertical"></textarea>
@@ -180,7 +188,7 @@ export async function renderOnboarding() {
       ${текущийБлок > 0
         ? `<button class="btn btn-ghost" style="flex:1" onclick="window.onbПрев()">← Назад</button>`
         : ''}
-      ${ответ
+      ${(ответ || блок.type === 'hrv')
         ? `<button class="btn btn-teal" style="flex:2" onclick="window.onbДалее()">${текущийБлок === БЛОКИ.length-1 ? '🚀 Создать мою ОС' : 'Далее →'}</button>`
         : `<button class="btn btn-ghost" style="flex:2" onclick="window.onbПропустить()">Пропустить блок</button>`}
     </div>
@@ -190,6 +198,78 @@ export async function renderOnboarding() {
     </button>
 
   </div>`;
+}
+
+function renderHRVInput() {
+  const saved = ответы['hrv_baseline'];
+  const val = saved ? parseInt(saved) : 60;
+  return `<div style="padding:10px 0">
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-size:13px;color:rgba(232,237,245,.6);margin-bottom:12px">Мой средний HRV</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:12px">
+        <button onclick="window.onbHRVChange(-5)"
+          style="width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.15);
+                 background:rgba(255,255,255,.06);color:#E8EDF5;font-size:20px;cursor:pointer">−</button>
+        <div style="text-align:center">
+          <div id="hrv-display" class="num" style="font-size:42px;color:#FF4560;font-family:Orbitron;min-width:80px">${val}</div>
+          <div style="font-size:10px;color:rgba(232,237,245,.35);margin-top:2px">мс</div>
+        </div>
+        <button onclick="window.onbHRVChange(+5)"
+          style="width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.15);
+                 background:rgba(255,255,255,.06);color:#E8EDF5;font-size:20px;cursor:pointer">+</button>
+      </div>
+      <input type="range" id="hrv-slider" min="20" max="120" value="${val}" step="1"
+        oninput="window.onbHRVSlide(this.value)"
+        style="width:100%;margin-top:16px;accent-color:#FF4560">
+    </div>
+    <div id="hrv-zone" style="text-align:center;margin-top:8px">${hrvZoneHTML(val)}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:14px">
+      ${[['Низкий','< 40','#FF4560',35],['Норма','40–80','#FFD700',60],['Высокий','> 80','#00E396',90]].map(([l,r,c,v]) =>
+        `<button onclick="window.onbHRVSet(${v})"
+          style="padding:8px 6px;border-radius:10px;border:1px solid ${c}44;background:${c}11;
+                 cursor:pointer;text-align:center">
+          <div style="font-size:10px;color:${c};font-weight:700">${l}</div>
+          <div style="font-size:9px;color:rgba(232,237,245,.4)">${r}</div>
+        </button>`
+      ).join('')}
+    </div>
+  </div>`;
+}
+
+function hrvZoneHTML(val) {
+  const v = parseInt(val);
+  if (v < 40)  return `<span style="font-size:12px;color:#FF4560">🔴 Низкий HRV — высокий стресс / истощение</span>`;
+  if (v < 60)  return `<span style="font-size:12px;color:#FFD700">🟡 Умеренный HRV — норма</span>`;
+  if (v < 80)  return `<span style="font-size:12px;color:#00E396">🟢 Хороший HRV — восстановление нормальное</span>`;
+  return `<span style="font-size:12px;color:#00F5D4">💚 Отличный HRV — ты в форме!</span>`;
+}
+
+let _hrvVal = 60;
+
+window.onbHRVChange = function(delta) {
+  _hrvVal = Math.min(120, Math.max(20, _hrvVal + delta));
+  _updateHRV(_hrvVal);
+};
+window.onbHRVSlide = function(v) {
+  _hrvVal = parseInt(v);
+  _updateHRV(_hrvVal);
+};
+window.onbHRVSet = function(v) {
+  _hrvVal = v;
+  _updateHRV(v);
+};
+function _updateHRV(v) {
+  const disp = document.getElementById('hrv-display');
+  const slider = document.getElementById('hrv-slider');
+  const zone = document.getElementById('hrv-zone');
+  if (disp) disp.textContent = v;
+  if (slider) slider.value = v;
+  if (zone) zone.innerHTML = hrvZoneHTML(v);
+  // Обновляем цвет числа
+  const color = v < 40 ? '#FF4560' : v < 60 ? '#FFD700' : '#00E396';
+  if (disp) disp.style.color = color;
+  // Сохраняем сразу
+  ответы['hrv_baseline'] = String(v);
 }
 
 function renderКнопкаЗаписи() {
@@ -458,7 +538,9 @@ async function завершить() {
     const { структура } = await res.json();
 
     // Применяем извлечённую структуру
-    if (структура.profile)         DB.saveProfile({ ...DB.getProfile(), ...структура.profile });
+    // Сохраняем HRV baseline из онбординга
+    const hrvBaseline = parseInt(ответы['hrv_baseline'] || 60);
+    if (структура.profile)         DB.saveProfile({ ...DB.getProfile(), ...структура.profile, hrvBaseline });
     if (структура.projects)        DB.saveProjects(структура.projects.map((p,i) => ({ id:'p'+(Date.now()+i), ...p })));
     if (структура.tasks)           DB.saveTasks(структура.tasks.map((t,i) => ({ id:'t'+(Date.now()+i), done:false, xpValue:50, createdAt:Date.now(), ...t })));
     if (структура.people)          DB.savePeople(структура.people.map((p,i) => ({ id:'pe'+(Date.now()+i), last:'сегодня', border: p.urgency==='urgent'?'#FF4560':p.urgency==='soon'?'#00F5D4':'rgba(232,237,245,.2)', ...p })));
@@ -466,6 +548,12 @@ async function завершить() {
     if (структура.weeklyChallenge) DB.set('weeklyChallenge', { progress:0, ...структура.weeklyChallenge });
     if (структура.rpgStats)        DB.set('rpgStats', структура.rpgStats);
     if (структура.dailyLog)        DB.saveDailyLog(структура.dailyLog);
+    // Всегда сохраняем HRV baseline (даже если profile не вернул AI)
+    if (!структура.profile) {
+      const p = DB.getProfile();
+      p.hrvBaseline = hrvBaseline;
+      DB.saveProfile(p);
+    }
 
     localStorage.setItem('lifeos_onboarded', 'true');
     localStorage.setItem('lifeos_onboarded_at', new Date().toISOString());

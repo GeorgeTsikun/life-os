@@ -133,20 +133,26 @@ window.submitExpectation = function() {
 };
 
 function personCardHTML(p) {
-  const urgencyLabel = p.urgency === 'urgent' ? '🔴 Сегодня' : p.urgency === 'soon' ? '🟢 Планово' : '⚪ Позже';
+  // §6.2 CRM urgency colors: 🔴 горит / 🟡 скоро / 🟢 позже
+  const urgency = p.urgency || 'later';
+  const urgencyLabel = urgency === 'urgent' ? '🔴 Горит' : urgency === 'soon' ? '🟡 Скоро' : '🟢 Позже';
+  const urgencyBorderColor = urgency === 'urgent' ? '#FF4560' : urgency === 'soon' ? '#FFD700' : (p.border || 'rgba(232,237,245,.2)');
+  const urgencyCardGlow    = urgency === 'urgent'
+    ? 'background:rgba(255,69,96,.04);box-shadow:inset 0 0 0 1px rgba(255,69,96,.1)'
+    : urgency === 'soon' ? 'background:rgba(255,215,0,.025)' : '';
   const commitStyle  = p.mine
     ? 'background:rgba(0,245,212,.05);border:1px solid rgba(0,245,212,.15)'
     : 'background:rgba(123,97,255,.05);border:1px solid rgba(123,97,255,.15)';
   const commitColor  = p.mine ? '#00F5D4' : '#7B61FF';
   const commitLabel  = p.mine ? '→ МОЁ ОБЯЗАТЕЛЬСТВО' : '← ОТ НИХ';
 
-  return `<div class="person-card" style="border-left-color:${p.border}" onclick="window.openPersonDetail('${p.id}')">
+  return `<div class="person-card" style="border-left-color:${urgencyBorderColor};${urgencyCardGlow}" onclick="window.openPersonDetail('${p.id}')">
     <div class="row" style="gap:10px;align-items:flex-start">
       <div class="person-avatar">${p.avatar || '👤'}</div>
       <div style="flex:1">
         <div class="row" style="justify-content:space-between;margin-bottom:3px">
           <div style="font-weight:600;font-size:14px">${p.name}</div>
-          <span class="badge" style="background:${p.border}18;color:${p.border};border:1px solid ${p.border}30;font-size:9px">${urgencyLabel}</span>
+          <span class="badge" style="background:${urgencyBorderColor}18;color:${urgencyBorderColor};border:1px solid ${urgencyBorderColor}30;font-size:9px">${urgencyLabel}</span>
         </div>
         <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:8px">${p.rel} · контакт: ${p.last}</div>
         <div class="commitment-block" style="${commitStyle}">

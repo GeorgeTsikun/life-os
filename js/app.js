@@ -10,6 +10,7 @@ import { renderPeople }       from './screens/people.js';
 import { renderContent }      from './screens/content.js';
 import { renderAchievements } from './screens/achievements.js';
 import { renderOnboarding }   from './screens/onboarding.js';
+import { renderAnalytics }    from './screens/analytics.js';
 import * as Sync              from './supabaseSync.js';
 import { openVoiceCapture }  from './voiceCapture.js';
 
@@ -163,6 +164,7 @@ const ЭКРАНЫ = {
   projects:     renderProjects,
   people:       renderPeople,
   achievements: renderAchievements,
+  analytics:    renderAnalytics,
 };
 
 // ── НАВИГАЦИЯ ─────────────────────────────────────────────────────────────────
@@ -194,6 +196,17 @@ window.goBack = function() {
   window.goTab(null, 'dash');
   document.querySelector('[data-tab="dash"]')?.classList.add('active');
   TG.hideBackButton();
+};
+
+// Открытие аналитики (не nav-таб, а виртуальный роут — не меняет активную кнопку)
+window._openAnalytics = function() {
+  уничтожитьВсеГрафики();
+  renderAnalytics();
+  TG.hapticSelection();
+};
+window._goAnalyticsBack = function() {
+  window.goTab(null, текущийТаб || 'dash');
+  document.querySelector(`[data-tab="${текущийТаб || 'dash'}"]`)?.classList.add('active');
 };
 
 // ── ОЧИСТКА ГРАФИКОВ ──────────────────────────────────────────────────────────

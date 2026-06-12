@@ -60,7 +60,13 @@ export function renderDash() {
         <div style="font-size:10px;letter-spacing:.12em;color:rgba(232,237,245,.7);margin-top:2px">${profile.tagline || 'ВИЗИОНЕР · СОЗДАТЕЛЬ · ЛИДЕР'}</div>
       </div>
       <div style="position:absolute;top:12px;right:12px;display:flex;flex-direction:column;align-items:flex-end;gap:6px">
-        <span class="level-badge" style="background:rgba(0,0,0,.55);backdrop-filter:blur(8px);border:1px solid rgba(0,245,212,.3);color:#00F5D4;font-weight:800">УР. ${level}</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button onclick="window._openAnalytics()" title="Аналитика"
+            style="padding:4px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.2);
+                   background:rgba(0,0,0,.55);backdrop-filter:blur(8px);
+                   color:#E8EDF5;font-size:11px;cursor:pointer;line-height:1">📊</button>
+          <span class="level-badge" style="background:rgba(0,0,0,.55);backdrop-filter:blur(8px);border:1px solid rgba(0,245,212,.3);color:#00F5D4;font-weight:800">УР. ${level}</span>
+        </div>
         <div class="streak-badge" style="background:rgba(0,0,0,.55);backdrop-filter:blur(8px)">
           <span class="flame" style="font-size:13px">🔥</span>
           <span class="num" style="color:#FFD700;font-size:13px">${profile.streak || 1}</span>
@@ -602,12 +608,27 @@ function renderFocusBlock(allTasks, health, profile) {
   if (mode.key === 'low') {
     const рутина = allTasks.filter(t => !t.done && !t.cancelled && (t.quadrant === 'delegate' || LIFE_CATS.has(t.cat)));
     const показ  = applyFilter(рутина).slice(0, 3);
+    // §5.2: предложить перенести Q1 с difficulty ≥ 4 в Q2
+    const heavyQ1 = allTasks.filter(t => !t.done && !t.cancelled && t.quadrant === 'do' && (t.difficulty || 2) >= 4);
+    const heavyBanner = heavyQ1.length > 0 ? `
+      <div style="background:rgba(255,69,96,.06);border:1px solid rgba(255,69,96,.2);border-radius:10px;padding:10px 12px;margin-bottom:10px">
+        <div style="font-size:10px;color:#FF4560;font-weight:700;margin-bottom:5px">⚠️ ${heavyQ1.length} тяжёлых Q1 при низком RC</div>
+        <div style="font-size:10px;color:rgba(232,237,245,.5);margin-bottom:8px">Перенести в Q2 чтобы не угробить себя?</div>
+        ${heavyQ1.slice(0,3).map(t => `
+          <div class="row" style="gap:6px;margin-bottom:5px">
+            <span style="flex:1;font-size:10px;color:#E8EDF5;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${t.text}</span>
+            <button onclick="window.rcMoveToQ2('${t.id}')"
+              style="flex-shrink:0;padding:3px 8px;border-radius:7px;border:1px solid rgba(255,69,96,.3);
+                     background:rgba(255,69,96,.1);color:#FF4560;font-size:9px;cursor:pointer">→ Q2</button>
+          </div>`).join('')}
+      </div>` : '';
     return `<div class="card" style="margin-bottom:12px;border-left:3px solid #FF6B6B">
       <div class="row" style="justify-content:space-between;margin-bottom:6px">
         <div class="sec-label" style="margin:0;color:#FF6B6B">🐢 РЕЖИМ ВОССТАНОВЛЕНИЯ</div>
         <span class="badge" style="background:rgba(255,107,107,.12);color:#FF6B6B;border:1px solid rgba(255,107,107,.25)">RC ${rc.toFixed(2)}</span>
       </div>
       <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:10px">HRV или сон в красной зоне — сегодня только рутина</div>
+      ${heavyBanner}
       ${filterBar}
       ${показ.length
         ? показ.map((t, i) => renderFocusItem(t, i, показ.length)).join('')
@@ -837,3 +858,10 @@ function mountEnergy(data) {
     },
   });
 }
+
+// §5.2 RC LOW: перенос тяжёлых Q1 → Q2 по предложению
+window.rcMoveToQ2 = function(id) {
+  DB.updateTask(id, { quadrant: 'schedule' });
+  window.showToast?.('→ Задача перенесена в Q2 (режим восстановления)', 'info');
+  renderDash();
+};

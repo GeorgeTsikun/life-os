@@ -386,9 +386,10 @@ function renderMatrix(tasks) {
       const all      = tasks.filter(t => t.quadrant === q.key && !t.done);
       const видимые  = all.slice(0,4);
       return `<div class="quadrant-card" style="border-top:2px solid ${q.color}">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;cursor:pointer"
+          onclick="window.matrixOpenKanban('${q.key}')" title="Открыть в Kanban">
           <div style="font-size:9px;font-weight:700;color:${q.color}">${q.label.split('·')[0].trim()}</div>
-          <span class="num" style="font-size:12px;color:${q.color}">${all.length}</span>
+          <span class="num" style="font-size:12px;color:${q.color}">${all.length} 🗂</span>
         </div>
         ${видимые.map(t => `
           <div style="font-size:11px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);display:flex;gap:6px;align-items:flex-start">
@@ -533,6 +534,13 @@ window.openTaskDetail = function(id) {
 
 window.setTaskView = function(mode) {
   viewMode = mode;
+  renderTasks();
+};
+
+// §6.2 Matrix → Kanban: тап на заголовок квадранта открывает Kanban
+// (в будущем можно добавить фильтрацию по квадранту)
+window.matrixOpenKanban = function(quad) {
+  viewMode = 'kanban';
   renderTasks();
 };
 
