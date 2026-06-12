@@ -33,8 +33,9 @@ const QUADS = [
   { key:'eliminate',label:'🌀 ЛОВУШКА',  sub:'Ворует время',      color:'rgba(232,237,245,.35)',cls:'accent-gray'},
 ];
 
-let viewMode   = 'dates'; // 'dates' | 'matrix' | 'done'
+let viewMode   = 'dates'; // 'dates' | 'matrix' | 'done' | 'ideas' | 'kanban'
 let catFilter  = 'all';  // 'all' | 'work' | 'personal' | 'cat:X'
+let kbExpanded = null;   // id раскрытой kanban-карточки
 
 const WORK_CATS_T = new Set(['Работа','Контент','Эксперименты','Стратегия','Обучение','Деньги','Бизнес','Клуб','Операционка','Привлечение клиентов','Развитие','Эффективность']);
 const LIFE_CATS_T = new Set(['Семья','Встречи','Быт','Здоровье','Chill','Личное','Личные дела','Домашние дела']);
@@ -69,10 +70,11 @@ export function renderTasks() {
   </div>
 
   <div class="toggle-row" style="margin-bottom:10px">
-    <button class="toggle-btn${viewMode==='dates'?' active':''}"  onclick="window.setTaskView('dates')">📅 По датам</button>
-    <button class="toggle-btn${viewMode==='matrix'?' active':''}" onclick="window.setTaskView('matrix')">🔲 Матрица</button>
-    <button class="toggle-btn${viewMode==='done'?' active':''}"   onclick="window.setTaskView('done')">✅ Готово</button>
-    <button class="toggle-btn${viewMode==='ideas'?' active':''}"  onclick="window.setTaskView('ideas')" style="color:#FFD700">💡 Идеи</button>
+    <button class="toggle-btn${viewMode==='dates'?' active':''}"  onclick="window.setTaskView('dates')">📅</button>
+    <button class="toggle-btn${viewMode==='matrix'?' active':''}" onclick="window.setTaskView('matrix')">🔲</button>
+    <button class="toggle-btn${viewMode==='kanban'?' active':''}" onclick="window.setTaskView('kanban')">🗂</button>
+    <button class="toggle-btn${viewMode==='done'?' active':''}"   onclick="window.setTaskView('done')">✅</button>
+    <button class="toggle-btn${viewMode==='ideas'?' active':''}"  onclick="window.setTaskView('ideas')" style="color:#FFD700">💡</button>
   </div>
 
   ${viewMode !== 'done' ? `
@@ -89,6 +91,7 @@ export function renderTasks() {
   ${viewMode === 'matrix' ? renderMatrix(filtered)
    : viewMode === 'done'  ? renderDone(готовые)
    : viewMode === 'ideas' ? renderIdeaBank()
+   : viewMode === 'kanban'? renderKanban()
    : renderByDates(filtered)}
 
   <div style="height:8px"></div>
@@ -96,6 +99,21 @@ export function renderTasks() {
 
   TG.hideMainButton();
   TG.hideBackButton();
+
+  // Dot-индикатор скролла канбана
+  if (viewMode === 'kanban') {
+    requestAnimationFrame(() => {
+      const wrap = document.getElementById('kanban-scroll');
+      if (!wrap || wrap._kbListener) return;
+      wrap._kbListener = true;
+      wrap.addEventListener('scroll', () => {
+        const idx = Math.round(wrap.scrollLeft / 220);
+        document.querySelectorAll('.kanban-hint-dot').forEach((d, i) => {
+          d.classList.toggle('active', i === idx);
+        });
+      }, { passive: true });
+    });
+  }
 }
 
 // ── ГРУППИРОВКА ПО ДАТАМ ─────────────────────────────────────────────────────
@@ -240,6 +258,109 @@ function renderIdeaBank() {
         <button onclick="window.ideaBankDelete('${idea.id}')" style="font-size:9px;padding:3px 7px;border-radius:8px;border:1px solid rgba(255,69,96,.2);background:rgba(255,69,96,.05);color:#FF4560;cursor:pointer">✕</button>
       </div>
     </div>`).join('')}
+  </div>`;
+}
+
+// ── KANBAN ─────────────────────────────────────────────────────────────────
+const KB_COLS = [
+  { id:'inbox',   icon:'📥', title:'Входящие', bg:'rgba(0,201,255,.08)',   border:'rgba(0,201,255,.25)',  color:'#00C9FF', countBg:'rgba(0,201,255,.15)' },
+  { id:'working', icon:'⚡',  title:'В работе',  bg:'rgba(255,69,96,.08)',   border:'rgba(255,69,96,.25)',  color:'#FF4560', countBg:'rgba(255,69,96,.15)'  },
+  { id:'waiting', icon:'⏳',  title:'Ожидание',  bg:'rgba(255,215,0,.07)',   border:'rgba(255,215,0,.22)',  color:'#FFD700', countBg:'rgba(255,215,0,.14)'  },
+  { id:'done',    icon:'✅',  title:'Сделано',   bg:'rgba(0,227,150,.07)',   border:'rgba(0,227,150,.2)',   color:'#00E396', countBg:'rgba(0,227,150,.14)'  },
+];
+
+const QUAD_COLOR = { do:'#FF4560', schedule:'#00F5D4', delegate:'#7B61FF', eliminate:'rgba(232,237,245,.3)' };
+
+function renderKanban() {
+  const все   = DB.getTasks();
+  const сегодня = new Date().toDateString();
+
+  // Распределяем активные по колонкам
+  const cols = {
+    inbox:   все.filter(t => !t.done && !t.cancelled && (!t.kanban_status || t.kanban_status === 'inbox')),
+    working: все.filter(t => !t.done && !t.cancelled && t.kanban_status === 'working'),
+    waiting: все.filter(t => !t.done && !t.cancelled && t.kanban_status === 'waiting'),
+    done:    все.filter(t => t.done && !t.cancelled && t.completedAt &&
+               new Date(t.completedAt).toDateString() === сегодня),
+  };
+
+  const colHTML = KB_COLS.map(col => {
+    const tasks = cols[col.id];
+    const totalXP = tasks.reduce((s, t) => s + (t.xpValue || 0), 0);
+
+    const cardsHTML = tasks.length
+      ? tasks.map(t => kbCardHTML(t, col)).join('')
+      : `<div class="kb-empty">${col.id === 'done' ? '🏆<br>Пока пусто<br>Выполни задачу!' : '✨<br>Пусто<br>Тяни сюда задачи'}</div>`;
+
+    return `<div class="kanban-col" data-col="${col.id}">
+      <div class="kb-head" style="background:${col.bg};border:1px solid ${col.border};border-bottom:none">
+        <div class="kb-head-left">
+          <span class="kb-head-icon">${col.icon}</span>
+          <span class="kb-head-title" style="color:${col.color}">${col.title}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+          <span class="kb-count" style="background:${col.countBg};color:${col.color}">${tasks.length}</span>
+          ${totalXP > 0 ? `<span class="kb-xp-total" style="color:${col.color}">+${totalXP} XP</span>` : ''}
+        </div>
+      </div>
+      <div class="kb-body">${cardsHTML}</div>
+    </div>`;
+  }).join('');
+
+  return `<div>
+    <div class="kanban-hint" id="kb-hint">
+      ${KB_COLS.map((c,i) => `<div class="kanban-hint-dot${i===0?' active':''}" id="kbdot-${i}"></div>`).join('')}
+    </div>
+    <div class="kanban-wrap" id="kanban-scroll">${colHTML}</div>
+  </div>`;
+}
+
+function kbCardHTML(t, col) {
+  const qColor  = QUAD_COLOR[t.quadrant] || '#7B61FF';
+  const catColor = CAT_COLOR[t.cat] || 'rgba(232,237,245,.3)';
+  const dc       = t.defer_count || 0;
+  const deferBadge = dc >= 1
+    ? `<span class="kb-chip" style="background:${dc>=3?'rgba(255,69,96,.12)':'rgba(255,159,67,.1)'};color:${dc>=3?'#FF4560':'#FF9F43'};border:1px solid ${dc>=3?'rgba(255,69,96,.3)':'rgba(255,159,67,.25)'}">T:${dc}</span>`
+    : '';
+  const fiBadge = t.financial_impact === 'direct'
+    ? `<span class="kb-chip" style="background:rgba(255,215,0,.1);color:#FFD700;border:1px solid rgba(255,215,0,.25)">💰</span>`
+    : t.financial_impact === 'indirect'
+    ? `<span class="kb-chip" style="background:rgba(0,227,150,.07);color:#00E396;border:1px solid rgba(0,227,150,.2)">💡</span>`
+    : '';
+
+  const isExpanded = kbExpanded === t.id;
+  // Кнопки движения зависят от колонки
+  const prevCol = col.id === 'working' ? 'inbox' : col.id === 'waiting' ? 'working' : null;
+  const nextCol = col.id === 'inbox' ? 'working' : col.id === 'working' ? 'waiting' : null;
+  const prevLabel = prevCol === 'inbox' ? '← Входящие' : prevCol === 'working' ? '← В работе' : null;
+  const nextLabel = nextCol === 'working' ? 'В работе →' : nextCol === 'waiting' ? 'Ожидание →' : null;
+
+  const actionsHTML = col.id === 'done' ? `
+    <div class="kb-actions-inner">
+      <div class="kb-btn-row">
+        <button class="kb-btn kb-btn-edit" onclick="event.stopPropagation();window.openTaskDetail('${t.id}')">✏️ Открыть</button>
+        <button class="kb-btn" onclick="event.stopPropagation();window.toggleTask('${t.id}')">↩ Вернуть</button>
+      </div>
+    </div>` : `
+    <div class="kb-actions-inner">
+      <div class="kb-btn-row">
+        ${prevLabel ? `<button class="kb-btn" onclick="event.stopPropagation();window.kbMove('${t.id}','${prevCol}')" style="flex:1.4">${prevLabel}</button>` : '<div style="flex:1.4"></div>'}
+        <button class="kb-btn kb-btn-done" onclick="event.stopPropagation();window.kbDone('${t.id}')">✓</button>
+        ${nextLabel ? `<button class="kb-btn" onclick="event.stopPropagation();window.kbMove('${t.id}','${nextCol}')" style="flex:1.4">${nextLabel}</button>` : '<div style="flex:1.4"></div>'}
+      </div>
+      <div class="kb-btn-row">
+        <button class="kb-btn kb-btn-edit" onclick="event.stopPropagation();window.openTaskDetail('${t.id}')">✏️ Открыть</button>
+      </div>
+    </div>`;
+
+  return `<div class="kb-card${isExpanded?' kb-expanded':''}" style="color:${qColor}" onclick="window.kbExpand('${t.id}')">
+    <div class="kb-card-text">${t.text}</div>
+    <div class="kb-card-meta">
+      ${t.cat ? `<span class="kb-chip" style="background:${catColor}18;color:${catColor};border:1px solid ${catColor}30">${t.cat}</span>` : ''}
+      ${deferBadge}${fiBadge}
+      <span class="kb-xp">+${t.xpValue || 10} XP</span>
+    </div>
+    <div class="kb-actions">${actionsHTML}</div>
   </div>`;
 }
 
@@ -414,6 +535,32 @@ window.setTaskView = function(mode) {
   viewMode = mode;
   renderTasks();
 };
+
+// ── KANBAN handlers ────────────────────────────────────────────────────────
+window.kbExpand = function(id) {
+  kbExpanded = kbExpanded === id ? null : id;
+  // Перерисовываем только kanban без полного сброса экрана
+  if (viewMode === 'kanban') renderTasks();
+};
+
+window.kbMove = function(id, newStatus) {
+  kbExpanded = null;
+  DB.setKanbanStatus(id, newStatus);
+  const labels = { inbox:'📥 Входящие', working:'⚡ В работе', waiting:'⏳ Ожидание' };
+  window.showToast?.(`${labels[newStatus] || newStatus}`, 'info');
+  renderTasks();
+};
+
+window.kbDone = function(id) {
+  kbExpanded = null;
+  const t = DB.getTasks().find(x => x.id === id);
+  if (t && !t.done) {
+    const result = DB.toggleTask(id);
+    onTaskToggled(result);
+  }
+  renderTasks();
+};
+
 
 window.ideaBankRevive = function(id) {
   const idea = DB.getIdeaBank().find(x => x.id === id);

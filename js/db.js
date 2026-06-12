@@ -284,6 +284,11 @@ export const DB = {
     return toMove.length;
   },
 
+  // Kanban-статус задачи: 'inbox' | 'working' | 'waiting'
+  setKanbanStatus(id, status) {
+    return this.updateTask(id, { kanban_status: status });
+  },
+
   // Полное обновление задачи (patch-merge)
   updateTask(id, patch) {
     const задачи = this.getTasks();
