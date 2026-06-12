@@ -145,6 +145,9 @@ export async function загрузитьВсё() {
       }
     } catch {}
 
+    // Ожидания + Банк идей
+    await Promise.allSettled([загрузитьОжидания(), загрузитьИдеи()]);
+
     console.log(`[Supabase] подтянул: задач=${tasks?.length||0} проектов=${projects?.length||0} людей=${people?.length||0} контента=${contentItems?.length||0}`);
     return true;
   } catch (err) {
@@ -256,6 +259,82 @@ export async function разблокироватьДостижение(key) {
     owner: владелец,
     achievement_key: key,
   }, 'owner,achievement_key');
+}
+
+// ── Ожидания (CRM Expectations) ──────────────────────────────────────────────
+export async function сохранитьОжидание(e) {
+  if (!активен()) return;
+  await запросUpsert('expectations', {
+    ...(uuidValid(e.id) ? { id: e.id } : {}),
+    owner:      владелец,
+    owner_name: e.owner,
+    what:       e.what,
+    deadline:   e.deadline || null,
+    context:    e.context  || null,
+    trigger:    e.trigger  || null,
+    status:     e.status   || 'pending',
+    created_at: e.createdAt || new Date().toISOString(),
+    closed_at:  e.closedAt || null,
+  });
+}
+
+export async function загрузитьОжидания() {
+  if (!активен()) return;
+  try {
+    const data = await запросSelect('expectations', `status=eq.pending&order=created_at.desc`);
+    if (data?.length) {
+      localStorage.setItem('lifeos_expectations', JSON.stringify(data.map(r => ({
+        id:        r.id,
+        owner:     r.owner_name,
+        what:      r.what,
+        deadline:  r.deadline  || null,
+        context:   r.context   || null,
+        trigger:   r.trigger   || null,
+        status:    r.status    || 'pending',
+        createdAt: r.created_at,
+        closedAt:  r.closed_at || null,
+      }))));
+    }
+  } catch {}
+}
+
+// ── Банк идей ─────────────────────────────────────────────────────────────────
+export async function сохранитьИдею(idea) {
+  if (!активен()) return;
+  await запросUpsert('idea_bank', {
+    ...(uuidValid(idea.id) ? { id: idea.id } : {}),
+    owner:          владелец,
+    text:           idea.text,
+    cat:            idea.cat  || null,
+    notes:          idea.notes || null,
+    source_task_id: idea.sourceTaskId || null,
+    created_at:     idea.createdAt || new Date().toISOString(),
+  });
+}
+
+export async function удалитьИдею(id) {
+  if (!активен()) return;
+  try {
+    const url = `${базаURL}/idea_bank?id=eq.${id}&owner=eq.${владелец}`;
+    await fetch(url, { method: 'DELETE', headers: заголовки() });
+  } catch {}
+}
+
+export async function загрузитьИдеи() {
+  if (!активен()) return;
+  try {
+    const data = await запросSelect('idea_bank', `order=created_at.desc`);
+    if (data?.length) {
+      localStorage.setItem('lifeos_ideaBank', JSON.stringify(data.map(r => ({
+        id:           r.id,
+        text:         r.text,
+        cat:          r.cat   || null,
+        notes:        r.notes || null,
+        sourceTaskId: r.source_task_id || null,
+        createdAt:    r.created_at,
+      }))));
+    }
+  } catch {}
 }
 
 export async function сохранитьКонтентЭлемент(c) {

@@ -86,6 +86,15 @@ window._дбHook = function(тип, объект) {
     case 'content':
       if (Array.isArray(объект)) объект.forEach(x => Sync.сохранитьКонтентЭлемент(x));
       break;
+    case 'expectations':
+      if (Array.isArray(объект)) объект.forEach(e => Sync.сохранитьОжидание(e));
+      break;
+    case 'expectation':  Sync.сохранитьОжидание(объект);            break;
+    case 'ideaBank':
+      if (Array.isArray(объект)) объект.forEach(i => Sync.сохранитьИдею(i));
+      break;
+    case 'idea':         Sync.сохранитьИдею(объект);                break;
+    case 'idea_delete':  Sync.удалитьИдею(объект.id);               break;
   }
 };
 

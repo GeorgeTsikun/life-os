@@ -256,11 +256,14 @@ export const DB = {
   saveIdeaBank(arr) { this.set('ideaBank', arr); },
   addToIdeaBank(obj) {
     const arr = this.getIdeaBank();
-    arr.unshift({ id:'idea_'+Date.now(), createdAt:new Date().toISOString(), ...obj });
+    const нов = { id:'idea_'+Date.now(), createdAt:new Date().toISOString(), ...obj };
+    arr.unshift(нов);
     this.saveIdeaBank(arr);
+    window._дбHook?.('idea', нов);
   },
   removeFromIdeaBank(id) {
     this.saveIdeaBank(this.getIdeaBank().filter(x => x.id !== id));
+    window._дбHook?.('idea_delete', { id });
   },
 
   // Перемещает Q4-задачи старше 48ч в Idea Bank
@@ -542,16 +545,22 @@ export const DB = {
 
   // Ожидания CRM (жду от других)
   getExpectations()    { return this.get('expectations') || []; },
-  saveExpectations(arr){ this.set('expectations', arr); window._дбHook?.('expectations', arr); },
+  saveExpectations(arr){ this.set('expectations', arr); },
   addExpectation(obj)  {
     const arr = this.getExpectations();
-    arr.unshift({ id:'exp_'+Date.now(), status:'pending', createdAt:new Date().toISOString(), ...obj });
+    const нов = { id:'exp_'+Date.now(), status:'pending', createdAt:new Date().toISOString(), ...obj };
+    arr.unshift(нов);
     this.saveExpectations(arr);
+    window._дбHook?.('expectation', нов);
   },
   closeExpectation(id) {
     const arr = this.getExpectations();
     const e = arr.find(x=>x.id===id);
-    if (e) { e.status='received'; e.closedAt=new Date().toISOString(); this.saveExpectations(arr); }
+    if (e) {
+      e.status='received'; e.closedAt=new Date().toISOString();
+      this.saveExpectations(arr);
+      window._дбHook?.('expectation', e);
+    }
   },
 
   // Еженедельный челлендж
