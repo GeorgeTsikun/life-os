@@ -737,11 +737,13 @@ window.submitAddTask = async function() {
   const customTime = document.getElementById('task-time-custom')?.value?.trim();
   const финальноеВремя = customTime || time || '—';
 
+  const finalQuad = quad === 'auto' ? 'schedule' : quad;
   DB.addTask({
     text,
-    cat:      cat === 'auto' ? 'Работа' : cat,
-    time:     финальноеВремя,
-    quadrant: quad === 'auto' ? 'schedule' : quad,
+    cat:        cat === 'auto' ? 'Работа' : cat,
+    time:       финальноеВремя,
+    quadrant:   finalQuad,
+    difficulty: finalQuad === 'do' ? 3 : 2,  // Q1 → сложность 3 по умолчанию
   });
   window.closeAddTask();
   TG.hapticSuccess();

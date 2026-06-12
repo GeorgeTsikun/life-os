@@ -98,6 +98,61 @@ window._дбHook = function(тип, объект) {
   }
 };
 
+// §3.2 — Жёсткий блок Q1 > 5: модал перебалансировки
+window.showQ1Block = function() {
+  const q1 = DB.getTasks().filter(t => !t.done && !t.cancelled && t.quadrant === 'do');
+  const div = document.createElement('div');
+  div.className = 'modal-overlay';
+  div.innerHTML = `<div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div style="text-align:center;margin-bottom:14px">
+      <div style="font-size:28px;margin-bottom:6px">⚠️</div>
+      <div style="font-size:14px;font-weight:800;color:#FF4560;margin-bottom:4px">Искусственный кризис</div>
+      <div style="font-size:11px;color:rgba(232,237,245,.55);line-height:1.5">
+        Q1 переполнен (${q1.length}/5).<br>
+        Перенеси минимум 3 задачи в Q2 чтобы разблокировать.
+      </div>
+    </div>
+    <div id="q1block-list" style="margin-bottom:16px">
+      ${q1.map(t => `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+        <div style="flex:1;font-size:12px;color:#E8EDF5;line-height:1.4">${t.text}</div>
+        <button onclick="window.q1MoveToQ2('${t.id}',this)"
+          style="flex-shrink:0;padding:5px 10px;border-radius:8px;font-size:10px;font-weight:700;
+                 border:1px solid rgba(0,245,212,.3);background:rgba(0,245,212,.08);color:#00F5D4;cursor:pointer">
+          → Q2
+        </button>
+      </div>`).join('')}
+    </div>
+    <div id="q1block-counter" style="text-align:center;font-size:11px;color:rgba(232,237,245,.4);margin-bottom:12px">
+      Перенесено: 0 из 3
+    </div>
+    <button class="btn btn-ghost" style="width:100%" onclick="this.closest('.modal-overlay').remove()">Закрыть</button>
+  </div>`;
+  div.setAttribute('data-moved', '0');
+  document.body.appendChild(div);
+};
+
+window.q1MoveToQ2 = function(id, btn) {
+  DB.updateTask(id, { quadrant: 'schedule' });
+  btn.textContent = '✓';
+  btn.disabled = true;
+  btn.style.background = 'rgba(0,227,150,.15)';
+  btn.style.color = '#00E396';
+  btn.style.borderColor = 'rgba(0,227,150,.3)';
+  const overlay = btn.closest('.modal-overlay');
+  const moved = parseInt(overlay.getAttribute('data-moved') || '0') + 1;
+  overlay.setAttribute('data-moved', moved);
+  document.getElementById('q1block-counter').textContent = `Перенесено: ${moved} из 3`;
+  if (moved >= 3) {
+    document.getElementById('q1block-counter').innerHTML =
+      '<span style="color:#00E396;font-weight:700">✅ Разблокировано! Можно добавлять Q1.</span>';
+    setTimeout(() => overlay.remove(), 1200);
+  }
+  window.showToast?.('→ Задача перенесена в Q2', 'info');
+  // Обновляем текущий экран если открыт tasks
+  if (window._текущийТаб === 'tasks') ЭКРАНЫ.tasks?.();
+};
+
 let текущийТаб = 'dash';
 
 const ЭКРАНЫ = {

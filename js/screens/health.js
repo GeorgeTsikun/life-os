@@ -43,6 +43,56 @@ function renderHealthBody() {
   else                           { body.innerHTML = nutritionTabHTML(); }
 }
 
+// ── §3.3 ЦИКЛИЧЕСКИЕ ЧЕКАПЫ ──────────────────────────────────────────────────
+function renderCheckups() {
+  const checkups = DB.getCheckups();
+  const today    = new Date();
+
+  return `<div class="card" style="margin-bottom:12px">
+    <div class="row" style="justify-content:space-between;margin-bottom:12px">
+      <div class="sec-label" style="margin:0">⏰ ЧЕКАПЫ ЖИЗНИ</div>
+      <span style="font-size:9px;color:rgba(232,237,245,.3)">раз в N дней</span>
+    </div>
+    ${checkups.map(c => {
+      const nextDue = c.lastDone
+        ? new Date(new Date(c.lastDone).getTime() + c.interval * 86400000)
+        : null;
+      const diffDays = nextDue ? Math.ceil((nextDue - today) / 86400000) : null;
+      const overdue  = diffDays !== null && diffDays < 0;
+      const soon     = diffDays !== null && diffDays <= 7;
+      const color    = overdue ? '#FF4560' : soon ? '#FFD700' : '#00E396';
+      const dot      = overdue ? '🔴' : soon ? '🟡' : c.lastDone ? '🟢' : '⚪';
+      const label    = overdue
+        ? `Просрочено ${Math.abs(diffDays)}д!`
+        : diffDays === null ? 'Нет данных'
+        : diffDays <= 0     ? 'Сегодня!'
+        : diffDays === 1    ? 'Завтра'
+        : diffDays <= 7     ? `${diffDays} дн.`
+        : nextDue.toLocaleDateString('ru-RU', { day:'numeric', month:'short' });
+
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+        <span style="font-size:20px;flex-shrink:0">${c.emoji}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:#E8EDF5">${c.name}</div>
+          <div style="font-size:9px;color:rgba(232,237,245,.35);margin-top:1px">каждые ${c.interval} дн.</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:10px;font-weight:700;color:${color}">${dot} ${label}</div>
+          ${c.lastDone ? `<div style="font-size:9px;color:rgba(232,237,245,.25);margin-top:1px">Был: ${new Date(c.lastDone).toLocaleDateString('ru-RU', {day:'numeric',month:'short'})}</div>` : ''}
+        </div>
+        <button onclick="window.markCheckupDone('${c.id}')"
+          style="flex-shrink:0;padding:5px 8px;border-radius:8px;font-size:10px;font-weight:700;
+                 border:1px solid ${color}44;background:${color}11;color:${color};cursor:pointer">✓</button>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+window.markCheckupDone = function(id) {
+  DB.markCheckupDone(id);
+  renderHealthBody();
+};
+
 // ── HEALTH TAB ────────────────────────────────────────────────────────────────
 function healthTabHTML() {
   const h = DB.getHealth();
@@ -102,6 +152,8 @@ function healthTabHTML() {
       <div style="height:45px;margin-top:8px"><canvas id="hrv-chart"></canvas></div>
     </div>
   </div>
+
+  ${renderCheckups()}
 
   <div class="card" id="ai-health-card" style="margin-bottom:12px">
     <div class="row" style="justify-content:space-between;margin-bottom:10px">

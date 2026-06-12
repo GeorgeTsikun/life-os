@@ -225,26 +225,49 @@ export const DB = {
   getTasks()      { return this.get('tasks'); },
   saveTasks(t)    { this.set('tasks', t); },
 
+  // §4.2 — Расчёт базового XP по формуле спека
+  calcBaseXP(difficulty, quadrant) {
+    const d  = Math.min(5, Math.max(1, difficulty || 2));
+    const PM = { do: 1.5, schedule: 1.3, delegate: 1.0, eliminate: 0.5 };
+    return Math.round(d * 10 * (PM[quadrant] || 1.0));
+  },
+
+  // §3.2 — Проверка лимита Q1 > 5
+  q1Count() {
+    return this.getTasks().filter(t => !t.done && !t.cancelled && t.quadrant === 'do').length;
+  },
+
   addTask(задача) {
     // §3.1 — HRV < 30 три дня подряд → блок новых Q1
     if (задача.quadrant === 'do' && !задача._forceQ1) {
       const h = this.getHealth();
       const hrvArr = (h?.hrvData || []).slice(-3);
       if (hrvArr.length >= 3 && hrvArr.every(v => v < 30)) {
-        window.showToast?.('⚠️ HRV < 30 три дня. Новые Q1 заблокированы — сначала восстановись.', 'error');
+        window.showToast?.('⚠️ HRV < 30 три дня. Q1 заблокированы — восстановись.', 'error');
+        return null;
+      }
+    }
+    // §3.2 — Лимит Q1 ≥ 5: жёсткий блок
+    if (задача.quadrant === 'do' && !задача._forceQ1) {
+      if (this.q1Count() >= 5) {
+        window.showQ1Block?.();
         return null;
       }
     }
     const задачи = this.getTasks();
+    const difficulty = задача.difficulty || 2;
     const новая = {
       id: 't' + Date.now(),
-      xpValue: {do:75, schedule:50, delegate:25, eliminate:25}[задача.quadrant] || 25,
+      difficulty,
+      xpValue: this.calcBaseXP(difficulty, задача.quadrant || 'schedule'),
       done: false,
       createdAt: Date.now(),
       notes: '',
       subtasks: [],
       ...задача,
     };
+    // Пересчитать xpValue если явно передан difficulty
+    if (!задача.xpValue) новая.xpValue = this.calcBaseXP(новая.difficulty, новая.quadrant);
     задачи.push(новая);
     this.saveTasks(задачи);
     window._дбHook?.('task', новая);
@@ -570,4 +593,39 @@ export const DB = {
 
   // Еженедельный челлендж
   getWeeklyChallenge() { return this.get('weeklyChallenge'); },
+
+  // §3.3 — Циклические чекапы жизни
+  getCheckups() {
+    const DEFAULTS = [
+      { id:'chk_dentist',  emoji:'🦷', name:'Стоматолог',               interval:180, lastDone:null, cat:'Здоровье' },
+      { id:'chk_blood',    emoji:'🩸', name:'Анализы крови',             interval:365, lastDone:null, cat:'Здоровье' },
+      { id:'chk_cardio',   emoji:'❤️', name:'Кардио / Терапевт',        interval:365, lastDone:null, cat:'Здоровье' },
+      { id:'chk_dog',      emoji:'🐕', name:'Обработка собаки от клещей',interval:28,  lastDone:null, cat:'Здоровье' },
+      { id:'chk_vision',   emoji:'👁️', name:'Окулист',                   interval:365, lastDone:null, cat:'Здоровье' },
+    ];
+    const stored = this.get('checkups') || [];
+    // Merge: сохраняем lastDone из хранилища, добавляем новые дефолты
+    const map = Object.fromEntries(stored.map(c => [c.id, c]));
+    return DEFAULTS.map(d => ({ ...d, ...(map[d.id] || {}) }));
+  },
+  saveCheckups(arr) { this.set('checkups', arr); },
+  markCheckupDone(id) {
+    const arr = this.getCheckups();
+    const c = arr.find(x => x.id === id);
+    if (!c) return;
+    c.lastDone = new Date().toISOString().split('T')[0];
+    this.saveCheckups(arr);
+    // Генерируем напоминание-задачу на следующий срок
+    const nextDate = new Date(Date.now() + c.interval * 86400000);
+    const ymd = nextDate.toISOString().split('T')[0];
+    this.addTask({
+      text: `${c.emoji} ${c.name}`,
+      cat: c.cat,
+      quadrant: 'schedule',
+      due_date: ymd,
+      difficulty: 1,
+      notes: `Циклический чекап (каждые ${c.interval} дней)`,
+    });
+    window.showToast?.(`✅ Записано! Следующий ${c.name}: ${nextDate.toLocaleDateString('ru-RU')}`, 'success');
+  },
 };

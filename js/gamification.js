@@ -167,9 +167,10 @@ export function onTaskToggled(задача) {
     const источник = карта[задача.quadrant] || 'task_q2';
     const base = задача.xpValue || XP_SOURCES[источник] || 50;
 
-    // Energy_Factor: при HRV < 30 + сложная задача (≥15 XP) → бонус ×1.5 за сверхусилие
-    const hrv = DB.getHealth().hrv || 60;
-    const ef  = (hrv < 30 && base >= 15) ? 1.5 : 1.0;
+    // §4.2 Energy_Factor: HRV < 30 + сложность ≥ 4 → бонус ×1.5 за сверхусилие
+    const hrv  = DB.getHealth().hrv || 60;
+    const diff = задача.difficulty || 2;
+    const ef   = (hrv < 30 && diff >= 4) ? 1.5 : 1.0;
     const итогоXP = Math.round(base * ef);
 
     awardXP(итогоXP, источник);

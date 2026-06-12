@@ -80,15 +80,22 @@ function разметка() {
     </div>
     <input id="td-date" type="datetime-local" class="input" value="${датаVal}" style="margin-bottom:14px;font-size:12px">
 
-    <!-- Ценность задачи (баллы) -->
-    <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:6px">Ценность задачи</div>
-    <div class="cat-pills" id="td-points" style="margin-bottom:14px">
-      ${[5,10,15,20,25,50].map(pts => `
-        <button class="cat-pill ${(t.xpValue||10)===pts?'active':''}" data-pts="${pts}"
-                onclick="window.tdВыбPts(${pts})"
-                style="--cc:${pts>=25?'#FFD700':pts>=15?'#00F5D4':'rgba(232,237,245,.5)'}">
-          ${pts} ${pts===5?'· мелкое':pts===10?'· полезное':pts===15?'· важное':pts===20?'· дорогое':pts===25?'· крутое':'· огромное'}
-        </button>`).join('')}
+    <!-- §4.2 Сложность задачи (Difficulty 1-5) -->
+    <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:6px">Сложность</div>
+    <div class="cat-pills" id="td-difficulty" style="margin-bottom:4px">
+      ${[
+        {d:1, label:'🟢 1',  hint:'Мелкое', cc:'#00E396'},
+        {d:2, label:'🔵 2',  hint:'Обычное', cc:'#00C9FF'},
+        {d:3, label:'🟡 3',  hint:'Важное',  cc:'#FFD700'},
+        {d:4, label:'🟠 4',  hint:'Сложное', cc:'#FF9F43'},
+        {d:5, label:'🔴 5',  hint:'Эпик',    cc:'#FF4560'},
+      ].map(x => `
+        <button class="cat-pill ${(t.difficulty||2)===x.d?'active':''}" data-diff="${x.d}"
+                onclick="window.tdВыбDiff(${x.d})"
+                style="--cc:${x.cc}" title="${x.hint}">${x.label} · ${x.hint}</button>`).join('')}
+    </div>
+    <div id="td-xp-preview" style="font-size:10px;color:rgba(0,245,212,.6);margin-bottom:14px;text-align:right">
+      +${DB.calcBaseXP(t.difficulty||2, t.quadrant||'schedule')} XP базово
     </div>
 
     <!-- Проект -->
@@ -207,10 +214,13 @@ window.tdВыбFi = function(fi) {
   TG.hapticSelection();
 };
 
-window.tdВыбPts = function(pts) {
-  _текущая.xpValue = pts;
-  document.querySelectorAll('#td-points .cat-pill').forEach(b => b.classList.remove('active'));
-  document.querySelector(`#td-points [data-pts="${pts}"]`)?.classList.add('active');
+window.tdВыбDiff = function(d) {
+  _текущая.difficulty = d;
+  _текущая.xpValue = DB.calcBaseXP(d, _текущая.quadrant || 'schedule');
+  document.querySelectorAll('#td-difficulty .cat-pill').forEach(b => b.classList.remove('active'));
+  document.querySelector(`#td-difficulty [data-diff="${d}"]`)?.classList.add('active');
+  const preview = document.getElementById('td-xp-preview');
+  if (preview) preview.textContent = `+${_текущая.xpValue} XP базово`;
   TG.hapticSelection();
 };
 
@@ -248,7 +258,8 @@ window.tdСохранить = async function() {
     text: текст,
     quadrant: _текущая.quadrant,
     cat: _текущая.cat || 'Работа',
-    xpValue: _текущая.xpValue || 10,
+    difficulty: _текущая.difficulty || 2,
+    xpValue:    DB.calcBaseXP(_текущая.difficulty || 2, _текущая.quadrant || 'schedule'),
     notes: заметки,
     subtasks: (_текущая.subtasks || []).filter(s => s.text?.trim()),
     project_id:       _текущая.project_id       || null,
