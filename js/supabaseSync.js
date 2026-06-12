@@ -129,6 +129,22 @@ export async function загрузитьВсё() {
     if (contentItems?.length) {
       localStorage.setItem('lifeos_content', JSON.stringify(contentItems.map(маппингКонтента)));
     }
+
+    // Инбокс — последние 50 записей (голосовые из бота)
+    try {
+      const inboxData = await запросSelect('inbox', 'order=created_at.desc&limit=50');
+      if (inboxData?.length) {
+        localStorage.setItem('lifeos_inbox', JSON.stringify(inboxData.map(r => ({
+          id:            r.id,
+          source:        r.source,
+          text:          r.raw_text,
+          type:          r.classified_as,
+          created_at:    r.created_at,
+          task_id:       r.task_id || null,
+        }))));
+      }
+    } catch {}
+
     console.log(`[Supabase] подтянул: задач=${tasks?.length||0} проектов=${projects?.length||0} людей=${people?.length||0} контента=${contentItems?.length||0}`);
     return true;
   } catch (err) {

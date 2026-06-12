@@ -108,24 +108,10 @@ export function renderDash() {
   </div>
 
   <!-- ── ФОКУС ДНЯ ──────────────────────────────────────────────────────────── -->
-  <div class="card" style="margin-bottom:12px">
-    <div class="row" style="justify-content:space-between;margin-bottom:10px">
-      <div class="sec-label" style="margin:0">🎯 ФОКУС ДНЯ</div>
-      <span class="badge" style="background:rgba(255,215,0,.12);color:#FFD700;border:1px solid rgba(255,215,0,.2)">Сегодня</span>
-    </div>
-    ${tasks.filter(t => t.quadrant === 'do' && !t.done).slice(0, 3).map((t, i) => `
-    <div class="focus-item" onclick="window.openTaskDetail?.('${t.id}')" style="${i < 2 ? 'border-bottom:1px solid rgba(255,255,255,.05)' : ''}">
-      <div class="focus-num" style="background:${i===0?'rgba(0,245,212,.15)':'rgba(255,255,255,.06)'};color:${i===0?'#00F5D4':'rgba(232,237,245,.5)'};border:1px solid ${i===0?'rgba(0,245,212,.3)':'rgba(255,255,255,.08)'}">${i + 1}</div>
-      <div style="flex:1;padding:0 8px">
-        <div style="font-size:13px;font-weight:500">${t.text}</div>
-        <div style="font-size:10px;color:rgba(232,237,245,.4);margin-top:2px">${t.cat || ''}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <div style="font-size:10px;color:rgba(232,237,245,.4)">${t.time || ''}</div>
-        <div class="checkbox" onclick="event.stopPropagation();window.toggleTaskFromDash?.('${t.id}')" style="cursor:pointer;width:18px;height:18px;font-size:10px"></div>
-      </div>
-    </div>`).join('') || `<div style="text-align:center;padding:12px 0;font-size:12px;color:rgba(232,237,245,.35)">✓ Все срочные задачи выполнены!</div>`}
-  </div>
+  ${renderFocusBlock(tasks)}
+
+  <!-- ── ЖУРНАЛ / ИНБОКС ───────────────────────────────────────────────────────── -->
+  ${renderInboxBlock()}
 
   <!-- ── ДОСТИЖЕНИЯ ─────────────────────────────────────────────────────────── -->
   ${unlockedAchs.length > 0 ? `
@@ -298,6 +284,143 @@ window.toggleTaskFromDash = function(id) {
     renderDash();
   }
 };
+
+window.toggleInboxGroup = function(groupId) {
+  const блок = document.getElementById(groupId);
+  const стрелка = document.getElementById(groupId + '-arr');
+  if (!блок) return;
+  const открыт = блок.style.display !== 'none';
+  блок.style.display = открыт ? 'none' : 'block';
+  if (стрелка) стрелка.style.transform = открыт ? 'none' : 'rotate(180deg)';
+};
+
+// ── ФОКУС ДНЯ ────────────────────────────────────────────────────────────────
+function renderFocusBlock(tasks) {
+  const q1 = tasks.filter(t => t.quadrant === 'do' && !t.done);
+  const q1Done = tasks.filter(t => t.quadrant === 'do' && t.done);
+  const allQ1Done = q1.length === 0 && q1Done.length > 0;
+
+  // Если все Q1 выполнены — показываем Q2 как следующие цели
+  if (allQ1Done) {
+    const q2 = tasks.filter(t => t.quadrant === 'schedule' && !t.done).slice(0, 3);
+    return `<div class="card" style="margin-bottom:12px">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+        <div class="sec-label" style="margin:0">🎯 ФОКУС ДНЯ</div>
+        <span class="badge" style="background:rgba(0,245,212,.12);color:#00F5D4;border:1px solid rgba(0,245,212,.25)">Q1 ✓ закрыт!</span>
+      </div>
+      <div style="background:rgba(0,245,212,.06);border:1px solid rgba(0,245,212,.15);border-radius:10px;padding:10px 14px;margin-bottom:10px;text-align:center">
+        <div style="font-size:18px;margin-bottom:3px">🏆</div>
+        <div style="font-size:12px;font-weight:700;color:#00F5D4">Все срочные закрыты!</div>
+        <div style="font-size:10px;color:rgba(232,237,245,.4);margin-top:2px">Теперь — задачи роста (Q2)</div>
+      </div>
+      ${q2.length ? q2.map((t, i) => renderFocusItem(t, i, q2.length)).join('') : '<div style="font-size:11px;color:rgba(232,237,245,.3);text-align:center;padding:8px 0">Нет задач Q2</div>'}
+    </div>`;
+  }
+
+  const показываемые = q1.slice(0, 3);
+  return `<div class="card" style="margin-bottom:12px">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <div class="sec-label" style="margin:0">🎯 ФОКУС ДНЯ</div>
+      <span class="badge" style="background:rgba(255,215,0,.12);color:#FFD700;border:1px solid rgba(255,215,0,.2)">${q1.length} срочных</span>
+    </div>
+    ${показываемые.length
+      ? показываемые.map((t, i) => renderFocusItem(t, i, показываемые.length)).join('')
+      : `<div style="text-align:center;padding:14px 0">
+          <div style="font-size:28px;margin-bottom:4px">✨</div>
+          <div style="font-size:12px;color:rgba(232,237,245,.35)">Нет срочных задач — отличный день!</div>
+        </div>`}
+  </div>`;
+}
+
+function renderFocusItem(t, i, total) {
+  const isFirst = i === 0;
+  const border  = i < total - 1 ? 'border-bottom:1px solid rgba(255,255,255,.05)' : '';
+  const xpBadge = `<span style="font-size:9px;background:rgba(255,215,0,.12);color:#FFD700;border-radius:5px;padding:2px 5px;margin-left:4px">+${t.xpValue || 10}</span>`;
+  return `
+  <div class="focus-item" onclick="window.openTaskDetail?.('${t.id}')" style="${border}">
+    <div class="focus-num" style="background:${isFirst ? 'rgba(0,245,212,.15)' : 'rgba(255,255,255,.06)'};color:${isFirst ? '#00F5D4' : 'rgba(232,237,245,.5)'};border:1px solid ${isFirst ? 'rgba(0,245,212,.3)' : 'rgba(255,255,255,.08)'}">${i + 1}</div>
+    <div style="flex:1;padding:0 8px">
+      <div style="font-size:13px;font-weight:500">${t.text}${xpBadge}</div>
+      <div style="font-size:10px;color:rgba(232,237,245,.4);margin-top:2px">${t.cat || ''}${t.time ? ' · ' + t.time : ''}</div>
+    </div>
+    <div class="checkbox" onclick="event.stopPropagation();window.toggleTaskFromDash?.('${t.id}')" style="cursor:pointer;width:20px;height:20px;font-size:11px;flex-shrink:0"></div>
+  </div>`;
+}
+
+// ── ЖУРНАЛ / ИНБОКС ──────────────────────────────────────────────────────────
+const INBOX_ICONS = {
+  task:          '📋',
+  idea:          '💡',
+  content_idea:  '🎬',
+  meeting_notes: '📝',
+  decision:      '🔑',
+  waiting:       '⏳',
+  checkin:       '🌙',
+  mood:          '⚡',
+  question:      '❓',
+  avoidance_mirror: '🪞',
+};
+
+function renderInboxBlock() {
+  const inbox = DB.getInbox();
+  if (!inbox.length) return '';
+
+  // Группируем по дням
+  const по_дням = {};
+  inbox.forEach(item => {
+    const день = new Date(item.created_at).toLocaleDateString('ru-RU', {
+      day: 'numeric', month: 'long', weekday: 'short'
+    });
+    if (!по_дням[день]) по_дням[день] = [];
+    по_дням[день].push(item);
+  });
+
+  const сегодняStr = new Date().toLocaleDateString('ru-RU', {
+    day: 'numeric', month: 'long', weekday: 'short'
+  });
+
+  return `<div class="card" style="margin-bottom:12px">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <div class="sec-label" style="margin:0">🎙️ ЖУРНАЛ</div>
+      <span style="font-size:10px;color:rgba(232,237,245,.35)">${inbox.length} записей</span>
+    </div>
+    ${Object.entries(по_дням).slice(0, 5).map(([день, записи], groupIdx) => {
+      const isToday = день === сегодняStr;
+      const открыт = groupIdx === 0; // первый аккордеон открыт
+      const groupId = 'inbox-g-' + groupIdx;
+      return `
+      <div style="margin-bottom:6px">
+        <div onclick="window.toggleInboxGroup('${groupId}')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid rgba(255,255,255,.06)">
+          <div style="font-size:11px;font-weight:600;color:${isToday ? '#00F5D4' : 'rgba(232,237,245,.6)'}">
+            ${isToday ? '● сегодня' : день}
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:9px;color:rgba(232,237,245,.3)">${записи.length}</span>
+            <span id="${groupId}-arr" style="font-size:10px;color:rgba(232,237,245,.3);transition:transform .2s;display:inline-block;transform:${открыт ? 'rotate(180deg)' : 'none'}">▾</span>
+          </div>
+        </div>
+        <div id="${groupId}" style="display:${открыт ? 'block' : 'none'}">
+          ${записи.map(item => {
+            const иконка = INBOX_ICONS[item.type] || '📌';
+            const время = new Date(item.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            // Текст — парсим JSON если нужно
+            let текст = item.text || '';
+            try { const p = JSON.parse(текст); текст = p.text || p.title || p.what || JSON.stringify(p); } catch {}
+            текст = String(текст).slice(0, 120);
+            return `
+            <div style="display:flex;gap:10px;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04)">
+              <div style="font-size:16px;padding-top:1px;width:20px;flex-shrink:0">${иконка}</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:11px;font-weight:500;color:#E8EDF5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${текст}</div>
+                <div style="font-size:9px;color:rgba(232,237,245,.3);margin-top:2px">${время} · ${item.type || '?'}</div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
 
 // ── CHARTS ────────────────────────────────────────────────────────────────────
 function destroyCharts() {

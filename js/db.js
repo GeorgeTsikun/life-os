@@ -424,6 +424,10 @@ export const DB = {
   getDailyLog()   { return this.get('dailyLog'); },
   saveDailyLog(d) { this.set('dailyLog', d); window._дбHook?.('daily', d); },
 
+  // Инбокс (голосовые записи из бота)
+  getInbox()      { return this.get('inbox') || []; },
+  saveInbox(arr)  { this.set('inbox', arr); },
+
   // Еженедельный челлендж
   getWeeklyChallenge() { return this.get('weeklyChallenge'); },
 };
