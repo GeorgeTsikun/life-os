@@ -1,7 +1,7 @@
 // ── HEALTH SCREEN (Health / Sport / Nutrition sub-tabs) ───────────────────────
-import { DB } from '../db.js?v=30';
-import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=30';
-import { TG } from '../telegram.js?v=30';
+import { DB } from '../db.js?v=31';
+import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=31';
+import { TG } from '../telegram.js?v=31';
 
 let sleepChart, pulseChart, hrvChart, revenueChart;
 let healthTab = 'health';
@@ -227,6 +227,72 @@ function sportTabHTML() {
   </div>`;
 }
 
+// ── КБЖУ ТРЕКЕР ──────────────────────────────────────────────────────────────
+function kbjuTrackerHTML(n) {
+  const meals = DB.getMeals();
+
+  const cG  = n.caloriesGoal || 2200;
+  const pG  = n.proteinGoal  || 140;
+  const fG  = n.fatGoal      || 70;
+  const crbG= n.carbsGoal    || 220;
+
+  const cal = n.calories || 0;
+  const pro = n.protein  || 0;
+  const fat = n.fat      || 0;
+  const crb = n.carbs    || 0;
+
+  const macroBar = (val, goal, color, label, unit='г') => {
+    const pct = Math.min((val / Math.max(goal, 1)) * 100, 100);
+    return `<div style="margin-bottom:9px">
+      <div class="row" style="justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:10px;color:rgba(232,237,245,.5)">${label}</span>
+        <span style="font-size:10px;font-weight:700;color:${color}">${val}<span style="font-weight:400;color:rgba(232,237,245,.35)"> / ${goal}${unit}</span></span>
+      </div>
+      <div style="height:6px;border-radius:3px;background:rgba(255,255,255,.07)">
+        <div style="height:100%;border-radius:3px;width:${pct.toFixed(1)}%;background:${color};box-shadow:0 0 6px ${color}55;transition:width .3s"></div>
+      </div>
+    </div>`;
+  };
+
+  return `<div class="card" style="margin-bottom:12px">
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div>
+        <div class="sec-label" style="margin:0 0 2px">🥗 КБЖУ</div>
+        <div style="font-size:9px;color:rgba(232,237,245,.35)">${meals.length} блюд сегодня</div>
+      </div>
+      <div style="text-align:right">
+        <div class="num" style="font-size:22px;color:#00E396">${cal}</div>
+        <div style="font-size:9px;color:rgba(232,237,245,.35)">/ ${cG} ккал</div>
+      </div>
+    </div>
+
+    ${macroBar(pro, pG,  '#FF9F43', '🥩 Белки', 'г')}
+    ${macroBar(crb, crbG,'#7B61FF', '🍞 Углеводы', 'г')}
+    ${macroBar(fat, fG,  '#FFD700', '🧈 Жиры', 'г')}
+
+    <div class="row" style="gap:8px;margin-top:12px">
+      <button onclick="window.openAddMealModal(false)" class="btn btn-ghost" style="flex:1;font-size:11px">✏️ Вручную</button>
+      <button onclick="window.openFoodCamera()" class="btn btn-teal" style="flex:2;font-size:11px">📷 Фото блюда</button>
+    </div>
+  </div>
+
+  ${meals.length > 0 ? `<div class="card" style="margin-bottom:12px">
+    <div class="sec-label" style="margin-bottom:8px">📋 ЖУРНАЛ БЛЮД</div>
+    ${meals.map(m => `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+      <div style="font-size:20px;flex-shrink:0">${m.emoji || '🍽️'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:#E8EDF5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.name}</div>
+        <div style="font-size:9px;color:rgba(232,237,245,.35);margin-top:2px">Б:${m.protein}г · У:${m.carbs}г · Ж:${m.fat}г · ${m.time || ''}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:12px;font-weight:700;color:#00E396">${m.calories} ккал</div>
+        <button onclick="window.deleteMealEntry('${m.id}')"
+          style="font-size:9px;color:rgba(255,69,96,.6);background:none;border:none;cursor:pointer;padding:2px 4px">🗑</button>
+      </div>
+    </div>`).join('')}
+  </div>` : ''}`;
+}
+
 // ── NUTRITION TAB ─────────────────────────────────────────────────────────────
 function nutritionTabHTML() {
   const n = DB.getNutrition();
@@ -271,25 +337,7 @@ function nutritionTabHTML() {
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:12px">
-    <div class="row" style="justify-content:space-between;margin-bottom:12px">
-      <div class="sec-label" style="margin:0">🥗 ПИТАНИЕ</div>
-      <div class="num" style="font-size:20px;color:#00E396">${n.score}/10</div>
-    </div>
-    <div class="prog-bar" style="height:8px;margin-bottom:12px">
-      <div class="prog-fill" style="width:${n.score*10}%;background:#00E396;box-shadow:0 0 6px rgba(0,227,150,.4)"></div>
-    </div>
-    <div class="grid3">
-      ${[
-        {l:'Белок',v:n.protein+'г',c:'#FF9F43'},
-        {l:'Углев.',v:n.carbs+'г',c:'#7B61FF'},
-        {l:'Жиры',v:n.fat+'г',c:'#FFD700'},
-      ].map(m=>`<div style="text-align:center">
-        <div style="font-size:13px;font-weight:700;color:${m.c}">${m.v}</div>
-        <div style="font-size:9px;color:rgba(232,237,245,.35)">${m.l}</div>
-      </div>`).join('')}
-    </div>
-  </div>
+  ${kbjuTrackerHTML(n)}
 
   <div class="card" style="margin-bottom:12px">
     <div class="sec-label">💊 ЕЖЕДНЕВНЫЕ ЧЕКБОКСЫ</div>
@@ -507,6 +555,126 @@ window.loadHealthAI = async function() {
     if (btn) btn.disabled = false;
   }
 };
+
+// ── КБЖУ: добавить вручную ─────────────────────────────────────────────────
+window.openAddMealModal = function(prefilled = null) {
+  document.getElementById('meal-modal')?.remove();
+  const div = document.createElement('div');
+  div.id = 'meal-modal';
+  div.className = 'modal-overlay';
+  const p = prefilled || {};
+  div.innerHTML = `<div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🍽️ Добавить блюдо</div>
+    ${p._loading ? `<div style="text-align:center;padding:20px;color:#00F5D4;font-size:12px">
+      <div style="width:24px;height:24px;border-radius:50%;border:3px solid #00F5D4;border-top-color:transparent;animation:spin .8s linear infinite;margin:0 auto 10px"></div>
+      Анализирую фото...
+    </div>` : ''}
+    <div id="meal-form-body" style="${p._loading?'display:none':''}">
+      ${p._error ? `<div style="color:#FF4560;font-size:11px;margin-bottom:12px">⚠️ ${p._error}</div>` : ''}
+      ${p.name !== undefined && p._confidence ? `<div style="font-size:10px;color:rgba(0,245,212,.7);margin-bottom:10px">🤖 AI распознал — проверь и скорректируй</div>` : ''}
+      <input id="meal-name" class="input" placeholder="Название блюда" value="${p.name || ''}" style="margin-bottom:10px">
+      <div class="grid2" style="margin-bottom:10px;gap:8px">
+        <div>
+          <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">ккал</div>
+          <input id="meal-cal" class="input" type="number" placeholder="400" value="${p.calories || ''}" style="width:100%">
+        </div>
+        <div>
+          <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Белки (г)</div>
+          <input id="meal-pro" class="input" type="number" placeholder="30" value="${p.protein || ''}" style="width:100%">
+        </div>
+        <div>
+          <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Углеводы (г)</div>
+          <input id="meal-crb" class="input" type="number" placeholder="50" value="${p.carbs || ''}" style="width:100%">
+        </div>
+        <div>
+          <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Жиры (г)</div>
+          <input id="meal-fat" class="input" type="number" placeholder="15" value="${p.fat || ''}" style="width:100%">
+        </div>
+      </div>
+      ${p.note ? `<div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:10px;padding:6px 10px;background:rgba(255,255,255,.04);border-radius:8px">${p.note}</div>` : ''}
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('meal-modal').remove()">Отмена</button>
+        <button class="btn btn-teal" style="flex:2" onclick="window._submitMeal()">Добавить</button>
+      </div>
+    </div>
+  </div>`;
+  div.addEventListener('click', e => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
+};
+
+window._submitMeal = function() {
+  const name     = document.getElementById('meal-name')?.value?.trim();
+  const calories = parseInt(document.getElementById('meal-cal')?.value) || 0;
+  const protein  = parseInt(document.getElementById('meal-pro')?.value) || 0;
+  const carbs    = parseInt(document.getElementById('meal-crb')?.value) || 0;
+  const fat      = parseInt(document.getElementById('meal-fat')?.value) || 0;
+  if (!name) { TG.hapticError(); return; }
+
+  DB.addMeal({ name, calories, protein, carbs, fat, emoji: '🍽️' });
+  document.getElementById('meal-modal')?.remove();
+  renderHealth('nutrition');
+  TG.hapticSuccess();
+};
+
+window.deleteMealEntry = function(id) {
+  DB.deleteMeal(id);
+  renderHealth('nutrition');
+  TG.hapticImpact('light');
+};
+
+// ── КБЖУ: фото еды → GPT-4o Vision ─────────────────────────────────────────
+window.openFoodCamera = function() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.capture = 'environment';
+  input.style.display = 'none';
+  document.body.appendChild(input);
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    input.remove();
+    if (!file) return;
+
+    // Show loading modal
+    window.openAddMealModal({ _loading: true });
+
+    try {
+      const base64 = await fileToBase64(file);
+      const res = await fetch('/api/analyze-food', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64, mimeType: file.type }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      // Show prefilled form
+      window.openAddMealModal({
+        name:       data.name,
+        calories:   data.calories,
+        protein:    data.protein,
+        carbs:      data.carbs,
+        fat:        data.fat,
+        note:       data.note || '',
+        _confidence: data.confidence,
+      });
+      TG.hapticImpact('medium');
+    } catch (err) {
+      window.openAddMealModal({ _error: err.message });
+    }
+  });
+  input.click();
+};
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]); // strip data:*;base64,
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 window.showHealthBridge = function() {
   const div = document.createElement('div');

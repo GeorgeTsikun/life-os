@@ -48,10 +48,14 @@ const ДАННЫЕ = {
     score: 7,
     supplements: true,
     shower: true,
-    calories: 2100,
-    protein: 120,
-    carbs: 240,
-    fat: 65,
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+    caloriesGoal: 2200,
+    proteinGoal: 140,
+    carbsGoal: 220,
+    fatGoal: 70,
   },
   workouts: [
     {id:'w1',date:new Date().toDateString(),type:'Силовая',duration:60,xp:100,emoji:'🏋️'},
@@ -449,6 +453,37 @@ export const DB = {
   // Питание
   getNutrition()  { return this.get('nutrition'); },
   saveNutrition(n){ this.set('nutrition', n); },
+
+  // ── КБЖУ: список блюд за сегодня ─────────────────────────────────────────
+  _mealsKey() {
+    const d = new Date();
+    return `lifeos_meals_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  },
+  getMeals() {
+    return JSON.parse(localStorage.getItem(this._mealsKey()) || '[]');
+  },
+  addMeal(meal) {
+    const meals = this.getMeals();
+    const newMeal = { id: crypto?.randomUUID?.() || ('m'+Date.now()), time: new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}), ...meal };
+    meals.push(newMeal);
+    localStorage.setItem(this._mealsKey(), JSON.stringify(meals));
+    // Пересчитать суммарные КБЖУ в nutrition
+    this._recalcNutritionFromMeals(meals);
+    return newMeal;
+  },
+  deleteMeal(id) {
+    const meals = this.getMeals().filter(m => m.id !== id);
+    localStorage.setItem(this._mealsKey(), JSON.stringify(meals));
+    this._recalcNutritionFromMeals(meals);
+  },
+  _recalcNutritionFromMeals(meals) {
+    const n = this.getNutrition();
+    n.calories = meals.reduce((s, m) => s + (m.calories || 0), 0);
+    n.protein  = meals.reduce((s, m) => s + (m.protein  || 0), 0);
+    n.fat      = meals.reduce((s, m) => s + (m.fat      || 0), 0);
+    n.carbs    = meals.reduce((s, m) => s + (m.carbs    || 0), 0);
+    this.saveNutrition(n);
+  },
 
   // Тренировки
   getWorkouts()   { return this.get('workouts'); },
