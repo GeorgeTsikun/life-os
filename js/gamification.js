@@ -63,11 +63,11 @@ export const XP_SOURCES = {
 // RPG-характеристики: ключ, ярлык, цвет, описание
 // Соответствует спеку §4.3: STR / VIT / SOC / WIS / ENG
 export const RPG_STATS = [
-  { key:'STR', label:'ТЕЛО', color:'#FF6B6B', desc:'Спорт и тренировки',       decay: 5 },
-  { key:'VIT', label:'СОН', color:'#00E396', desc:'Сон, HRV и питание',        decay: 8 },
-  { key:'SOC', label:'ЛЮДИ', color:'#FF9F43', desc:'Люди и обязательства',      decay: 4 },
-  { key:'WIS', label:'РАЗУМ', color:'#00C9FF', desc:'Журнал энергии и ревью',    decay: 3 },
-  { key:'ENG', label:'ЗАРЯД', color:'#00F5D4', desc:'Энергия (HRV + задачи Q2)', decay: 0 }, // динамический
+  { key:'STR', label:'BODY💪🏻', color:'#FF6B6B', desc:'Спорт и тренировки',       decay: 5 },
+  { key:'VIT', label:'RCVR♥️', color:'#00E396', desc:'Сон, HRV и питание',        decay: 8 },
+  { key:'SOC', label:'PPL🫂', color:'#FF9F43', desc:'Люди и обязательства',      decay: 4 },
+  { key:'WIS', label:'MIND🧠', color:'#00C9FF', desc:'Журнал энергии и ревью',    decay: 3 },
+  { key:'ENG', label:'NRG⚡️', color:'#00F5D4', desc:'Энергия (HRV + задачи Q2)', decay: 0 }, // динамический
 ];
 
 // Начисляем XP и обновляем профиль
