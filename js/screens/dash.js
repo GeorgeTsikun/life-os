@@ -4,6 +4,8 @@ import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted } from
 import { TG } from '../telegram.js';
 
 let radarChart, energyChart;
+let _currentQuests = []; // для синхронизации taskId при completeQuest
+let focusFilter = 'all'; // 'all' | 'work' | 'personal' | 'cat:X'
 
 export function renderDash() {
   const profile = DB.getProfile();
@@ -30,6 +32,7 @@ export function renderDash() {
     if (i === 0 && topQ1) return { ...q, title: topQ1.text, xp: topQ1.xpValue || 20, taskId: topQ1.id };
     return q;
   });
+  _currentQuests = динамичныеКвесты; // сохраняем для completeQuest
   const liveQuests = динамичныеКвесты.filter(q => !q.done);
   const doneQuests = динамичныеКвесты.filter(q => q.done);
 
@@ -132,19 +135,29 @@ export function renderDash() {
   <!-- ── RPG ХАРАКТЕРИСТИКИ ─────────────────────────────────────────────────── -->
   <div class="card" style="margin-bottom:12px">
     <div class="sec-label">📊 СОСТОЯНИЕ ГЕРОЯ</div>
-    <div class="grid2">
-      <canvas id="radar-chart" style="max-height:155px"></canvas>
-      <div>
-        <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:6px">Энергия / неделя</div>
-        <canvas id="energy-chart" style="max-height:145px"></canvas>
-      </div>
+    <!-- Радар — на всю ширину, достаточно крупный -->
+    <div style="width:100%;height:220px;position:relative">
+      <canvas id="radar-chart" style="width:100%;height:100%"></canvas>
     </div>
-    <div style="margin-top:12px">
-      ${RPG_STATS.map(s => `<div class="stat-row">
-        <div class="stat-label" style="color:${s.color}">${s.label}</div>
-        <div class="stat-bar"><div class="stat-bar-fill" style="width:${rpg[s.key]}%;background:${s.color};box-shadow:0 0 6px ${s.color}60"></div></div>
-        <div class="stat-val" style="color:${s.color}">${rpg[s.key]}</div>
-      </div>`).join('')}
+    <!-- Шкалы под радаром -->
+    <div style="margin-top:14px">
+      ${RPG_STATS.map(s => {
+        const val = typeof rpg[s.key] === 'number' ? rpg[s.key] : 50;
+        return `<div class="stat-row" style="margin-bottom:6px">
+          <div class="stat-label" style="color:${s.color};font-size:10px;min-width:64px">${s.label}</div>
+          <div class="stat-bar" style="flex:1;height:6px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden;margin:0 8px">
+            <div class="stat-bar-fill" style="height:100%;width:${val}%;background:${s.color};box-shadow:0 0 6px ${s.color}60;border-radius:4px;transition:width .4s ease"></div>
+          </div>
+          <div class="stat-val" style="color:${s.color};font-size:11px;font-weight:700;min-width:24px;text-align:right">${val}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <!-- График энергии / неделя -->
+    <div style="margin-top:14px">
+      <div style="font-size:9px;color:rgba(232,237,245,.35);letter-spacing:.08em;margin-bottom:6px">⚡ ЭНЕРГИЯ / НЕДЕЛЯ</div>
+      <div style="height:70px;position:relative">
+        <canvas id="energy-chart" style="width:100%;height:100%"></canvas>
+      </div>
     </div>
   </div>
 
@@ -288,11 +301,12 @@ window.toggleTaskFromDash = function(id) {
 };
 
 window.completeQuest = function(id) {
+  // Берём taskId из динамического квеста (там он есть), а не из DB (там нет)
+  const dynQ = _currentQuests.find(q => q.id === id);
   const q = DB.completeQuest(id);
   if (q) {
-    // Если квест привязан к реальной задаче — закрываем её тоже
-    if (q.taskId) DB.toggleTask(q.taskId);
-    window.showToast?.(`${q.icon} ${q.title.slice(0, 30)} · +${q.xp} XP`, 'success');
+    if (dynQ?.taskId) DB.toggleTask(dynQ.taskId); // синхронизируем задачу
+    window.showToast?.(`${q.icon} ${(dynQ?.title || q.title).slice(0, 30)} · +${q.xp} XP`, 'success');
     TG.hapticSuccess();
     renderDash();
   }
@@ -307,6 +321,20 @@ window.resetQuest = function(id) {
   }
 };
 
+window.setFocusFilter = function(f) {
+  focusFilter = f;
+  // Скрываем меню категорий при выборе
+  const m = document.getElementById('cat-menu');
+  if (m) m.style.display = 'none';
+  renderDash();
+};
+
+window.toggleCatMenu = function() {
+  const m = document.getElementById('cat-menu');
+  if (!m) return;
+  m.style.display = m.style.display === 'none' ? 'flex' : 'none';
+};
+
 window.toggleInboxGroup = function(groupId) {
   const блок = document.getElementById(groupId);
   const стрелка = document.getElementById(groupId + '-arr');
@@ -316,20 +344,46 @@ window.toggleInboxGroup = function(groupId) {
   if (стрелка) стрелка.style.transform = открыт ? 'none' : 'rotate(180deg)';
 };
 
-// ── ФОКУС ДНЯ ────────────────────────────────────────────────────────────────
-function renderFocusBlock(tasks) {
-  const q1 = tasks.filter(t => t.quadrant === 'do' && !t.done);
-  const q1Done = tasks.filter(t => t.quadrant === 'do' && t.done);
-  const allQ1Done = q1.length === 0 && q1Done.length > 0;
+// ── КАТЕГОРИИ для фильтра ────────────────────────────────────────────────────
+const WORK_CATS  = new Set(['Работа','Контент','Эксперименты','Стратегия','Обучение','Деньги','Бизнес','Клуб','Операционка','Привлечение клиентов','Развитие','Эффективность']);
+const LIFE_CATS  = new Set(['Семья','Встречи','Быт','Здоровье','Chill','Личное','Личные дела','Домашние дела']);
+const ALL_CATS   = ['Работа','Контент','Эксперименты','Семья','Встречи','Быт','Стратегия','Обучение','Деньги','Здоровье','Chill','Личное'];
 
-  // Если все Q1 выполнены — показываем Q2 как следующие цели
+// ── ФОКУС ДНЯ ────────────────────────────────────────────────────────────────
+function renderFocusBlock(allTasks) {
+  const q1All  = allTasks.filter(t => t.quadrant === 'do'       && !t.done && !t.cancelled);
+  const q1Done = allTasks.filter(t => t.quadrant === 'do'       && t.done);
+  const allQ1Done = q1All.length === 0 && q1Done.length > 0;
+
+  // Применяем фильтр
+  function applyFilter(tasks) {
+    if (focusFilter === 'work')    return tasks.filter(t => WORK_CATS.has(t.cat));
+    if (focusFilter === 'personal') return tasks.filter(t => LIFE_CATS.has(t.cat) || (!WORK_CATS.has(t.cat) && !LIFE_CATS.has(t.cat)));
+    if (focusFilter.startsWith('cat:')) return tasks.filter(t => t.cat === focusFilter.slice(4));
+    return tasks;
+  }
+
+  // Фильтр-панель
+  const filterBar = `
+  <div style="display:flex;gap:6px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch">
+    <button onclick="window.setFocusFilter('all')" style="flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ${focusFilter==='all'?'rgba(0,245,212,.5)':'rgba(255,255,255,.12)'};background:${focusFilter==='all'?'rgba(0,245,212,.15)':'rgba(255,255,255,.04)'};color:${focusFilter==='all'?'#00F5D4':'rgba(232,237,245,.5)'}">Все</button>
+    <button onclick="window.setFocusFilter('work')" style="flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ${focusFilter==='work'?'rgba(0,245,212,.5)':'rgba(255,255,255,.12)'};background:${focusFilter==='work'?'rgba(0,245,212,.15)':'rgba(255,255,255,.04)'};color:${focusFilter==='work'?'#00F5D4':'rgba(232,237,245,.5)'}">💼 Работа</button>
+    <button onclick="window.setFocusFilter('personal')" style="flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ${focusFilter==='personal'?'rgba(255,107,107,.5)':'rgba(255,255,255,.12)'};background:${focusFilter==='personal'?'rgba(255,107,107,.1)':'rgba(255,255,255,.04)'};color:${focusFilter==='personal'?'#FF6B6B':'rgba(232,237,245,.5)'}">🏠 Личное</button>
+    <button onclick="window.toggleCatMenu()" style="flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:11px;cursor:pointer;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:rgba(232,237,245,.5)">⚙️</button>
+  </div>
+  <div id="cat-menu" style="display:none;flex-wrap:wrap;gap:5px;margin-bottom:10px">
+    ${ALL_CATS.map(c => `<button onclick="window.setFocusFilter('cat:${c}')" style="padding:3px 9px;border-radius:14px;font-size:10px;cursor:pointer;border:1px solid ${focusFilter==='cat:'+c?'rgba(0,245,212,.5)':'rgba(255,255,255,.1)'};background:${focusFilter==='cat:'+c?'rgba(0,245,212,.15)':'rgba(255,255,255,.03)'};color:${focusFilter==='cat:'+c?'#00F5D4':'rgba(232,237,245,.45)'}">${c}</button>`).join('')}
+  </div>`;
+
+  // Если все Q1 выполнены — показываем Q2
   if (allQ1Done) {
-    const q2 = tasks.filter(t => t.quadrant === 'schedule' && !t.done).slice(0, 3);
+    const q2 = applyFilter(allTasks.filter(t => t.quadrant === 'schedule' && !t.done)).slice(0, 3);
     return `<div class="card" style="margin-bottom:12px">
-      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <div class="row" style="justify-content:space-between;margin-bottom:6px">
         <div class="sec-label" style="margin:0">🎯 ФОКУС ДНЯ</div>
         <span class="badge" style="background:rgba(0,245,212,.12);color:#00F5D4;border:1px solid rgba(0,245,212,.25)">Q1 ✓ закрыт!</span>
       </div>
+      ${filterBar}
       <div style="background:rgba(0,245,212,.06);border:1px solid rgba(0,245,212,.15);border-radius:10px;padding:10px 14px;margin-bottom:10px;text-align:center">
         <div style="font-size:18px;margin-bottom:3px">🏆</div>
         <div style="font-size:12px;font-weight:700;color:#00F5D4">Все срочные закрыты!</div>
@@ -339,17 +393,23 @@ function renderFocusBlock(tasks) {
     </div>`;
   }
 
-  const показываемые = q1.slice(0, 3);
+  const filtered = applyFilter(q1All);
+  const показываемые = filtered.slice(0, 3);
+  const badge = filtered.length !== q1All.length
+    ? `<span class="badge" style="background:rgba(255,215,0,.12);color:#FFD700;border:1px solid rgba(255,215,0,.2)">${filtered.length} из ${q1All.length}</span>`
+    : `<span class="badge" style="background:rgba(255,215,0,.12);color:#FFD700;border:1px solid rgba(255,215,0,.2)">${q1All.length} срочных</span>`;
+
   return `<div class="card" style="margin-bottom:12px">
-    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+    <div class="row" style="justify-content:space-between;margin-bottom:6px">
       <div class="sec-label" style="margin:0">🎯 ФОКУС ДНЯ</div>
-      <span class="badge" style="background:rgba(255,215,0,.12);color:#FFD700;border:1px solid rgba(255,215,0,.2)">${q1.length} срочных</span>
+      ${badge}
     </div>
+    ${filterBar}
     ${показываемые.length
       ? показываемые.map((t, i) => renderFocusItem(t, i, показываемые.length)).join('')
       : `<div style="text-align:center;padding:14px 0">
           <div style="font-size:28px;margin-bottom:4px">✨</div>
-          <div style="font-size:12px;color:rgba(232,237,245,.35)">Нет срочных задач — отличный день!</div>
+          <div style="font-size:12px;color:rgba(232,237,245,.35)">${focusFilter !== 'all' ? 'Нет задач с таким фильтром' : 'Нет срочных задач — отличный день!'}</div>
         </div>`}
   </div>`;
 }
@@ -453,17 +513,20 @@ function destroyCharts() {
 function mountRadar(rpg) {
   const ctx = document.getElementById('radar-chart');
   if (!ctx) return;
+  const vals = [rpg.STR ?? 62, rpg.VIT ?? 70, rpg.SOC ?? 55, rpg.WIS ?? 48, rpg.ENG ?? 65];
   radarChart = new Chart(ctx, {
     type: 'radar',
     data: {
-      labels: ['BODY','RCVR','PPL','MIND','NRG'],
+      labels: ['BODY 💪','RCVR ♥️','PPL 🫂','MIND 🧠','NRG ⚡'],
       datasets: [{
-        data: [rpg.STR, rpg.VIT, rpg.SOC, rpg.WIS, rpg.ENG],
-        backgroundColor: 'rgba(0,245,212,.12)',
+        data: vals,
+        backgroundColor: 'rgba(0,245,212,.10)',
         borderColor: '#00F5D4',
-        borderWidth: 1.5,
+        borderWidth: 2,
         pointBackgroundColor: '#00F5D4',
-        pointRadius: 2,
+        pointBorderColor: '#00F5D4',
+        pointRadius: 4,
+        pointHoverRadius: 6,
       }],
     },
     options: {
@@ -473,10 +536,13 @@ function mountRadar(rpg) {
       scales: {
         r: {
           min: 0, max: 100,
-          grid:       { color: 'rgba(255,255,255,.07)' },
-          angleLines: { color: 'rgba(255,255,255,.07)' },
-          pointLabels: { color: 'rgba(232,237,245,.45)', font: { size: 9, family: 'Manrope' } },
-          ticks: { display: false },
+          grid:       { color: 'rgba(255,255,255,.08)' },
+          angleLines: { color: 'rgba(255,255,255,.08)' },
+          pointLabels: {
+            color: 'rgba(232,237,245,.65)',
+            font: { size: 10, family: 'Manrope', weight: '600' },
+          },
+          ticks: { display: false, stepSize: 25 },
         },
       },
     },

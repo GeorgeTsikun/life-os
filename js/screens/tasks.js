@@ -33,12 +33,30 @@ const QUADS = [
   { key:'eliminate',label:'🌀 ЛОВУШКА',  sub:'Ворует время',      color:'rgba(232,237,245,.35)',cls:'accent-gray'},
 ];
 
-let viewMode = 'dates'; // 'dates' | 'matrix' | 'done'
+let viewMode   = 'dates'; // 'dates' | 'matrix' | 'done'
+let catFilter  = 'all';  // 'all' | 'work' | 'personal' | 'cat:X'
+
+const WORK_CATS_T = new Set(['Работа','Контент','Эксперименты','Стратегия','Обучение','Деньги','Бизнес','Клуб','Операционка','Привлечение клиентов','Развитие','Эффективность']);
+const LIFE_CATS_T = new Set(['Семья','Встречи','Быт','Здоровье','Chill','Личное','Личные дела','Домашние дела']);
+const ALL_CATS_T  = ['Работа','Контент','Эксперименты','Семья','Встречи','Быт','Стратегия','Обучение','Деньги','Здоровье','Chill','Личное'];
+
+function applyCatFilter(tasks) {
+  if (catFilter === 'work')     return tasks.filter(t => WORK_CATS_T.has(t.cat));
+  if (catFilter === 'personal') return tasks.filter(t => LIFE_CATS_T.has(t.cat) || (!WORK_CATS_T.has(t.cat) && !LIFE_CATS_T.has(t.cat)));
+  if (catFilter.startsWith('cat:')) return tasks.filter(t => t.cat === catFilter.slice(4));
+  return tasks;
+}
 
 export function renderTasks() {
-  const tasks = DB.getTasks();
-  const активные = tasks.filter(t => !t.done);
+  const tasks    = DB.getTasks();
+  const активные = tasks.filter(t => !t.done && !t.cancelled);
   const готовые  = tasks.filter(t => t.done);
+  const filtered = catFilter !== 'all' && viewMode !== 'done' ? applyCatFilter(активные) : активные;
+
+  const btnStyle = (f, clr='#00F5D4') => {
+    const active = catFilter === f;
+    return `padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;border:1px solid ${active?`rgba(${clr==='#FF6B6B'?'255,107,107':'0,245,212'},.5)`:'rgba(255,255,255,.12)'};background:${active?`rgba(${clr==='#FF6B6B'?'255,107,107':'0,245,212'},.12)`:'rgba(255,255,255,.04)'};color:${active?clr:'rgba(232,237,245,.5)'}`;
+  };
 
   const el = document.getElementById('content');
   el.innerHTML = `<div class="screen">
@@ -50,15 +68,26 @@ export function renderTasks() {
     <button class="btn btn-teal" onclick="window.openAddTask()">+ Добавить</button>
   </div>
 
-  <div class="toggle-row" style="margin-bottom:14px">
+  <div class="toggle-row" style="margin-bottom:10px">
     <button class="toggle-btn${viewMode==='dates'?' active':''}"  onclick="window.setTaskView('dates')">📅 По датам</button>
     <button class="toggle-btn${viewMode==='matrix'?' active':''}" onclick="window.setTaskView('matrix')">🔲 Матрица</button>
     <button class="toggle-btn${viewMode==='done'?' active':''}"   onclick="window.setTaskView('done')">✅ Готово</button>
   </div>
 
-  ${viewMode === 'matrix' ? renderMatrix(активные)
+  ${viewMode !== 'done' ? `
+  <div style="display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;scrollbar-width:none">
+    <button onclick="window.setCatFilter('all')"      style="${btnStyle('all')}">Все</button>
+    <button onclick="window.setCatFilter('work')"     style="${btnStyle('work')}">💼 Работа</button>
+    <button onclick="window.setCatFilter('personal')" style="${btnStyle('personal','#FF6B6B')}">🏠 Личное</button>
+    <button onclick="window.toggleTaskCatMenu()"      style="padding:4px 10px;border-radius:20px;font-size:11px;cursor:pointer;flex-shrink:0;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:rgba(232,237,245,.5)">⚙️</button>
+  </div>
+  <div id="task-cat-menu" style="display:none;flex-wrap:wrap;gap:5px;margin-bottom:10px">
+    ${ALL_CATS_T.map(c => `<button onclick="window.setCatFilter('cat:${c}')" style="padding:3px 9px;border-radius:14px;font-size:10px;cursor:pointer;border:1px solid ${catFilter==='cat:'+c?'rgba(0,245,212,.5)':'rgba(255,255,255,.1)'};background:${catFilter==='cat:'+c?'rgba(0,245,212,.15)':'rgba(255,255,255,.03)'};color:${catFilter==='cat:'+c?'#00F5D4':'rgba(232,237,245,.45)'}">${c}</button>`).join('')}
+  </div>` : ''}
+
+  ${viewMode === 'matrix' ? renderMatrix(filtered)
    : viewMode === 'done'  ? renderDone(готовые)
-   : renderByDates(активные)}
+   : renderByDates(filtered)}
 
   <div style="height:8px"></div>
 </div>`;
@@ -346,6 +375,19 @@ window.openTaskDetail = function(id) {
 window.setTaskView = function(mode) {
   viewMode = mode;
   renderTasks();
+};
+
+window.setCatFilter = function(f) {
+  catFilter = f;
+  const m = document.getElementById('task-cat-menu');
+  if (m) m.style.display = 'none';
+  renderTasks();
+};
+
+window.toggleTaskCatMenu = function() {
+  const m = document.getElementById('task-cat-menu');
+  if (!m) return;
+  m.style.display = m.style.display === 'none' ? 'flex' : 'none';
 };
 
 window.openAddTask = openAddTask;

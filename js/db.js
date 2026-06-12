@@ -443,7 +443,12 @@ export const DB = {
 
   // RPG характеристики
   getRpgStats() {
-    const шкалы = this.get('rpgStats') || ДАННЫЕ.rpgStats;
+    const шкалы = { ...ДАННЫЕ.rpgStats, ...(this.get('rpgStats') || {}) };
+    // Защита: все базовые шкалы должны быть числами
+    шкалы.STR = typeof шкалы.STR === 'number' ? шкалы.STR : 62;
+    шкалы.VIT = typeof шкалы.VIT === 'number' ? шкалы.VIT : 70;
+    шкалы.SOC = typeof шкалы.SOC === 'number' ? шкалы.SOC : 55;
+    шкалы.WIS = typeof шкалы.WIS === 'number' ? шкалы.WIS : 48;
     // ENG — динамический: рассчитывается из HRV (clamp 0–100)
     const hrv = this.getHealth().hrv || 60;
     шкалы.ENG = Math.min(100, Math.max(0, Math.round((hrv / 80) * 100)));
