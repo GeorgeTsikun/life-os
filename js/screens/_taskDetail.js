@@ -1,7 +1,7 @@
 // ── ДЕТАЛЬ ЗАДАЧИ — модалка редактирования ───────────────────────────────────
 import { DB } from '../db.js';
 import { TG } from '../telegram.js';
-import { парсДату, форматДата, вISO, вДатуISO } from '../utils/date.js';
+import { парсДату, форматДата, вISO, вДатуISO, вЛокальнуюФорму } from '../utils/date.js';
 
 const CAT_LIST = [
   'Работа','Контент','Эксперименты','Семья','Встречи','Быт',
@@ -34,8 +34,8 @@ export function openTaskDetail(task, onClose) {
 
 function разметка() {
   const t = _текущая;
-  const дата = t.start_iso ? new Date(t.start_iso) : (t.due_date ? new Date(t.due_date) : null);
-  const датаVal = дата ? дата.toISOString().slice(0,16) : ''; // datetime-local format
+  const дата = t.start_iso ? new Date(t.start_iso) : (t.due_date ? new Date(t.due_date + 'T09:00') : null);
+  const датаVal = вЛокальнуюФорму(дата); // datetime-local format в ЛОКАЛЬНОМ времени
 
   return `<div class="detail-sheet">
     <div class="modal-handle"></div>
@@ -153,7 +153,7 @@ window.tdУст = function(когда) {
   if (когда === 'today')      d = new Date(сейчас.getFullYear(), сейчас.getMonth(), сейчас.getDate(), 9, 0);
   else if (когда === 'tomorrow') { d = new Date(сейчас.getFullYear(), сейчас.getMonth(), сейчас.getDate()+1, 9, 0); }
   else if (когда === 'next-week') { d = new Date(сейчас.getFullYear(), сейчас.getMonth(), сейчас.getDate()+7, 9, 0); }
-  document.getElementById('td-date').value = d ? d.toISOString().slice(0,16) : '';
+  document.getElementById('td-date').value = вЛокальнуюФорму(d);
   TG.hapticSelection();
 };
 
@@ -205,10 +205,17 @@ window.tdСохранить = async function() {
     patch.due_date  = null;
   }
 
-  DB.updateTask(_текущая.id, patch);
+  const обновлено = DB.updateTask(_текущая.id, patch);
   закрыть();
   _онЗакрытии?.();
   TG.hapticSuccess();
+  // Показываем toast — чтобы пользователь видел что реально сохранилось
+  if (window.showToast) {
+    const что = [];
+    if (patch.cat) что.push(patch.cat);
+    if (patch.start_iso) что.push(форматДата(new Date(patch.start_iso), {compact:true}));
+    window.showToast(`✓ Сохранено${что.length ? ' · ' + что.join(' · ') : ''}`, 'success');
+  }
 };
 
 window.tdУдалить = function() {

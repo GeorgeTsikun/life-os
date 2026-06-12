@@ -188,5 +188,22 @@ export function вДатуISO(дата) {
   if (!дата) return null;
   const d = (дата instanceof Date) ? дата : new Date(дата);
   if (isNaN(d.getTime())) return null;
-  return d.toISOString().split('T')[0];
+  // ВАЖНО: используем ЛОКАЛЬНЫЕ компоненты, не UTC, чтобы дата не сдвигалась
+  const год = d.getFullYear();
+  const мес = String(d.getMonth() + 1).padStart(2, '0');
+  const ден = String(d.getDate()).padStart(2, '0');
+  return `${год}-${мес}-${ден}`;
+}
+
+// Date → "YYYY-MM-DDTHH:MM" для datetime-local input (ЛОКАЛЬНОЕ время)
+export function вЛокальнуюФорму(дата) {
+  if (!дата) return '';
+  const d = (дата instanceof Date) ? дата : new Date(дата);
+  if (isNaN(d.getTime())) return '';
+  const год = d.getFullYear();
+  const мес = String(d.getMonth() + 1).padStart(2, '0');
+  const ден = String(d.getDate()).padStart(2, '0');
+  const ч = String(d.getHours()).padStart(2, '0');
+  const мин = String(d.getMinutes()).padStart(2, '0');
+  return `${год}-${мес}-${ден}T${ч}:${мин}`;
 }
