@@ -35,7 +35,7 @@ export function запуститьРасписание({ bot, supa, openai, owne
 
   // 21:00 по Москве
   cron.schedule('0 21 * * *', () => {
-    вечернийАвтоЧекин({ bot, ownerTgId, безКэша })
+    вечернийАвтоЧекин({ bot, ownerTgId, безКэша, supa })
       .catch(err => console.error('[cron 21:00]', err.message));
   }, { timezone: 'Europe/Moscow' });
 
@@ -45,19 +45,20 @@ export function запуститьРасписание({ bot, supa, openai, owne
 // ── УТРЕННИЙ БРИФИНГ (авто в 8:00) ───────────────────────────────────────────
 export async function утреннийАвтоБрифинг({ bot, supa, openai, ownerTgId, безКэша, ДИРЕКТОР_ПРОМТ }) {
   const сегодня = сегодняМосква();
-  const вчера   = вчераМосква();
 
-  // Загружаем задачи из Supabase
+  // Загружаем задачи + здоровье из Supabase
   let задачиСегодня = [];
   let просроченные  = [];
   let ожидания      = [];
+  let здоровье      = null;
 
   if (supa) {
-    const [резСегодня, резПросроч, резОжид] = await Promise.all([
+    const [резСегодня, резПросроч, резОжид, резЗдор] = await Promise.all([
       supa.from('tasks')
         .select('id,text,quadrant,cat,xp_value,due_date,defer_count')
         .eq('owner', 'george')
         .eq('done', false)
+        .eq('cancelled', false)
         .or(`due_date.eq.${сегодня},quadrant.eq.do`)
         .order('due_date', { ascending: true })
         .limit(20),
@@ -65,51 +66,91 @@ export async function утреннийАвтоБрифинг({ bot, supa, openai
         .select('id,text,quadrant,cat,xp_value,due_date,defer_count')
         .eq('owner', 'george')
         .eq('done', false)
+        .eq('cancelled', false)
         .lt('due_date', сегодня)
         .not('due_date', 'is', null)
         .order('due_date', { ascending: true })
         .limit(10),
-      supa.from('waitings')
-        .select('person_name,what,due_date')
+      // Ожидания (новая таблица expectations)
+      supa.from('expectations')
+        .select('owner_name,what,deadline')
         .eq('owner', 'george')
-        .eq('status', 'waiting')
-        .lte('due_date', сегодня)
-        .limit(5),
+        .eq('status', 'pending')
+        .lte('deadline', сегодня)
+        .limit(5)
+        .maybeSingle()
+        .then(r => ({ data: r.data ? [r.data] : [] }))
+        .catch(() => ({ data: [] })),
+      // Последние данные здоровья
+      supa.from('health_logs')
+        .select('hrv,sleep_hours,resting_hr,steps')
+        .eq('owner', 'george')
+        .order('logged_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        .catch(() => ({ data: null })),
     ]);
 
     задачиСегодня = резСегодня.data || [];
     просроченные  = (резПросроч.data || []).filter(t => t.due_date < сегодня);
-    ожидания      = резОжид.data || [];
+    // Ожидания: пробуем и новую таблицу и старую waitings
+    if (!ожидания.length) {
+      const резWait = await supa.from('waitings')
+        .select('person_name,what,due_date')
+        .eq('owner', 'george')
+        .eq('status', 'waiting')
+        .lte('due_date', сегодня)
+        .limit(5)
+        .catch(() => ({ data: [] }));
+      ожидания = (резWait.data || []).map(w => ({ owner_name: w.person_name, what: w.what, deadline: w.due_date }));
+    }
+    здоровье = резЗдор.data;
   }
 
-  // GPT формирует текст брифинга
+  // Формируем блок здоровья
+  let блокЗдоровья = '';
+  if (здоровье) {
+    const hrv   = здоровье.hrv   || 0;
+    const sleep = здоровье.sleep_hours || 0;
+    const rc    = sleep && hrv ? ((sleep/8) * (hrv/55)).toFixed(2) : null;
+    const rcМетка = rc >= 1.1 ? '🚀 Высокий' : rc >= 0.8 ? '⚡ Норма' : rc ? '🐢 Низкий' : null;
+    const hrvСтатус = hrv >= 60 ? '✅' : hrv >= 40 ? '🟡' : '🔴';
+    блокЗдоровья = [
+      `📊 HRV: ${hrvСтатус} ${hrv}мс  |  🌙 Сон: ${sleep}ч`,
+      rcМетка ? `⚡ RC: ${rcМетка} (${rc})` : '',
+    ].filter(Boolean).join('\n');
+  }
+
   const срочные   = задачиСегодня.filter(t => t.quadrant === 'do').map(t => `⚡ ${t.text}`);
   const рост      = задачиСегодня.filter(t => t.quadrant === 'schedule').map(t => `🏔️ ${t.text}`);
   const сегодняТекст = [...срочные, ...рост].slice(0, 5).join('\n') || 'нет задач на сегодня';
-  const ожиданийТекст = ожидания.map(o => `• ${o.what} ← ${o.person_name || '?'}`).join('\n') || 'нет';
+  const ожиданийТекст = ожидания.map(o => `• ${o.what} ← ${o.owner_name || '?'}`).join('\n') || 'нет';
 
   let брифингТекст = '';
   if (openai) {
     try {
+      const контекстЗдор = здоровье
+        ? `\nДанные здоровья: HRV ${здоровье.hrv}мс, сон ${здоровье.sleep_hours}ч, пульс ${здоровье.resting_hr || '—'}.`
+        : '';
       const completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: ДИРЕКТОР_ПРОМТ },
           { role: 'system', content:
-            `Сегодня ${сегодня} (Москва). Это АВТОМАТИЧЕСКИЙ утренний брифинг.\n` +
-            `Задачи ШТУРМ и РОСТ на сегодня:\n${сегодняТекст}\n\n` +
-            `Ожидания от других (горят):\n${ожиданийТекст}\n\n` +
-            `Напиши короткий (3-4 строки) боевой брифинг. Без воды.`
+            `Сегодня ${сегодня} (Москва). Это АВТОМАТИЧЕСКИЙ утренний брифинг.${контекстЗдор}\n` +
+            `Задачи на сегодня:\n${сегодняТекст}\n\n` +
+            `Ожидания (горят):\n${ожиданийТекст}\n\n` +
+            `Напиши короткий (2-3 строки) боевой брифинг. Тон: директор → самому себе. Без воды. Если HRV низкий — упомяни осторожность.`
           },
           { role: 'user', content: 'Что сегодня?' },
         ],
         temperature: 0.7,
-        max_tokens: 250,
+        max_tokens: 220,
       });
       брифингТекст = completion.choices[0].message.content;
     } catch (err) {
       console.error('[cron] GPT брифинг:', err.message);
-      брифингТекст = сегодняТекст;
+      брифингТекст = `Фокус дня:\n${сегодняТекст}`;
     }
   } else {
     брифингТекст = `Фокус дня:\n${сегодняТекст}`;
@@ -119,25 +160,28 @@ export async function утреннийАвтоБрифинг({ bot, supa, openai
     weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Moscow'
   });
 
-  let текстСообщ = `☀️ *Утренний брифинг · ${дата}*\n\n${брифингТекст}`;
+  const части = [
+    `☀️ *Утренний брифинг · ${дата}*`,
+    блокЗдоровья ? `\n${блокЗдоровья}` : '',
+    `\n${брифингТекст}`,
+    ожидания.length ? `\n🕐 *Жду от других:*\n${ожиданийТекст}` : '',
+  ].filter(Boolean);
 
   const клавиатура = new InlineKeyboard()
     .webApp('⚡ Открыть LIFE OS', безКэша())
     .row();
 
-  // Отправляем основной брифинг
-  await bot.api.sendMessage(ownerTgId, текстСообщ, {
+  await bot.api.sendMessage(ownerTgId, части.join('\n'), {
     parse_mode: 'Markdown',
     reply_markup: клавиатура,
   });
 
-  // Отправляем просроченные задачи отдельными карточками
+  // Просроченные — отдельными карточками с кнопками
   if (просроченные.length > 0) {
     await bot.api.sendMessage(ownerTgId,
       `🔴 *Висит со вчера (${просроченные.length}):*\nЧто делаем с каждой?`,
       { parse_mode: 'Markdown' }
     );
-
     for (const задача of просроченные.slice(0, 5)) {
       await отправитьКарточкуПереноса(bot, ownerTgId, задача);
     }
@@ -169,15 +213,46 @@ export async function отправитьКарточкуПереноса(bot, ow
 }
 
 // ── ВЕЧЕРНИЙ ЧЕК-ИН (авто в 21:00) ──────────────────────────────────────────
-async function вечернийАвтоЧекин({ bot, ownerTgId, безКэша }) {
+async function вечернийАвтоЧекин({ bot, ownerTgId, безКэша, supa }) {
+  const сегодня = сегодняМосква();
+
+  // Статистика дня из Supabase
+  let выполнено = 0;
+  let заработаноXP = 0;
+  let q1Закрыто = 0;
+
+  if (supa) {
+    try {
+      const { data } = await supa.from('tasks')
+        .select('quadrant,xp_value')
+        .eq('owner', 'george')
+        .eq('done', true)
+        .gte('completed_at', `${сегодня}T00:00:00`)
+        .lte('completed_at', `${сегодня}T23:59:59`);
+
+      if (data?.length) {
+        выполнено = data.length;
+        заработаноXP = data.reduce((s, t) => s + (t.xp_value || 10), 0);
+        q1Закрыто = data.filter(t => t.quadrant === 'do').length;
+      }
+    } catch (err) {
+      console.error('[cron 21:00] статистика:', err.message);
+    }
+  }
+
+  const статБлок = выполнено > 0
+    ? `\n✅ Сегодня закрыто: *${выполнено} задач* (+${заработаноXP} XP)` +
+      (q1Закрыто > 0 ? `\n⚡ Q1 выполнено: *${q1Закрыто}*` : '')
+    : '\n📭 Задач не закрыто — расскажи почему?';
+
   const клавиатура = new InlineKeyboard()
     .text('🎙️ Голосом',  'checkin:voice')
     .text('📝 Текстом',  'checkin:text').row()
-    .webApp('📊 Открыть статистику', безКэша());
+    .webApp('📊 Открыть LIFE OS', безКэша());
 
   await bot.api.sendMessage(ownerTgId,
-    `🌙 *Вечерний чек-ин*\n\n` +
-    `День заканчивается. Что сделано? Что не успел?\n` +
+    `🌙 *Вечерний чек-ин*${статБлок}\n\n` +
+    `Как прошёл день? Что сделал, что не успел, как энергия?\n` +
     `Расскажи голосом или напиши — зафиксирую, начислю XP.`,
     { parse_mode: 'Markdown', reply_markup: клавиатура }
   );
