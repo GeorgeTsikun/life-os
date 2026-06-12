@@ -113,6 +113,9 @@ function renderByDates(tasks) {
 
 // ── АРХИВ ГОТОВЫХ ───────────────────────────────────────────────────────────
 function renderDone(готовые) {
+  const отменённые = готовые.filter(t => t.cancelled);
+  const выполненные = готовые.filter(t => !t.cancelled);
+
   if (готовые.length === 0) {
     return `<div style="text-align:center;padding:40px 20px;color:rgba(232,237,245,.4)">
       <div style="font-size:48px;margin-bottom:12px">📭</div>
@@ -120,6 +123,21 @@ function renderDone(готовые) {
       <div style="font-size:11px;margin-top:8px">Выполненные задачи окажутся здесь</div>
     </div>`;
   }
+
+  // Отменённые — отдельным блоком снизу
+  const блокОтменённых = отменённые.length ? `
+    <div style="margin-top:8px;margin-bottom:12px">
+      <div style="font-size:9px;color:rgba(232,237,245,.3);letter-spacing:.08em;margin-bottom:6px;padding:0 4px">❌ ОТМЕНЁННЫЕ (${отменённые.length})</div>
+      ${отменённые.map(t => `
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04);opacity:.5">
+          <span style="font-size:12px">❌</span>
+          <div style="flex:1;font-size:11px;text-decoration:line-through;color:rgba(232,237,245,.4)">${t.text}</div>
+          <span style="font-size:9px;color:rgba(232,237,245,.2)">${t.cat || ''}</span>
+        </div>`).join('')}
+    </div>` : '';
+
+  готовые = выполненные; // далее рендерим только выполненные
+  if (!готовые.length) return блокОтменённых || '';
   // Сортируем по дате выполнения (свежие сверху)
   готовые = [...готовые].sort((a,b) => {
     const da = new Date(a.completedAt || 0).getTime();
@@ -147,7 +165,7 @@ function renderDone(готовые) {
       </div>
       ${items.map(t => doneItemHTML(t)).join('')}
     </div>
-  `).join('');
+  `).join('') + блокОтменённых;
 }
 
 function doneItemHTML(t) {
@@ -209,15 +227,23 @@ function taskItemHTML(t, quadColor) {
   const quadEmoji = quad ? quad.label.split(' ')[0] : '';
   const дата = t.start_iso ? new Date(t.start_iso) : (t.due_date ? new Date(t.due_date) : null);
   const датаСтр = дата ? форматДата(дата, { compact: true }) : (t.time || '');
-  return `<div class="task-item${t.done?' done':''}">
+  // Бейдж финансового импакта
+  const fiIcons = { direct: '💰', indirect: '💡' };
+  const fiBadge = fiIcons[t.financial_impact] ? `<span style="font-size:10px" title="${t.financial_impact==='direct'?'Прямой доход':'Косвенный рост'}">${fiIcons[t.financial_impact]}</span>` : '';
+  // Имя проекта
+  const проект = t.project_id ? (DB.getProjects().find(p => p.id === t.project_id)) : null;
+  const projBadge = проект ? `<span style="font-size:8px;background:${проект.color||'#7B61FF'}18;color:${проект.color||'#7B61FF'};border:1px solid ${проект.color||'#7B61FF'}30;border-radius:4px;padding:1px 5px">${проект.emoji||''} ${проект.name}</span>` : '';
+
+  return `<div class="task-item${t.done?' done':''}${t.cancelled?' cancelled':''}">
     <div class="checkbox${t.done?' checked':''}" style="${t.done?`background:${quadColor};border-color:${quadColor};color:#000`:''}" onclick="event.stopPropagation();window.toggleTask('${t.id}')">
       ${t.done?'✓':''}
     </div>
     <div style="flex:1;cursor:pointer;min-width:0" onclick="window.openTaskDetail('${t.id}')">
-      <div class="task-text" style="font-size:12px;font-weight:500">${t.text}</div>
-      <div class="row" style="gap:6px;margin-top:3px;font-size:9px;color:rgba(232,237,245,.4)">
+      <div class="task-text" style="font-size:12px;font-weight:500">${t.text} ${fiBadge}</div>
+      <div class="row" style="gap:6px;margin-top:3px;font-size:9px;color:rgba(232,237,245,.4);flex-wrap:wrap">
         ${quadEmoji ? `<span>${quadEmoji}</span>` : ''}
         ${датаСтр ? `<span>· ${датаСтр}</span>` : ''}
+        ${projBadge}
       </div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">

@@ -91,6 +91,30 @@ function разметка() {
         </button>`).join('')}
     </div>
 
+    <!-- Проект -->
+    <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:6px">Проект</div>
+    <div class="cat-pills" id="td-projects" style="margin-bottom:14px">
+      <button class="cat-pill ${!t.project_id?'active':''}" data-proj=""
+              onclick="window.tdВыбProj('')" style="--cc:rgba(232,237,245,.4)">— Без проекта</button>
+      ${DB.getProjects().map(p => `
+        <button class="cat-pill ${t.project_id===p.id?'active':''}" data-proj="${p.id}"
+                onclick="window.tdВыбProj('${p.id}')"
+                style="--cc:${p.color||'#7B61FF'}">${p.emoji||''} ${p.name}</button>`).join('')}
+    </div>
+
+    <!-- Финансовый импакт -->
+    <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:6px">Финансовый импакт</div>
+    <div class="cat-pills" id="td-finance" style="margin-bottom:14px">
+      ${[
+        {v:'direct',   label:'💰 Прямой',    color:'#00F5D4', hint:'приносит деньги'},
+        {v:'indirect', label:'💡 Косвенный', color:'#FFD700', hint:'влияет на рост'},
+        {v:'none',     label:'— Нет',        color:'rgba(232,237,245,.3)', hint:'бытовое'},
+      ].map(f => `
+        <button class="cat-pill ${(t.financial_impact||'none')===f.v?'active':''}" data-fi="${f.v}"
+                onclick="window.tdВыбFi('${f.v}')"
+                style="--cc:${f.color}" title="${f.hint}">${f.label}</button>`).join('')}
+    </div>
+
     <!-- Заметки -->
     <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Заметки</div>
     <textarea id="td-notes" class="input" rows="2" placeholder="Дополнительные мысли, ссылки..." style="margin-bottom:14px;resize:vertical;font-size:12px">${escapeHtml(t.notes || '')}</textarea>
@@ -169,6 +193,20 @@ window.tdУст = function(когда) {
   TG.hapticSelection();
 };
 
+window.tdВыбProj = function(projId) {
+  _текущая.project_id = projId || null;
+  document.querySelectorAll('#td-projects .cat-pill').forEach(b => b.classList.remove('active'));
+  document.querySelector(`#td-projects [data-proj="${projId}"]`)?.classList.add('active');
+  TG.hapticSelection();
+};
+
+window.tdВыбFi = function(fi) {
+  _текущая.financial_impact = fi;
+  document.querySelectorAll('#td-finance .cat-pill').forEach(b => b.classList.remove('active'));
+  document.querySelector(`#td-finance [data-fi="${fi}"]`)?.classList.add('active');
+  TG.hapticSelection();
+};
+
 window.tdВыбPts = function(pts) {
   _текущая.xpValue = pts;
   document.querySelectorAll('#td-points .cat-pill').forEach(b => b.classList.remove('active'));
@@ -209,10 +247,12 @@ window.tdСохранить = async function() {
   const patch = {
     text: текст,
     quadrant: _текущая.quadrant,
-    cat: _текущая.cat || 'Работа',  // категория обязательна — дефолт 'Работа'
+    cat: _текущая.cat || 'Работа',
     xpValue: _текущая.xpValue || 10,
     notes: заметки,
     subtasks: (_текущая.subtasks || []).filter(s => s.text?.trim()),
+    project_id:       _текущая.project_id       || null,
+    financial_impact: _текущая.financial_impact || 'none',
   };
 
   if (датаStr) {
