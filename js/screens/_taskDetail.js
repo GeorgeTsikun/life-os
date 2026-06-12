@@ -108,7 +108,8 @@ function разметка() {
 
     <!-- Кнопки -->
     <div style="display:flex;gap:8px;margin-top:14px">
-      <button class="btn btn-ghost" style="flex:1;color:#FF6B6B" onclick="window.tdУдалить()">🗑 Удалить</button>
+      <button class="btn btn-ghost" style="flex:1;color:rgba(232,237,245,.4);font-size:11px" onclick="window.tdОтменить()">❌ Отменить</button>
+      <button class="btn btn-ghost" style="flex:1;color:#FF6B6B;font-size:11px" onclick="window.tdУдалить()">🗑 Удалить</button>
       <button class="btn btn-teal" style="flex:2" onclick="window.tdСохранить()">💾 Сохранить</button>
     </div>
   </div>`;
@@ -208,7 +209,7 @@ window.tdСохранить = async function() {
   const patch = {
     text: текст,
     quadrant: _текущая.quadrant,
-    cat: _текущая.cat,
+    cat: _текущая.cat || 'Работа',  // категория обязательна — дефолт 'Работа'
     xpValue: _текущая.xpValue || 10,
     notes: заметки,
     subtasks: (_текущая.subtasks || []).filter(s => s.text?.trim()),
@@ -237,8 +238,17 @@ window.tdСохранить = async function() {
   }
 };
 
+window.tdОтменить = function() {
+  if (!confirm('Отменить задачу? Она останется в истории.')) return;
+  DB.cancelTask(_текущая.id);
+  закрыть();
+  _онЗакрытии?.();
+  TG.hapticImpact('medium');
+  window.showToast?.('❌ Задача отменена (сохранена в истории)', 'info');
+};
+
 window.tdУдалить = function() {
-  if (!confirm('Удалить эту задачу?')) return;
+  if (!confirm('Удалить задачу навсегда? Её нельзя будет вернуть.')) return;
   DB.deleteTask(_текущая.id);
   закрыть();
   _онЗакрытии?.();

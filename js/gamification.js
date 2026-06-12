@@ -2,8 +2,11 @@
 import { DB } from './db.js';
 
 // XP, необходимый для уровня n (начиная с 1)
+// Быстрый старт как в RPG: L1=50, L2=100, L3=150, L4=280, L5=430, L10=15000
 export function xpForLevel(n) {
-  return Math.round(1000 * Math.pow(n, 1.5));
+  if (n <= 3) return Math.round(50 * n);
+  if (n <= 7) return Math.round(100 * Math.pow(n, 1.6));
+  return Math.round(150 * Math.pow(n, 2));
 }
 
 // Суммарный XP для достижения уровня n (начиная с нуля)

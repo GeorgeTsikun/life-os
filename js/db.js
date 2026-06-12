@@ -183,6 +183,21 @@ function инициализировать() {
     хранилищеСохранить('rpgStats', rpg);
     хранилищеСохранить('migrated_v3_rpg_stats', true);
   }
+  // Миграция v4: жёсткий сброс профиля — L1/0 XP, фото принудительно
+  if (!хранилищеПолучить('migrated_v4_hard_reset')) {
+    const p = хранилищеПолучить('profile') || {};
+    p.level = 1;
+    p.xp = 0;
+    p.streak = p.streak ?? 1;
+    p.photo = 'assets/avatar.jpg';  // принудительно — фото с акулами
+    p.lastDecayDate = null;         // сброс деградации
+    p.lastQuestReset = null;        // сброс квестов
+    хранилищеСохранить('profile', p);
+    // Сброс квестов в изначальное состояние (done: false)
+    const кв = хранилищеПолучить('quests') || ДАННЫЕ.quests;
+    хранилищеСохранить('quests', кв.map(q => ({ ...q, done: false })));
+    хранилищеСохранить('migrated_v4_hard_reset', true);
+  }
 }
 
 // ── ПУБЛИЧНОЕ API ─────────────────────────────────────────────────────────────
@@ -190,6 +205,7 @@ export const DB = {
   init() {
     инициализировать();
     this.applyDailyDecay();
+    this.resetDailyQuests();
   },
 
   get(ключ)       { return хранилищеПолучить(ключ) ?? ДАННЫЕ[ключ]; },
@@ -367,11 +383,44 @@ export const DB = {
 
   // Квесты
   getQuests()     { return this.get('quests'); },
+
   completeQuest(id) {
     const квесты = this.getQuests();
     const к = квесты.find(x => x.id === id);
     if (к && !к.done) { к.done = true; this.set('quests', квесты); return к; }
     return null;
+  },
+
+  resetQuest(id) {
+    const квесты = this.getQuests();
+    const к = квесты.find(x => x.id === id);
+    if (к) { к.done = false; this.set('quests', квесты); return к; }
+    return null;
+  },
+
+  // Авторесет квестов каждый день
+  resetDailyQuests() {
+    const сегодня = new Date().toDateString();
+    const p = this.getProfile();
+    if (p.lastQuestReset === сегодня) return;
+    const квесты = this.getQuests().map(q => ({ ...q, done: false }));
+    this.set('quests', квесты);
+    p.lastQuestReset = сегодня;
+    this.saveProfile(p);
+  },
+
+  // Отменить задачу (не удалять, хранить в аналитике)
+  cancelTask(id) {
+    const задачи = this.getTasks();
+    const т = задачи.find(x => x.id === id);
+    if (т) {
+      т.cancelled = true;
+      т.done = true;
+      т.cancelledAt = new Date().toISOString();
+      this.saveTasks(задачи);
+      window._дбHook?.('task', т);
+    }
+    return т;
   },
 
   // Профиль / XP

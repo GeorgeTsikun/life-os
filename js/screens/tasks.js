@@ -190,17 +190,16 @@ function renderMatrix(tasks) {
           <div style="font-size:9px;font-weight:700;color:${q.color}">${q.label.split('·')[0].trim()}</div>
           <span class="num" style="font-size:12px;color:${q.color}">${all.length}</span>
         </div>
-        ${видимые.map(t => `<div style="font-size:11px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;display:flex;gap:6px;align-items:flex-start" onclick="event.stopPropagation();window.toggleTask('${t.id}')">
-          <div style="width:14px;height:14px;border-radius:3px;border:1px solid rgba(255,255,255,.2);flex-shrink:0;margin-top:2px"></div>
-          <span style="line-height:1.3">${t.text}</span>
-        </div>`).join('')}
+        ${видимые.map(t => `
+          <div style="font-size:11px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);display:flex;gap:6px;align-items:flex-start">
+            <div style="width:14px;height:14px;border-radius:3px;border:1px solid rgba(255,255,255,.2);flex-shrink:0;margin-top:2px;cursor:pointer"
+                 onclick="event.stopPropagation();window.toggleTask('${t.id}')"></div>
+            <span style="line-height:1.3;cursor:pointer;flex:1" onclick="window.openTaskDetail('${t.id}')">${t.text}</span>
+          </div>`).join('')}
         ${видимые.length === 0 ? `<div style="font-size:10px;color:rgba(232,237,245,.25);text-align:center;padding:12px 0">✓ Пусто</div>` : ''}
         ${all.length > 4 ? `<div style="font-size:9px;color:rgba(232,237,245,.3);margin-top:6px;text-align:center">+${all.length-4} ещё</div>` : ''}
       </div>`;
     }).join('')}
-  </div>
-  <div style="font-size:10px;color:rgba(232,237,245,.35);text-align:center;margin-top:8px;letter-spacing:.05em">
-    Переключи на «📋 Список» чтобы видеть детали и категории
   </div>`;
 }
 

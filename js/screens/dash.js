@@ -23,7 +23,15 @@ export function renderDash() {
   const unlockedAchs = achs.filter(a => a.unlocked);
 
   const photoSrc  = profile.photo || 'assets/avatar.jpg';
-  const liveQuests = quests.filter(q => !q.done);
+  // Динамические квесты — привязываем первый к реальной Q1-задаче
+  const q1Tasks = tasks.filter(t => !t.done && t.quadrant === 'do');
+  const topQ1 = q1Tasks[0];
+  const динамичныеКвесты = DB.getQuests().map((q, i) => {
+    if (i === 0 && topQ1) return { ...q, title: topQ1.text, xp: topQ1.xpValue || 20, taskId: topQ1.id };
+    return q;
+  });
+  const liveQuests = динамичныеКвесты.filter(q => !q.done);
+  const doneQuests = динамичныеКвесты.filter(q => q.done);
 
   // Дофамин-баланс (механика GAMECHANGER)
   const earned     = DB.getEarned();
@@ -87,24 +95,18 @@ export function renderDash() {
   <div class="card" style="margin-bottom:12px">
     <div class="row" style="justify-content:space-between;margin-bottom:10px">
       <div class="sec-label" style="margin:0">⚡ КВЕСТЫ ДНЯ</div>
-      <span style="font-size:10px;color:rgba(232,237,245,.4)">${liveQuests.length} активных · ${quests.length - liveQuests.length} ✓</span>
+      <span style="font-size:10px;color:rgba(232,237,245,.4)">${liveQuests.length} активных · ${doneQuests.length} ✓</span>
     </div>
-    ${liveQuests.length > 0
-      ? `<div class="quests-grid">${liveQuests.map(q => `
-        <div class="quest-card" onclick="window.completeQuest('${q.id}')">
-          <div class="quest-icon">${q.icon}</div>
-          <div style="flex:1">
-            <div style="font-size:12px;font-weight:600;color:#E8EDF5">${q.title}</div>
-            <div style="font-size:10px;color:rgba(0,245,212,.7);margin-top:2px">+${q.xp} XP · +${q.xp} баллов</div>
-          </div>
-          <div style="font-size:16px">⬜</div>
-        </div>`).join('')}
-      </div>`
-      : `<div style="text-align:center;padding:18px 8px">
-          <div style="font-size:32px;margin-bottom:6px">🎯</div>
-          <div style="font-size:13px;font-weight:600;color:#00F5D4;margin-bottom:4px">Все квесты выполнены!</div>
-          <div style="font-size:11px;color:rgba(232,237,245,.4)">Новые появятся завтра в 08:00</div>
-        </div>`}
+    ${динамичныеКвесты.map(q => `
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer"
+           onclick="window.${q.done ? 'resetQuest' : 'completeQuest'}('${q.id}')">
+        <div style="width:28px;height:28px;border-radius:8px;background:${q.done ? 'rgba(0,245,212,.15)' : 'rgba(255,255,255,.05)'};display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${q.icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:${q.done ? 'rgba(232,237,245,.35)' : '#E8EDF5'};${q.done ? 'text-decoration:line-through' : ''};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${q.title}</div>
+          <div style="font-size:9px;color:rgba(0,245,212,.6);margin-top:1px">${q.done ? '✓ выполнено · нажми чтобы отменить' : '+' + q.xp + ' XP'}</div>
+        </div>
+        <div style="font-size:18px;flex-shrink:0">${q.done ? '✅' : '⬜'}</div>
+      </div>`).join('')}
   </div>
 
   <!-- ── ФОКУС ДНЯ ──────────────────────────────────────────────────────────── -->
@@ -281,6 +283,26 @@ window.toggleTaskFromDash = function(id) {
     if (т.done) {
       window.showToast?.(`+${т.xpValue || 10} баллов 🎯`, 'success');
     }
+    renderDash();
+  }
+};
+
+window.completeQuest = function(id) {
+  const q = DB.completeQuest(id);
+  if (q) {
+    // Если квест привязан к реальной задаче — закрываем её тоже
+    if (q.taskId) DB.toggleTask(q.taskId);
+    window.showToast?.(`${q.icon} ${q.title.slice(0, 30)} · +${q.xp} XP`, 'success');
+    TG.hapticSuccess();
+    renderDash();
+  }
+};
+
+window.resetQuest = function(id) {
+  const q = DB.resetQuest(id);
+  if (q) {
+    window.showToast?.(`↩️ Квест отменён`, 'info');
+    TG.hapticImpact('light');
     renderDash();
   }
 };
