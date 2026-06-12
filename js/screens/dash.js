@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=29';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=29';
-import { TG } from '../telegram.js?v=29';
+import { DB } from '../db.js?v=30';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=30';
+import { TG } from '../telegram.js?v=30';
 
 let radarChart, energyChart;
 let _currentQuests = []; // для синхронизации taskId при completeQuest
@@ -352,6 +352,24 @@ window.ciPickMood = function(m) {
   });
 };
 
+window.ciVoiceNote = function() {
+  // Запускаем голосовой захват, результат вставляем в поле заметки
+  if (!window.openVoiceCapture) { window.showToast?.('🎙️', 'Голос недоступен', '', ''); return; }
+
+  const origHook = window._voiceCaptureCallback;
+  window._voiceCaptureCallback = function(text) {
+    const ta = document.getElementById('ci-note');
+    if (ta) {
+      ta.value = ta.value ? ta.value + ' ' + text : text;
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
+    }
+    window._voiceCaptureCallback = origHook;
+    TG.hapticSuccess();
+  };
+  window.openVoiceCapture?.('checkin');
+};
+
 window.submitCheckin = function() {
   const energy = parseInt(document.getElementById('ci-energy')?.value || '7');
   const mood   = window._ciMood || DB.getDailyLog()?.mood || '😊';
@@ -508,13 +526,20 @@ function renderCheckinBlock(daily) {
       </div>
     </div>
 
-    <!-- Заметка -->
-    <textarea id="ci-note" class="input" rows="1" placeholder="Одна фраза о дне (необязательно)…"
-      style="margin-bottom:12px;font-size:12px;resize:none">${daily.note||''}</textarea>
+    <!-- Заметка + голос -->
+    <div style="display:flex;gap:8px;margin-bottom:12px;align-items:flex-start">
+      <textarea id="ci-note" class="input" rows="2" placeholder="Как ощущаешь день? Что важного…"
+        style="flex:1;font-size:12px;resize:none">${daily.note||''}</textarea>
+      <button onclick="window.ciVoiceNote()" title="Голосом"
+        style="flex-shrink:0;width:42px;height:52px;border-radius:10px;border:1px solid rgba(0,245,212,.25);
+               background:rgba(0,245,212,.08);color:#00F5D4;font-size:18px;cursor:pointer">🎙️</button>
+    </div>
 
-    <button onclick="window.submitCheckin()" class="btn btn-teal" style="width:100%;padding:11px;font-size:12px">
-      Записать ✓
-    </button>
+    <div style="display:flex;gap:8px">
+      <button onclick="window.submitCheckin()" class="btn btn-teal" style="flex:3;padding:11px;font-size:12px">
+        Записать ✓
+      </button>
+    </div>
   </div>`;
 }
 

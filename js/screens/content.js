@@ -2,8 +2,8 @@
 // Пайплайн: Идея → Сценарий → Съёмка → Монтаж → Запланировано → Опубликовано
 // Группировка по платформам, метрики после публикации.
 
-import { DB } from '../db.js?v=29';
-import { TG } from '../telegram.js?v=29';
+import { DB } from '../db.js?v=30';
+import { TG } from '../telegram.js?v=30';
 
 const ПЛАТФОРМЫ = [
   { id:'instagram', name:'Instagram', emoji:'📷', color:'#E1306C' },
@@ -39,6 +39,15 @@ const ИМЕНА_ТИПОВ = {
 };
 
 let выбраннаяПлатформа = 'instagram';
+let contentViewMode = 'kanban'; // 'kanban' | 'list'
+
+// Kanban колонки (упрощённые 4 стадии)
+const KANBAN_COLS = [
+  { id: 'idea',      label: '💡 Идея',       color: '#FFD700', statuses: ['idea'] },
+  { id: 'wip',       label: '✍️ В работе',   color: '#7B61FF', statuses: ['script','shooting','editing'] },
+  { id: 'scheduled', label: '📅 Запланировано', color: '#00F5D4', statuses: ['scheduled'] },
+  { id: 'done',      label: '🚀 Готово',     color: '#00E396', statuses: ['published'] },
+];
 
 // ── SEED данные если нет в localStorage ───────────────────────────────────────
 const SEED_CONTENT = [
@@ -82,22 +91,28 @@ export function renderContent() {
   const el = document.getElementById('content');
   el.innerHTML = `<div class="screen">
 
-    <div class="row" style="justify-content:space-between;margin-bottom:14px">
+    <div class="row" style="justify-content:space-between;margin-bottom:12px">
       <div>
         <div class="num" style="font-size:16px">КОНТЕНТ</div>
         <div style="font-size:10px;color:rgba(232,237,245,.4);margin-top:2px">${весь.length} единиц · ${опубликовано.length} опубликовано</div>
       </div>
-      <button class="btn btn-teal" onclick="window.openAddContent()">+ Идея</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button onclick="window.toggleContentView()" style="padding:5px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);color:rgba(232,237,245,.7);font-size:11px;cursor:pointer">
+          ${contentViewMode==='kanban'?'☰ Список':'⊞ Канбан'}
+        </button>
+        <button class="btn btn-teal" onclick="window.openAddContent()">+ Идея</button>
+      </div>
     </div>
 
     <!-- ПЕРЕКЛЮЧАТЕЛЬ ПЛАТФОРМ -->
-    <div class="cat-pills" style="margin-bottom:16px">
+    <div style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:14px;padding-bottom:2px">
       ${ПЛАТФОРМЫ.map(п => `
-        <button class="cat-pill ${п.id===выбраннаяПлатформа?'active':''}"
-                onclick="window.выбратьПлатформу('${п.id}')"
-                style="--cc:${п.color};font-size:11px;padding:6px 12px">
-          ${п.emoji} ${п.name}
-          <span style="margin-left:4px;opacity:.5">${весь.filter(c=>(c.platforms||[]).includes(п.id)).length}</span>
+        <button onclick="window.выбратьПлатформу('${п.id}')"
+          style="flex-shrink:0;padding:5px 12px;border-radius:20px;font-size:11px;cursor:pointer;
+                 border:1px solid ${п.id===выбраннаяПлатформа?п.color+'80':'rgba(255,255,255,.1)'};
+                 background:${п.id===выбраннаяПлатформа?п.color+'18':'rgba(255,255,255,.03)'};
+                 color:${п.id===выбраннаяПлатформа?п.color:'rgba(232,237,245,.5)'}">
+          ${п.emoji} ${п.name} <span style="opacity:.5">${весь.filter(c=>(c.platforms||[]).includes(п.id)).length}</span>
         </button>
       `).join('')}
     </div>
@@ -108,38 +123,8 @@ export function renderContent() {
         <div style="font-size:13px">Для ${платформа.name} пока ничего нет.</div>
         <div style="font-size:11px;margin-top:8px">Нажми «+ Идея» чтобы начать.</div>
       </div>
-    ` : ''}
+    ` : contentViewMode === 'kanban' ? renderContentKanban(наПлатформе) : renderContentList(по_статусу)}
 
-    <!-- ПАЙПЛАЙН ПО СТАТУСАМ -->
-    ${по_статусу.filter(s => s.items.length > 0).map(с => `
-      <div class="card" style="margin-bottom:12px;border-top:2px solid ${с.color}">
-        <div class="row" style="justify-content:space-between;margin-bottom:10px">
-          <div style="font-size:11px;font-weight:700;color:${с.color};letter-spacing:.05em">${с.name}</div>
-          <span class="num" style="font-size:14px;color:${с.color}">${с.items.length}</span>
-        </div>
-        ${с.items.map(c => renderКонтентКарточку(c, с.color)).join('')}
-      </div>
-    `).join('')}
-
-    ${опубликовано.length > 0 ? `
-      <div class="card" style="margin-bottom:12px;background:linear-gradient(135deg,rgba(0,227,150,.06),rgba(0,245,212,.04))">
-        <div class="sec-label">📊 ЗА МЕСЯЦ (введи метрики кликом на пост)</div>
-        <div class="grid3" style="margin-top:8px">
-          <div style="text-align:center">
-            <div class="num" style="font-size:18px;color:#00E396">${'—'}</div>
-            <div style="font-size:9px;color:rgba(232,237,245,.4)">Просмотры</div>
-          </div>
-          <div style="text-align:center">
-            <div class="num" style="font-size:18px;color:#00C9FF">${'—'}</div>
-            <div style="font-size:9px;color:rgba(232,237,245,.4)">Лайки</div>
-          </div>
-          <div style="text-align:center">
-            <div class="num" style="font-size:18px;color:#FFD700">${'—'}</div>
-            <div style="font-size:9px;color:rgba(232,237,245,.4)">Подписчики</div>
-          </div>
-        </div>
-      </div>
-    ` : ''}
 
     <div style="height:8px"></div>
   </div>`;
@@ -147,6 +132,82 @@ export function renderContent() {
   TG.hideBackButton();
   TG.hideMainButton();
 }
+
+// ── KANBAN VIEW ───────────────────────────────────────────────────────────────
+function renderContentKanban(items) {
+  return `<div style="display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:8px;align-items:flex-start">
+    ${KANBAN_COLS.map(col => {
+      const colItems = items.filter(c => col.statuses.includes(c.status || 'idea'));
+      return `<div style="flex-shrink:0;width:200px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:0 2px">
+          <div style="font-size:11px;font-weight:700;color:${col.color}">${col.label}</div>
+          <div style="font-size:10px;color:rgba(232,237,245,.35);margin-left:auto">${colItems.length}</div>
+        </div>
+        <div style="min-height:60px">
+          ${colItems.length === 0
+            ? `<div style="border:1px dashed rgba(255,255,255,.08);border-radius:10px;padding:16px;text-align:center;font-size:10px;color:rgba(232,237,245,.25)">пусто</div>`
+            : colItems.map(c => renderKanbanCard(c, col.color)).join('')
+          }
+        </div>
+        ${col.id === 'idea' ? `<button onclick="window.openAddContent()" style="width:100%;margin-top:6px;padding:8px;border-radius:9px;border:1px dashed rgba(255,215,0,.2);background:transparent;color:rgba(255,215,0,.4);font-size:11px;cursor:pointer">+ Идея</button>` : ''}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function renderKanbanCard(c, цвет) {
+  const платформы = (c.platforms || []).map(id => ПЛАТФОРМЫ.find(p => p.id===id)?.emoji).filter(Boolean).join('');
+  return `<div onclick="window.openContentDetail('${c.id}')"
+    style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-left:2px solid ${цвет};
+           border-radius:9px;padding:10px;margin-bottom:6px;cursor:pointer">
+    <div style="font-size:11px;font-weight:500;line-height:1.3;margin-bottom:6px">${c.title}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:12px">${платформы}</span>
+      <div style="display:flex;gap:4px">
+        ${KANBAN_COLS.map(col => `
+          <button onclick="event.stopPropagation();window.moveContentKanban('${c.id}','${col.statuses[0]}')"
+            title="${col.label}"
+            style="width:18px;height:18px;border-radius:4px;border:1px solid ${col.color}40;
+                   background:${col.statuses.includes(c.status||'idea')?col.color+'30':'transparent'};
+                   font-size:8px;cursor:pointer;color:${col.color}">
+            ${col.statuses.includes(c.status||'idea')?'●':'○'}
+          </button>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── LIST VIEW ─────────────────────────────────────────────────────────────────
+function renderContentList(по_статусу) {
+  const filtered = по_статусу.filter(s => s.items.length > 0);
+  if (!filtered.length) return '';
+  return filtered.map(с => `
+    <div class="card" style="margin-bottom:12px;border-top:2px solid ${с.color}">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:700;color:${с.color}">${с.name}</div>
+        <span class="num" style="font-size:14px;color:${с.color}">${с.items.length}</span>
+      </div>
+      ${с.items.map(c => renderКонтентКарточку(c, с.color)).join('')}
+    </div>
+  `).join('');
+}
+
+window.toggleContentView = function() {
+  contentViewMode = contentViewMode === 'kanban' ? 'list' : 'kanban';
+  renderContent();
+};
+
+window.moveContentKanban = function(id, newStatus) {
+  const данные = загрузитьКонтент();
+  const c = данные.find(x => x.id === id);
+  if (c) {
+    c.status = newStatus;
+    if (newStatus === 'published' && !c.publish_date) c.publish_date = new Date().toISOString().split('T')[0];
+    сохранитьКонтент(данные);
+  }
+  renderContent();
+  TG.hapticImpact('light');
+};
 
 function renderКонтентКарточку(c, цвет) {
   const платформы = (c.platforms || []).map(id => ПЛАТФОРМЫ.find(p => p.id===id)?.emoji).filter(Boolean).join(' ');

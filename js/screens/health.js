@@ -1,7 +1,7 @@
 // ── HEALTH SCREEN (Health / Sport / Nutrition sub-tabs) ───────────────────────
-import { DB } from '../db.js?v=29';
-import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=29';
-import { TG } from '../telegram.js?v=29';
+import { DB } from '../db.js?v=30';
+import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=30';
+import { TG } from '../telegram.js?v=30';
 
 let sleepChart, pulseChart, hrvChart, revenueChart;
 let healthTab = 'health';
@@ -234,29 +234,40 @@ function nutritionTabHTML() {
 
   return `
   <div class="card" style="margin-bottom:12px">
-    <div class="sec-label">💧 ВОДА</div>
-    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div>
-        <div class="num" style="font-size:28px;color:#00C9FF">${n.water}л</div>
-        <div style="font-size:10px;color:rgba(232,237,245,.4)">цель ${n.waterGoal}л</div>
-      </div>
-      <div style="position:relative;width:70px;height:70px">
-        <svg width="70" height="70">
-          <circle cx="35" cy="35" r="28" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="6"/>
-          <circle cx="35" cy="35" r="28" fill="none" stroke="#00C9FF" stroke-width="6"
-            stroke-dasharray="${(2*Math.PI*28).toFixed(1)}" stroke-dashoffset="${((1-waterPct/100)*2*Math.PI*28).toFixed(1)}"
-            stroke-linecap="round" transform="rotate(-90 35 35)"
-            style="filter:drop-shadow(0 0 4px #00C9FF)"/>
-        </svg>
-        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
-          <span style="font-size:14px;font-weight:700;color:#00C9FF">${Math.round(waterPct)}%</span>
-        </div>
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="sec-label" style="margin:0">💧 ВОДА</div>
+      <div class="row" style="gap:6px;align-items:baseline">
+        <span class="num" style="font-size:22px;color:#00C9FF">${(n.water*1000).toFixed(0)}</span>
+        <span style="font-size:10px;color:rgba(232,237,245,.4)">/ ${(n.waterGoal*1000).toFixed(0)} мл</span>
       </div>
     </div>
+
+    <!-- 10 стаканов по 250мл = 2500мл -->
+    ${(()=>{
+      const GLASS = 0.25; // 250мл
+      const total = 10;
+      const filled = Math.min(total, Math.round(n.water / GLASS));
+      return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+        ${Array.from({length: total}, (_, i) => {
+          const done = i < filled;
+          return `<button onclick="window.setWaterGlasses(${i+1})"
+            style="flex:1;min-width:calc(10% - 6px);aspect-ratio:1;border-radius:10px;border:1.5px solid ${done?'#00C9FF':'rgba(255,255,255,.1)'};
+                   background:${done?'rgba(0,201,255,.18)':'rgba(255,255,255,.03)'};
+                   font-size:16px;cursor:pointer;transition:all .15s;
+                   box-shadow:${done?'0 0 8px rgba(0,201,255,.3)':'none'}">
+            ${done?'💧':'○'}
+          </button>`;
+        }).join('')}
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:9px;color:rgba(232,237,245,.3);margin-bottom:10px">
+        <span>0</span><span>500мл</span><span>1л</span><span>1.5л</span><span>2л</span><span>2.5л</span>
+      </div>`;
+    })()}
+
     <div class="row" style="gap:8px">
-      <button class="btn btn-ghost" style="flex:1" onclick="window.addWater(-0.25)">-250мл</button>
-      <button class="btn btn-teal"  style="flex:1" onclick="window.addWater(0.25)">+250мл 💧</button>
-      <button class="btn btn-ghost" style="flex:1" onclick="window.addWater(0.5)">+500мл</button>
+      <button class="btn btn-ghost" style="flex:1;font-size:11px" onclick="window.addWater(-0.25)">− стакан</button>
+      <button class="btn btn-teal"  style="flex:2;font-size:11px" onclick="window.addWater(0.25)">+ стакан 250мл 💧</button>
+      <button class="btn btn-ghost" style="flex:1;font-size:11px" onclick="window.addWater(0.5)">+ 500мл</button>
     </div>
   </div>
 
@@ -421,6 +432,19 @@ window.submitWorkout = function() {
 window.addWater = function(amount) {
   const n = DB.getNutrition();
   n.water = Math.max(0, Math.min(5, +(n.water + amount).toFixed(2)));
+  DB.saveNutrition(n);
+  if (n.water >= 2) onNutritionUpdated(n);
+  renderHealth('nutrition');
+  TG.hapticImpact('light');
+};
+
+// Тап на стакан — устанавливает точное количество стаканов
+window.setWaterGlasses = function(glassCount) {
+  const n = DB.getNutrition();
+  const newWater = +(glassCount * 0.25).toFixed(2);
+  // Если тапаем на уже залитый последний стакан — убираем один
+  const currentGlasses = Math.round(n.water / 0.25);
+  n.water = currentGlasses === glassCount ? Math.max(0, newWater - 0.25) : newWater;
   DB.saveNutrition(n);
   if (n.water >= 2) onNutritionUpdated(n);
   renderHealth('nutrition');
