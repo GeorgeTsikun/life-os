@@ -499,6 +499,20 @@ export const DB = {
   getInbox()      { return this.get('inbox') || []; },
   saveInbox(arr)  { this.set('inbox', arr); },
 
+  // Ожидания CRM (жду от других)
+  getExpectations()    { return this.get('expectations') || []; },
+  saveExpectations(arr){ this.set('expectations', arr); window._дбHook?.('expectations', arr); },
+  addExpectation(obj)  {
+    const arr = this.getExpectations();
+    arr.unshift({ id:'exp_'+Date.now(), status:'pending', createdAt:new Date().toISOString(), ...obj });
+    this.saveExpectations(arr);
+  },
+  closeExpectation(id) {
+    const arr = this.getExpectations();
+    const e = arr.find(x=>x.id===id);
+    if (e) { e.status='received'; e.closedAt=new Date().toISOString(); this.saveExpectations(arr); }
+  },
+
   // Еженедельный челлендж
   getWeeklyChallenge() { return this.get('weeklyChallenge'); },
 };

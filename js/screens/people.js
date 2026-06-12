@@ -12,17 +12,31 @@ const CHECKUPS = [
 export function renderPeople() {
   const people = DB.getPeople();
   const urgent = people.filter(p => p.urgency === 'urgent').length;
+  const expectations = DB.getExpectations().filter(e => e.status !== 'received');
 
   const el = document.getElementById('content');
   el.innerHTML = `<div class="screen">
   <div class="row" style="justify-content:space-between;margin-bottom:14px">
     <div>
       <div class="num" style="font-size:16px">ЛЮДИ</div>
-      <div style="font-size:10px;color:rgba(232,237,245,.4);margin-top:2px">${urgent} требуют внимания сегодня</div>
+      <div style="font-size:10px;color:rgba(232,237,245,.4);margin-top:2px">${urgent} требуют внимания · ${expectations.length} ожиданий</div>
     </div>
     <button class="btn btn-teal" onclick="window.openAddPerson()">+ Контакт</button>
   </div>
 
+  <!-- ── ОЖИДАНИЯ (жду от других) ──────────────────────────────────────────── -->
+  <div class="card" style="margin-bottom:12px;border-left:3px solid #7B61FF">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <div class="sec-label" style="margin:0;color:#7B61FF">🕐 ЖДАНКИ (жду от других)</div>
+      <button onclick="window.openAddExpectation()" style="background:rgba(123,97,255,.12);border:1px solid rgba(123,97,255,.3);border-radius:8px;padding:4px 10px;font-size:10px;color:#7B61FF;cursor:pointer">+ Добавить</button>
+    </div>
+    ${expectations.length ? expectations.map(e => expectationCardHTML(e)).join('') : `
+      <div style="text-align:center;padding:12px 0;font-size:11px;color:rgba(232,237,245,.3)">
+        Нет активных ожиданий ✓
+      </div>`}
+  </div>
+
+  <!-- ── ПЛАНОВЫЕ ЧЕКАПЫ ───────────────────────────────────────────────────── -->
   <div class="card gold" style="margin-bottom:12px">
     <div class="sec-label">📅 ПЛАНОВЫЕ ЧЕКАПЫ</div>
     ${CHECKUPS.map((c,i)=>`<div class="row" style="padding:8px 0;${i<3?'border-bottom:1px solid rgba(255,255,255,.05)':''}">
@@ -42,6 +56,81 @@ export function renderPeople() {
   TG.hideBackButton();
   TG.hideMainButton();
 }
+
+// ── ОЖИДАНИЯ ─────────────────────────────────────────────────────────────────
+function expectationCardHTML(e) {
+  const now       = new Date();
+  const deadline  = e.deadline ? new Date(e.deadline) : null;
+  const diffDays  = deadline ? Math.ceil((deadline - now) / 86400000) : null;
+  const overdue   = diffDays !== null && diffDays < 0;
+  const urgent    = diffDays !== null && diffDays <= 1;
+  const color     = overdue ? '#FF4560' : urgent ? '#FFD700' : '#7B61FF';
+  const label     = overdue ? `Просрочено ${Math.abs(diffDays)}д` : diffDays === 0 ? 'Сегодня' : diffDays === 1 ? 'Завтра' : deadline ? `${diffDays}д` : '—';
+
+  return `<div style="padding:9px 0;border-bottom:1px solid rgba(255,255,255,.04);display:flex;align-items:flex-start;gap:10px">
+    <div style="font-size:22px;flex-shrink:0;padding-top:1px">🕐</div>
+    <div style="flex:1;min-width:0">
+      <div class="row" style="justify-content:space-between;margin-bottom:3px">
+        <div style="font-size:12px;font-weight:700;color:#E8EDF5">${e.owner}</div>
+        <span style="font-size:9px;font-weight:700;color:${color};flex-shrink:0">${label}</span>
+      </div>
+      <div style="font-size:11px;color:rgba(232,237,245,.7);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.what}</div>
+      ${e.context ? `<div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:3px">${e.context}</div>` : ''}
+      ${e.trigger ? `<div style="font-size:9px;color:#FFD700;background:rgba(255,215,0,.06);border-radius:6px;padding:3px 7px;margin-top:3px">⚡ ${e.trigger}</div>` : ''}
+    </div>
+    <button onclick="event.stopPropagation();window.closeExpectation('${e.id}')" style="flex-shrink:0;background:rgba(0,245,212,.08);border:1px solid rgba(0,245,212,.2);border-radius:8px;padding:5px 8px;font-size:10px;color:#00F5D4;cursor:pointer">✓</button>
+  </div>`;
+}
+
+window.closeExpectation = function(id) {
+  DB.closeExpectation(id);
+  window.showToast?.('✅ Получено!', 'success');
+  renderPeople();
+};
+
+window.openAddExpectation = function() {
+  const div = document.createElement('div');
+  div.className = 'modal-overlay';
+  div.innerHTML = `<div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🕐 Жду от…</div>
+
+    <div style="font-size:11px;color:rgba(232,237,245,.4);margin-bottom:4px">От кого жду</div>
+    <input id="exp-owner" class="input" placeholder="Имя человека" style="margin-bottom:10px">
+
+    <div style="font-size:11px;color:rgba(232,237,245,.4);margin-bottom:4px">Что именно жду</div>
+    <input id="exp-what" class="input" placeholder="Результаты аналитики, ответ по КП…" style="margin-bottom:10px">
+
+    <div style="font-size:11px;color:rgba(232,237,245,.4);margin-bottom:4px">Дедлайн ожидания</div>
+    <input id="exp-deadline" class="input" type="date" style="margin-bottom:10px">
+
+    <div style="font-size:11px;color:rgba(232,237,245,.4);margin-bottom:4px">Контекст (необязательно)</div>
+    <input id="exp-context" class="input" placeholder="Он говорил что у него проблемы с X…" style="margin-bottom:10px">
+
+    <div style="font-size:11px;color:rgba(232,237,245,.4);margin-bottom:4px">Действие если не пришло</div>
+    <input id="exp-trigger" class="input" placeholder="Пингануть в Telegram в 12:00 с предложением помочь" style="margin-bottom:16px">
+
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" style="flex:1" onclick="this.closest('.modal-overlay').remove()">Отмена</button>
+      <button class="btn btn-teal" style="flex:2" onclick="window.submitExpectation()">Добавить ✓</button>
+    </div>
+  </div>`;
+  div.addEventListener('click', e => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
+};
+
+window.submitExpectation = function() {
+  const owner    = document.getElementById('exp-owner')?.value?.trim();
+  const what     = document.getElementById('exp-what')?.value?.trim();
+  const deadline = document.getElementById('exp-deadline')?.value;
+  const context  = document.getElementById('exp-context')?.value?.trim();
+  const trigger  = document.getElementById('exp-trigger')?.value?.trim();
+  if (!owner || !what) { window.showToast?.('Заполни кто и что', 'error'); return; }
+  DB.addExpectation({ owner, what, deadline: deadline || null, context, trigger });
+  document.querySelector('.modal-overlay')?.remove();
+  window.showToast?.('🕐 Ожидание добавлено', 'success');
+  renderPeople();
+};
 
 function personCardHTML(p) {
   const urgencyLabel = p.urgency === 'urgent' ? '🔴 Сегодня' : p.urgency === 'soon' ? '🟢 Планово' : '⚪ Позже';

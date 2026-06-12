@@ -263,12 +263,18 @@ function taskItemHTML(t, quadColor) {
   const проект = t.project_id ? (DB.getProjects().find(p => p.id === t.project_id)) : null;
   const projBadge = проект ? `<span style="font-size:8px;background:${проект.color||'#7B61FF'}18;color:${проект.color||'#7B61FF'};border:1px solid ${проект.color||'#7B61FF'}30;border-radius:4px;padding:1px 5px">${проект.emoji||''} ${проект.name}</span>` : '';
 
+  // Счётчик переносов [T:X] — §3.2
+  const dc = t.defer_count || 0;
+  const deferBadge = dc >= 1
+    ? `<span style="font-size:8px;background:rgba(255,${dc>=3?'69,96':'159,67'},.15);color:${dc>=3?'#FF4560':'#FF9F43'};border:1px solid ${dc>=3?'rgba(255,69,96,.3)':'rgba(255,159,67,.3)'};border-radius:4px;padding:1px 5px;margin-left:3px;font-weight:700">T:${dc}</span>`
+    : '';
+
   return `<div class="task-item${t.done?' done':''}${t.cancelled?' cancelled':''}">
     <div class="checkbox${t.done?' checked':''}" style="${t.done?`background:${quadColor};border-color:${quadColor};color:#000`:''}" onclick="event.stopPropagation();window.toggleTask('${t.id}')">
       ${t.done?'✓':''}
     </div>
     <div style="flex:1;cursor:pointer;min-width:0" onclick="window.openTaskDetail('${t.id}')">
-      <div class="task-text" style="font-size:12px;font-weight:500">${t.text} ${fiBadge}</div>
+      <div class="task-text" style="font-size:12px;font-weight:500">${t.text} ${fiBadge}${deferBadge}</div>
       <div class="row" style="gap:6px;margin-top:3px;font-size:9px;color:rgba(232,237,245,.4);flex-wrap:wrap">
         ${quadEmoji ? `<span>${quadEmoji}</span>` : ''}
         ${датаСтр ? `<span>· ${датаСтр}</span>` : ''}

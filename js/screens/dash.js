@@ -80,6 +80,9 @@ export function renderDash() {
     </div>
   </div>
 
+  <!-- ── СФЕРА-АВАТАР ─────────────────────────────────────────────────────────── -->
+  ${renderSphere(health, profile, tasks)}
+
   <!-- ── МИНИ-СТАТЫ ──────────────────────────────────────────────────────────── -->
   <div class="energy-chips">
     ${[
@@ -178,6 +181,10 @@ export function renderDash() {
     mountRadar(rpg);
     mountEnergy(health.energyData || [65, 72, 88, 75, 91, 60, 55]);
   });
+
+  // Auto walk task при LOW RC (§5.2)
+  const _rc = calcRC(health, profile);
+  if (rcMode(_rc).key === 'low') autoAddWalkTask();
 
   TG.hideMainButton();
   TG.hideBackButton();
@@ -382,6 +389,84 @@ window.toggleInboxGroup = function(groupId) {
   блок.style.display = открыт ? 'none' : 'block';
   if (стрелка) стрелка.style.transform = открыт ? 'none' : 'rotate(180deg)';
 };
+
+// ── СФЕРА-АВАТАР (Живой Организм) ────────────────────────────────────────────
+function renderSphere(health, profile, tasks) {
+  const rc     = calcRC(health, profile);
+  const mode   = rcMode(rc);
+  const rpg    = DB.getRpgStats();
+  const debuff = Object.values(rpg).some(v => typeof v === 'number' && v < 30);
+  const balance = DB.getBalance();
+
+  // Класс сферы: debuff > low > norm > high
+  const cls = debuff ? 'debuff' : mode.key;
+
+  // Подпись под сферой
+  const labels = {
+    high:   { icon:'🚀', text:'ВЫСОКИЙ ЗАРЯД',   sub:'Берись за стратегию' },
+    norm:   { icon:'⚡', text:'В РЕСУРСЕ',        sub:'Стандартный режим' },
+    low:    { icon:'🐢', text:'РЕЖИМ СПЯЧКИ',     sub:'Только рутина и отдых' },
+    debuff: { icon:'⚠️', text:'ИСТОЩЕНИЕ',         sub:'Шкала в критической зоне' },
+  };
+  const lbl = labels[cls];
+
+  // Q1 активных задач
+  const q1done  = tasks.filter(t => t.quadrant === 'do' && t.done).length;
+  const q1total = tasks.filter(t => t.quadrant === 'do').length;
+
+  return `<div style="background:rgba(255,255,255,.025);border-radius:16px;margin-bottom:12px;padding:14px 16px;border:1px solid rgba(255,255,255,.06);overflow:hidden;position:relative">
+    <!-- Фоновое свечение -->
+    <div style="position:absolute;inset:0;border-radius:16px;background:radial-gradient(ellipse at 50% -20%, ${cls==='high'?'rgba(0,245,212,.08)':cls==='norm'?'rgba(123,97,255,.08)':cls==='low'?'rgba(255,69,96,.06)':'rgba(100,100,100,.05)'}, transparent 70%);pointer-events:none"></div>
+
+    <div style="display:flex;align-items:center;gap:16px;position:relative">
+      <!-- Сфера -->
+      <div class="sphere ${cls}"></div>
+
+      <!-- Инфо справа -->
+      <div style="flex:1">
+        <div style="font-size:9px;letter-spacing:.1em;color:rgba(232,237,245,.35);margin-bottom:4px">СОСТОЯНИЕ ОРГАНИЗМА</div>
+        <div style="font-size:15px;font-weight:800;color:${cls==='high'?'#00F5D4':cls==='norm'?'#7B61FF':cls==='low'?'#FF6B6B':'#888'}">${lbl.icon} ${lbl.text}</div>
+        <div style="font-size:11px;color:rgba(232,237,245,.45);margin-top:2px">${lbl.sub}</div>
+
+        <!-- Мини-прогресс Q1 -->
+        <div style="margin-top:8px;display:flex;align-items:center;gap:6px">
+          <div style="flex:1;height:3px;background:rgba(255,255,255,.07);border-radius:2px;overflow:hidden">
+            <div style="height:100%;width:${q1total?Math.round(q1done/q1total*100):0}%;background:${cls==='high'?'#00F5D4':'#7B61FF'};border-radius:2px;transition:width .4s"></div>
+          </div>
+          <span style="font-size:9px;color:rgba(232,237,245,.35)">${q1done}/${q1total} Q1</span>
+          <span style="font-size:9px;color:rgba(232,237,245,.35)">·</span>
+          <span style="font-size:9px;color:${balance>=0?'#00F5D4':'#FF4560'}">${balance>=0?'+':''}${balance} dp</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── AUTO WALK TASK (LOW RC §5.2) ──────────────────────────────────────────────
+function autoAddWalkTask() {
+  const сегодня = new Date().toDateString();
+  const p = DB.getProfile();
+  if (p.lastWalkTaskDate === сегодня) return; // уже добавляли
+
+  const exists = DB.getTasks().some(t =>
+    !t.done && !t.cancelled &&
+    (t.text.toLowerCase().includes('прогулк') || t.text.toLowerCase().includes('walk'))
+  );
+  if (exists) return;
+
+  DB.addTask({
+    text: '🚶 Прогулка на свежем воздухе 40 мин',
+    cat: 'Здоровье',
+    quadrant: 'delegate',
+    time: 'сегодня',
+    xpValue: 30,
+    notes: 'Автодобавлено: RC < 0.8, режим восстановления',
+  });
+
+  p.lastWalkTaskDate = сегодня;
+  DB.saveProfile(p);
+  window.showToast?.('🚶 Добавлена прогулка 40 мин (+30 XP повышенных)', 'info');
+}
 
 // ── DAILY CHECK-IN ────────────────────────────────────────────────────────────
 function renderCheckinBlock(daily) {

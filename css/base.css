@@ -126,6 +126,68 @@ html, body {
   100% { background-position: 200% center; }
 }
 
+/* ── AVATAR SPHERE ──────────────────────────────────────────────────────── */
+@keyframes sphereHigh {
+  0%,100% { transform:scale(1);    box-shadow:0 0 40px #00F5D4,0 0 80px rgba(0,245,212,.3),inset 0 0 30px rgba(0,245,212,.15); }
+  50%     { transform:scale(1.07); box-shadow:0 0 60px #00F5D4,0 0 120px rgba(0,245,212,.5),inset 0 0 50px rgba(0,245,212,.25); }
+}
+@keyframes sphereNorm {
+  0%,100% { transform:scale(1);    box-shadow:0 0 30px #7B61FF,0 0 60px rgba(123,97,255,.25),inset 0 0 20px rgba(123,97,255,.1); }
+  50%     { transform:scale(1.04); box-shadow:0 0 45px #7B61FF,0 0 90px rgba(123,97,255,.4),inset 0 0 35px rgba(123,97,255,.2); }
+}
+@keyframes sphereLow {
+  0%,100% { transform:scale(.95);  opacity:.55; box-shadow:0 0 15px rgba(255,69,96,.3),inset 0 0 10px rgba(255,69,96,.1); }
+  50%     { transform:scale(.98);  opacity:.7;  box-shadow:0 0 25px rgba(255,69,96,.4),inset 0 0 20px rgba(255,69,96,.15); }
+}
+@keyframes sphereDebuff {
+  0%,100% { transform:scale(.9);   opacity:.4; filter:saturate(0); }
+  50%     { transform:scale(.93);  opacity:.55; filter:saturate(.2); }
+}
+@keyframes sphereRing {
+  0%,100% { transform:scale(1);   opacity:.3; }
+  50%     { transform:scale(1.15); opacity:.15; }
+}
+
+.sphere-wrap {
+  position:relative; display:flex; align-items:center; justify-content:center;
+  width:100%; padding:16px 0 10px;
+}
+.sphere {
+  width:90px; height:90px; border-radius:50%;
+  position:relative; flex-shrink:0;
+}
+.sphere::before {
+  content:''; position:absolute; inset:-8px; border-radius:50%;
+  border:1px solid currentColor; opacity:.2;
+  animation:sphereRing 3s ease-in-out infinite;
+}
+.sphere::after {
+  content:''; position:absolute; top:18%; left:22%;
+  width:30%; height:20%; border-radius:50%;
+  background:rgba(255,255,255,.35); filter:blur(4px);
+  transform:rotate(-35deg);
+}
+.sphere.high {
+  background:radial-gradient(circle at 35% 32%, #00F5D4 0%, #006688 45%, #002233 100%);
+  animation:sphereHigh 2.8s ease-in-out infinite;
+  color:#00F5D4;
+}
+.sphere.norm {
+  background:radial-gradient(circle at 35% 32%, #9B89FF 0%, #4433BB 45%, #110D33 100%);
+  animation:sphereNorm 3.5s ease-in-out infinite;
+  color:#7B61FF;
+}
+.sphere.low {
+  background:radial-gradient(circle at 35% 32%, #FF6B6B 0%, #882233 45%, #220011 100%);
+  animation:sphereLow 4.5s ease-in-out infinite;
+  color:#FF4560;
+}
+.sphere.debuff {
+  background:radial-gradient(circle at 35% 32%, #555 0%, #222 45%, #0a0a0a 100%);
+  animation:sphereDebuff 5s ease-in-out infinite;
+  color:#666;
+}
+
 /* ── UTILITY ─────────────────────────────────────────────────────────────── */
 .row    { display: flex; gap: 8px; align-items: center; }
 .col    { display: flex; flex-direction: column; }
