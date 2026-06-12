@@ -1,6 +1,6 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
 import { DB } from '../db.js';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted } from '../gamification.js';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode } from '../gamification.js';
 import { TG } from '../telegram.js';
 
 let radarChart, energyChart;
@@ -94,6 +94,9 @@ export function renderDash() {
     </div>`).join('')}
   </div>
 
+  <!-- ── REAL CAPACITY ────────────────────────────────────────────────────────── -->
+  ${renderRcBlock(health, profile)}
+
   <!-- ── КВЕСТЫ ДНЯ ─────────────────────────────────────────────────────────── -->
   <div class="card" style="margin-bottom:12px">
     <div class="row" style="justify-content:space-between;margin-bottom:10px">
@@ -113,7 +116,7 @@ export function renderDash() {
   </div>
 
   <!-- ── ФОКУС ДНЯ ──────────────────────────────────────────────────────────── -->
-  ${renderFocusBlock(tasks)}
+  ${renderFocusBlock(tasks, health, profile)}
 
   <!-- ── ЖУРНАЛ / ИНБОКС ───────────────────────────────────────────────────────── -->
   ${renderInboxBlock()}
@@ -344,16 +347,87 @@ window.toggleInboxGroup = function(groupId) {
   if (стрелка) стрелка.style.transform = открыт ? 'none' : 'rotate(180deg)';
 };
 
+// ── REAL CAPACITY БЛОК ───────────────────────────────────────────────────────
+function renderRcBlock(health, profile) {
+  const rc   = calcRC(health, profile);
+  const mode = rcMode(rc);
+  const pct  = Math.min(100, Math.round(rc * 100));
+
+  // Градиент прогресс-бара: красный(0) → жёлтый(80%) → зелёный(110%+)
+  const barColor = mode.key === 'high' ? '#00F5D4' : mode.key === 'norm' ? '#FFD700' : '#FF6B6B';
+
+  // Рекомендации по режиму
+  const tips = {
+    high: ['Закрой топ Q1 за утро', 'Запланируй сложную встречу', 'Двигай стратегию вперёд'],
+    norm: ['Обычный ритм, не перегружай', 'Q1 + пара Q2-задач', 'Есть время для обучения'],
+    low:  ['Только рутина и чеклисты', 'Не принимай важных решений', 'Сон и восстановление в приоритете'],
+  };
+  const совет = tips[mode.key][Math.floor(Math.random() * 3)];
+
+  return `<div class="card" style="margin-bottom:12px;border-left:3px solid ${barColor}">
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:rgba(232,237,245,.5)">⚡ РЕАЛЬНАЯ ЁМКОСТЬ</div>
+      <div style="font-size:13px;font-weight:800;color:${barColor}">${mode.label}</div>
+    </div>
+
+    <!-- RC прогресс-бар -->
+    <div style="height:6px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden;margin-bottom:8px">
+      <div style="height:100%;width:${pct}%;background:${barColor};border-radius:4px;transition:width .5s ease;box-shadow:0 0 8px ${barColor}60"></div>
+    </div>
+
+    <div class="row" style="justify-content:space-between;margin-bottom:6px">
+      <div style="font-size:11px;color:rgba(232,237,245,.6)">${mode.hint}</div>
+      <div style="font-size:11px;font-weight:700;color:${barColor}">${rc.toFixed(2)}</div>
+    </div>
+
+    <!-- Формула: сон + HRV -->
+    <div class="row" style="gap:8px">
+      <div style="flex:1;background:rgba(255,255,255,.03);border-radius:8px;padding:7px 10px;text-align:center">
+        <div style="font-size:16px;margin-bottom:2px">🌙</div>
+        <div class="num" style="font-size:13px;color:${health?.sleep?.hours >= 7 ? '#00E396' : '#FF9F43'}">${health?.sleep?.hours ?? 7.2}ч</div>
+        <div style="font-size:8px;color:rgba(232,237,245,.3);margin-top:1px">сон</div>
+      </div>
+      <div style="flex:1;background:rgba(255,255,255,.03);border-radius:8px;padding:7px 10px;text-align:center">
+        <div style="font-size:16px;margin-bottom:2px">💚</div>
+        <div class="num" style="font-size:13px;color:${(health?.hrv ?? 55) >= 50 ? '#00E396' : '#FF9F43'}">${health?.hrv ?? 55} мс</div>
+        <div style="font-size:8px;color:rgba(232,237,245,.3);margin-top:1px">HRV</div>
+      </div>
+      <div style="flex:2;background:rgba(255,255,255,.03);border-radius:8px;padding:7px 12px;display:flex;align-items:center">
+        <div style="font-size:10px;color:rgba(232,237,245,.45);line-height:1.4">💡 ${совет}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
 // ── КАТЕГОРИИ для фильтра ────────────────────────────────────────────────────
 const WORK_CATS  = new Set(['Работа','Контент','Эксперименты','Стратегия','Обучение','Деньги','Бизнес','Клуб','Операционка','Привлечение клиентов','Развитие','Эффективность']);
 const LIFE_CATS  = new Set(['Семья','Встречи','Быт','Здоровье','Chill','Личное','Личные дела','Домашние дела']);
 const ALL_CATS   = ['Работа','Контент','Эксперименты','Семья','Встречи','Быт','Стратегия','Обучение','Деньги','Здоровье','Chill','Личное'];
 
 // ── ФОКУС ДНЯ ────────────────────────────────────────────────────────────────
-function renderFocusBlock(allTasks) {
+function renderFocusBlock(allTasks, health, profile) {
+  const rc     = calcRC(health, profile);
+  const mode   = rcMode(rc);
   const q1All  = allTasks.filter(t => t.quadrant === 'do'       && !t.done && !t.cancelled);
   const q1Done = allTasks.filter(t => t.quadrant === 'do'       && t.done);
   const allQ1Done = q1All.length === 0 && q1Done.length > 0;
+
+  // В LOW режиме RC — только рутина и delegate (не Q1)
+  if (mode.key === 'low') {
+    const рутина = allTasks.filter(t => !t.done && !t.cancelled && (t.quadrant === 'delegate' || LIFE_CATS.has(t.cat)));
+    const показ  = applyFilter(рутина).slice(0, 3);
+    return `<div class="card" style="margin-bottom:12px;border-left:3px solid #FF6B6B">
+      <div class="row" style="justify-content:space-between;margin-bottom:6px">
+        <div class="sec-label" style="margin:0;color:#FF6B6B">🐢 РЕЖИМ ВОССТАНОВЛЕНИЯ</div>
+        <span class="badge" style="background:rgba(255,107,107,.12);color:#FF6B6B;border:1px solid rgba(255,107,107,.25)">RC ${rc.toFixed(2)}</span>
+      </div>
+      <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:10px">HRV или сон в красной зоне — сегодня только рутина</div>
+      ${filterBar}
+      ${показ.length
+        ? показ.map((t, i) => renderFocusItem(t, i, показ.length)).join('')
+        : `<div style="text-align:center;padding:12px 0;font-size:12px;color:rgba(232,237,245,.3)">Отдыхай — задач нет</div>`}
+    </div>`;
+  }
 
   // Применяем фильтр
   function applyFilter(tasks) {

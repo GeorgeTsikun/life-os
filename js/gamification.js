@@ -214,3 +214,32 @@ export function onNutritionUpdated(питание) {
   if (питание.score >= 8)  итого += XP_SOURCES.nutrition_8;
   if (итого > 0) awardXP(итого, 'nutrition');
 }
+
+// ── REAL CAPACITY (RC) ────────────────────────────────────────────────────────
+// §5.1–5.2: RC = (sleep_h / 8) × (hrv_current / hrv_baseline)
+// Режимы: HIGH > 1.1, NORM 0.8–1.1, LOW < 0.8
+
+export function calcRC(health, profile) {
+  const sleepH  = health?.sleep?.hours  ?? 7.5;
+  const hrv     = health?.hrv           ?? 55;
+  const baseline = profile?.hrvBaseline ?? 55; // среднее за 14 дней (обновляем ниже)
+  const rc = (sleepH / 8) * (hrv / Math.max(baseline, 1));
+  return Math.round(rc * 100) / 100; // 0.00 – 2.00+
+}
+
+export function rcMode(rc) {
+  if (rc >= 1.1)  return { key: 'high', label: '🚀 ВЫСОКИЙ',   color: '#00F5D4', hint: 'Бери сложные Q1 и стратегию' };
+  if (rc >= 0.8)  return { key: 'norm', label: '⚡ НОРМА',      color: '#FFD700', hint: 'Обычный ритм, Q1 + Q2' };
+  return           { key: 'low',  label: '🐢 БАШКА ТУПИТ', color: '#FF6B6B', hint: 'Только рутина и восстановление' };
+}
+
+// Обновляем скользящий baseline HRV (14-дневное среднее)
+export function updateHrvBaseline(hrv) {
+  const p = DB.getProfile();
+  const history = p.hrvHistory || [];
+  history.push(hrv);
+  if (history.length > 14) history.shift();
+  p.hrvHistory  = history;
+  p.hrvBaseline = Math.round(history.reduce((a, b) => a + b, 0) / history.length);
+  DB.saveProfile(p);
+}
