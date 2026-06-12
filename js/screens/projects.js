@@ -1,6 +1,6 @@
 // ── PROJECTS SCREEN ───────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=28';
-import { TG } from '../telegram.js?v=28';
+import { DB } from '../db.js?v=29';
+import { TG } from '../telegram.js?v=29';
 
 let revenueChart;
 
@@ -192,6 +192,12 @@ window.openProjectDetail = function(id) {
         </div>`).join('')}
       </div>`;
     })()}
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button class="btn" style="flex:1;background:rgba(0,245,212,.1);border:1px solid rgba(0,245,212,.3);color:#00F5D4"
+        onclick="window.addTaskFromProject('${p.id}','${p.name.replace(/'/g,"\\'")}','${p.color}')">+ Задача</button>
+      <button class="btn" style="flex:1;background:rgba(255,69,96,.08);border:1px solid rgba(255,69,96,.25);color:#FF4560"
+        onclick="window.deleteProject('${p.id}')">🗑 Удалить</button>
+    </div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-ghost" style="flex:1" onclick="this.closest('.detail-overlay').remove()">Закрыть</button>
       <button class="btn btn-teal" style="flex:2" onclick="window.saveProject('${p.id}')">Сохранить</button>
@@ -201,6 +207,52 @@ window.openProjectDetail = function(id) {
   document.body.appendChild(div);
   window._projStage = p.stage;
   TG.hapticImpact('light');
+};
+
+window.deleteProject = function(id) {
+  if (!confirm('Удалить проект? Задачи останутся.')) return;
+  const projects = DB.getProjects().filter(x => x.id !== id);
+  DB.saveProjects(projects);
+  window._дбHook?.('projects', projects);
+  document.querySelector('.detail-overlay')?.remove();
+  renderProjects();
+  TG.hapticSuccess();
+};
+
+window.addTaskFromProject = function(projectId, projectName, projectColor) {
+  document.querySelector('.detail-overlay')?.remove();
+  const div = document.createElement('div');
+  div.className = 'detail-overlay';
+  div.innerHTML = `<div class="detail-sheet">
+    <div class="modal-handle"></div>
+    <div style="font-size:14px;font-weight:700;margin-bottom:12px">+ Задача в проект: ${projectName}</div>
+    <input id="projtask-text" class="input" placeholder="Что сделать..." style="margin-bottom:10px" autofocus>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <select id="projtask-quad" class="input" style="flex:1">
+        <option value="do">⚡ Q1 Срочно</option>
+        <option value="schedule" selected>🏔️ Q2 Важно</option>
+      </select>
+      <input id="projtask-due" class="input" type="date" style="flex:1" value="${new Date().toISOString().split('T')[0]}">
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" style="flex:1" onclick="this.closest('.detail-overlay').remove()">Отмена</button>
+      <button class="btn btn-teal" style="flex:2" onclick="window._saveTaskFromProject('${projectId}','${projectName.replace(/'/g,"\\'")}')">Создать</button>
+    </div>
+  </div>`;
+  div.addEventListener('click', e => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
+  setTimeout(() => document.getElementById('projtask-text')?.focus(), 100);
+};
+
+window._saveTaskFromProject = function(projectId, projectName) {
+  const text = document.getElementById('projtask-text')?.value?.trim();
+  if (!text) return;
+  const quad = document.getElementById('projtask-quad')?.value || 'schedule';
+  const due  = document.getElementById('projtask-due')?.value || null;
+  DB.addTask({ text, cat: 'Работа', quadrant: quad, due_date: due, project_id: projectId });
+  document.querySelector('.detail-overlay')?.remove();
+  window.showToast?.('✅', 'Задача создана', text, '');
+  TG.hapticSuccess();
 };
 
 window.saveProject = function(id) {

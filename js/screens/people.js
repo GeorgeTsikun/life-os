@@ -1,6 +1,6 @@
 // ── PEOPLE / CRM SCREEN ───────────────────────────────────────────────────────
-import { DB } from '../db.js?v=28';
-import { TG } from '../telegram.js?v=28';
+import { DB } from '../db.js?v=29';
+import { TG } from '../telegram.js?v=29';
 
 const CHECKUPS = [
   {l:'Чекап здоровья — терапевт',d:'июль 2026',i:'🏥'},
@@ -238,6 +238,12 @@ window.openPersonDetail = function(id) {
       <button class="btn btn-ghost" style="flex:1" onclick="this.closest('.detail-overlay').remove()">Закрыть</button>
       <button class="btn btn-teal" style="flex:2" onclick="window.savePerson('${p.id}')">Сохранить</button>
     </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn" style="flex:1;background:rgba(0,245,212,.1);border:1px solid rgba(0,245,212,.3);color:#00F5D4"
+        onclick="window.addTaskFromPerson('${p.id}','${p.name.replace(/'/g,"\\'")}')">+ Задача</button>
+      <button class="btn" style="flex:1;background:rgba(255,69,96,.08);border:1px solid rgba(255,69,96,.25);color:#FF4560"
+        onclick="window.deletePerson('${p.id}')">🗑 Удалить</button>
+    </div>
   </div>`;
 
   div.addEventListener('click', e => { if (e.target === div) div.remove(); });
@@ -278,6 +284,55 @@ window.addPersonLog = function(id) {
     document.querySelector('.detail-overlay')?.remove();
     window.openPersonDetail(id);
   }
+};
+
+window.deletePerson = function(id) {
+  if (!confirm('Удалить этого человека?')) return;
+  const people = DB.getPeople().filter(x => x.id !== id);
+  DB.savePeople(people);
+  window._дбHook?.('people', people);
+  document.querySelector('.detail-overlay')?.remove();
+  renderPeople();
+  TG.hapticSuccess();
+};
+
+window.addTaskFromPerson = function(personId, personName) {
+  const overlay = document.querySelector('.detail-overlay');
+  if (overlay) overlay.remove();
+
+  const div = document.createElement('div');
+  div.className = 'detail-overlay';
+  div.innerHTML = `<div class="detail-sheet">
+    <div class="modal-handle"></div>
+    <div style="font-size:14px;font-weight:700;margin-bottom:12px">+ Задача по контакту: ${personName}</div>
+    <input id="ptask-text" class="input" placeholder="Что сделать..." style="margin-bottom:10px" autofocus>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <select id="ptask-quad" class="input" style="flex:1">
+        <option value="do">⚡ Q1 Срочно</option>
+        <option value="schedule" selected>🏔️ Q2 Важно</option>
+        <option value="delegate">⚙️ Q3 Делегировать</option>
+      </select>
+      <input id="ptask-due" class="input" type="date" style="flex:1" value="${new Date().toISOString().split('T')[0]}">
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" style="flex:1" onclick="this.closest('.detail-overlay').remove()">Отмена</button>
+      <button class="btn btn-teal" style="flex:2" onclick="window._saveTaskFromPerson('${personId}','${personName.replace(/'/g,"\\'")}')">Создать</button>
+    </div>
+  </div>`;
+  div.addEventListener('click', e => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
+  setTimeout(() => document.getElementById('ptask-text')?.focus(), 100);
+};
+
+window._saveTaskFromPerson = function(personId, personName) {
+  const text = document.getElementById('ptask-text')?.value?.trim();
+  if (!text) return;
+  const quad = document.getElementById('ptask-quad')?.value || 'schedule';
+  const due  = document.getElementById('ptask-due')?.value || null;
+  DB.addTask({ text, cat: 'Встречи', quadrant: quad, due_date: due, notes: `Контакт: ${personName}` });
+  document.querySelector('.detail-overlay')?.remove();
+  window.showToast?.('✅', 'Задача создана', text, '');
+  TG.hapticSuccess();
 };
 
 window.openAddPerson = function() {
