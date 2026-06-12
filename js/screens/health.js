@@ -103,6 +103,16 @@ function healthTabHTML() {
     </div>
   </div>
 
+  <div class="card" id="ai-health-card" style="margin-bottom:12px">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <div class="sec-label" style="margin:0">🤖 AI-АНАЛИЗ</div>
+      <button onclick="window.loadHealthAI()" id="ai-health-btn" style="font-size:9px;padding:3px 9px;border-radius:10px;border:1px solid rgba(0,245,212,.3);background:rgba(0,245,212,.06);color:#00F5D4;cursor:pointer">Обновить</button>
+    </div>
+    <div id="ai-health-body" style="font-size:11px;color:rgba(232,237,245,.45);text-align:center;padding:8px 0">
+      Нажмите «Обновить» для AI-анализа состояния
+    </div>
+  </div>
+
   <div class="card" style="margin-bottom:12px">
     <div class="sec-label">📱 APPLE HEALTH</div>
     <div style="padding:12px;background:rgba(255,255,255,.02);border-radius:10px;text-align:center">
@@ -372,6 +382,54 @@ window.toggleNutritionCheck = function(key) {
   onNutritionUpdated(n);
   renderHealth('nutrition');
   TG.hapticImpact('medium');
+};
+
+window.loadHealthAI = async function() {
+  const body = document.getElementById('ai-health-body');
+  const btn  = document.getElementById('ai-health-btn');
+  if (!body) return;
+
+  body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 0">
+    <div style="width:12px;height:12px;border-radius:50%;border:2px solid #00F5D4;border-top-color:transparent;animation:spin .8s linear infinite"></div>
+    <span>Анализирую...</span>
+  </div>`;
+  if (btn) btn.disabled = true;
+
+  try {
+    const h = DB.getHealth();
+    const p = DB.getProfile();
+    // Простой RC расчёт без импорта gamification
+    const sleepH = h?.sleep?.hours ?? 7.5;
+    const hrv    = h?.hrv ?? 55;
+    const base   = p?.hrvBaseline ?? 55;
+    const rcVal  = Math.round((sleepH/8) * (hrv/Math.max(base,1)) * 100) / 100;
+    const rcLabel = rcVal >= 1.1 ? '🚀 ВЫСОКИЙ' : rcVal >= 0.8 ? '⚡ НОРМА' : '🐢 БАШКА ТУПИТ';
+
+    const res = await fetch('/api/health-summary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ health: h, profile: p, rc: { value: rcVal, label: rcLabel } }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const statusEmoji = { отлично:'🟢', хорошо:'🟡', норма:'🟠', тревога:'🔴' }[data.status] || '⚪';
+    body.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:18px">${statusEmoji}</span>
+        <span style="font-size:12px;font-weight:700;color:${data.color || '#00E396'}">${(data.status||'').toUpperCase()}</span>
+      </div>
+      <div style="font-size:11px;line-height:1.6;color:rgba(232,237,245,.75);margin-bottom:12px">${data.summary || ''}</div>
+      ${(data.tips||[]).map(t => `<div style="display:flex;align-items:flex-start;gap:7px;margin-bottom:6px">
+        <span style="color:${data.color||'#00F5D4'};flex-shrink:0">→</span>
+        <span style="font-size:10px;color:rgba(232,237,245,.55);line-height:1.5">${t}</span>
+      </div>`).join('')}
+      <div style="font-size:9px;color:rgba(232,237,245,.2);margin-top:8px;text-align:right">${new Date().toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'})}</div>`;
+  } catch (err) {
+    body.innerHTML = `<div style="color:#FF4560;font-size:11px">Ошибка: ${err.message}</div>`;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 };
 
 window.showHealthBridge = function() {
