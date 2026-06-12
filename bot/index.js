@@ -562,13 +562,17 @@ async function сохранитьВSupabase(telegramId, разбор) {
     }
 
     if (разбор.тип === 'task') {
+      const due_date = извл.start_iso ? извл.start_iso.split('T')[0] : null;
       const запись = {
-        owner:      'george',
-        text:       извл.text || 'Без названия',
-        quadrant:   извл.quadrant || 'schedule',
-        cat:        извл.cat || null,
-        time_label: извл.time || null,
-        xp_value:   ({do:75,schedule:50,delegate:25,eliminate:25}[извл.quadrant] || 50),
+        owner:        'george',
+        text:         извл.text || 'Без названия',
+        quadrant:     извл.quadrant || 'schedule',
+        cat:          извл.cat || null,
+        time_label:   извл.time || null,
+        xp_value:     ({do:75,schedule:50,delegate:25,eliminate:25}[извл.quadrant] || 50),
+        start_iso:    извл.start_iso || null,
+        due_date:     due_date,
+        duration_min: извл.duration_min || 60,
       };
       console.log('[supa] INSERT task:', JSON.stringify(запись));
       const { data, error } = await supa.from('tasks').insert(запись).select();

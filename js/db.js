@@ -157,6 +157,8 @@ export const DB = {
       xpValue: {do:75, schedule:50, delegate:25, eliminate:25}[задача.quadrant] || 25,
       done: false,
       createdAt: Date.now(),
+      notes: '',
+      subtasks: [],
       ...задача,
     };
     задачи.push(новая);
@@ -165,11 +167,33 @@ export const DB = {
     return новая;
   },
 
+  // Полное обновление задачи (patch-merge)
+  updateTask(id, patch) {
+    const задачи = this.getTasks();
+    const т = задачи.find(x => x.id === id);
+    if (!т) return null;
+    Object.assign(т, patch);
+    this.saveTasks(задачи);
+    window._дбHook?.('task', т);
+    return т;
+  },
+
   toggleTask(id) {
     const задачи = this.getTasks();
     const т = задачи.find(x => x.id === id);
-    if (т) { т.done = !т.done; this.saveTasks(задачи); window._дбHook?.('task', т); }
+    if (т) {
+      т.done = !т.done;
+      т.completedAt = т.done ? new Date().toISOString() : null;
+      this.saveTasks(задачи);
+      window._дбHook?.('task', т);
+    }
     return т;
+  },
+
+  deleteTask(id) {
+    const задачи = this.getTasks().filter(x => x.id !== id);
+    this.saveTasks(задачи);
+    window._дбHook?.('task_delete', { id });
   },
 
   // Проекты

@@ -2,6 +2,8 @@
 import { DB } from '../db.js';
 import { onTaskToggled } from '../gamification.js';
 import { TG } from '../telegram.js';
+import { парсДату, бакет, форматДата, БАКЕТЫ_UI, ПОРЯДОК_БАКЕТОВ, вISO } from '../utils/date.js';
+import { openTaskDetail } from './_taskDetail.js';
 
 const CAT_COLOR = {
   // Основные категории (соответствуют твоим календарям)
@@ -31,35 +33,135 @@ const QUADS = [
   { key:'eliminate',label:'🌀 ЛОВУШКА',  sub:'Ворует время',      color:'rgba(232,237,245,.35)',cls:'accent-gray'},
 ];
 
-let viewMode = 'list'; // 'list' | 'matrix'
+let viewMode = 'dates'; // 'dates' | 'matrix' | 'done'
 
 export function renderTasks() {
   const tasks = DB.getTasks();
-  const total = tasks.length;
-  const done  = tasks.filter(t=>t.done).length;
+  const активные = tasks.filter(t => !t.done);
+  const готовые  = tasks.filter(t => t.done);
 
   const el = document.getElementById('content');
   el.innerHTML = `<div class="screen">
   <div class="row" style="justify-content:space-between;margin-bottom:12px">
     <div>
       <div class="num" style="font-size:16px">ЗАДАЧИ</div>
-      <div style="font-size:10px;color:rgba(232,237,245,.4);margin-top:2px">${done} / ${total} выполнено · XP: ${done * 50}</div>
+      <div style="font-size:10px;color:rgba(232,237,245,.4);margin-top:2px">${активные.length} активных · ${готовые.length} готовых</div>
     </div>
     <button class="btn btn-teal" onclick="window.openAddTask()">+ Добавить</button>
   </div>
 
   <div class="toggle-row" style="margin-bottom:14px">
-    <button class="toggle-btn${viewMode==='list'?' active':''}" onclick="window.setTaskView('list')">📋 Список</button>
+    <button class="toggle-btn${viewMode==='dates'?' active':''}"  onclick="window.setTaskView('dates')">📅 По датам</button>
     <button class="toggle-btn${viewMode==='matrix'?' active':''}" onclick="window.setTaskView('matrix')">🔲 Матрица</button>
+    <button class="toggle-btn${viewMode==='done'?' active':''}"   onclick="window.setTaskView('done')">✅ Готово</button>
   </div>
 
-  ${viewMode === 'matrix' ? renderMatrix(tasks) : renderList(tasks)}
+  ${viewMode === 'matrix' ? renderMatrix(активные)
+   : viewMode === 'done'  ? renderDone(готовые)
+   : renderByDates(активные)}
 
   <div style="height:8px"></div>
 </div>`;
 
   TG.hideMainButton();
   TG.hideBackButton();
+}
+
+// ── ГРУППИРОВКА ПО ДАТАМ ─────────────────────────────────────────────────────
+function renderByDates(tasks) {
+  if (tasks.length === 0) {
+    return `<div style="text-align:center;padding:40px 20px;color:rgba(232,237,245,.4)">
+      <div style="font-size:48px;margin-bottom:12px">✨</div>
+      <div style="font-size:13px">Активных задач нет</div>
+      <div style="font-size:11px;margin-top:8px">Скажи боту голосом или жми + Добавить</div>
+    </div>`;
+  }
+
+  // Группируем по бакетам
+  const группы = Object.fromEntries(ПОРЯДОК_БАКЕТОВ.map(к => [к, []]));
+  for (const t of tasks) {
+    const дата = t.start_iso ? new Date(t.start_iso)
+               : t.due_date  ? new Date(t.due_date)
+               : парсДату(t.time);
+    const б = бакет(дата);
+    группы[б].push({ ...t, _дата: дата });
+  }
+
+  // Сортировка внутри: просрочено сверху, остальное по дате возрастанию
+  Object.values(группы).forEach(arr => arr.sort((a,b) => {
+    if (!a._дата) return 1;
+    if (!b._дата) return -1;
+    return a._дата - b._дата;
+  }));
+
+  return ПОРЯДОК_БАКЕТОВ.map(к => {
+    const items = группы[к];
+    if (items.length === 0) return '';
+    const ui = БАКЕТЫ_UI[к];
+    return `<div class="card" style="margin-bottom:12px;border-top:2px solid ${ui.color}">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:${ui.color};letter-spacing:.05em">${ui.label}</div>
+          <div style="font-size:9px;color:rgba(232,237,245,.35);margin-top:1px">${ui.sub}</div>
+        </div>
+        <span class="num" style="font-size:14px;color:${ui.color}">${items.length}</span>
+      </div>
+      ${items.map(t => taskItemHTML(t, ui.color)).join('')}
+    </div>`;
+  }).join('');
+}
+
+// ── АРХИВ ГОТОВЫХ ───────────────────────────────────────────────────────────
+function renderDone(готовые) {
+  if (готовые.length === 0) {
+    return `<div style="text-align:center;padding:40px 20px;color:rgba(232,237,245,.4)">
+      <div style="font-size:48px;margin-bottom:12px">📭</div>
+      <div style="font-size:13px">Пока пусто</div>
+      <div style="font-size:11px;margin-top:8px">Выполненные задачи окажутся здесь</div>
+    </div>`;
+  }
+  // Сортируем по дате выполнения (свежие сверху)
+  готовые = [...готовые].sort((a,b) => {
+    const da = new Date(a.completedAt || 0).getTime();
+    const db = new Date(b.completedAt || 0).getTime();
+    return db - da;
+  });
+
+  // Группируем по дням
+  const поДням = {};
+  for (const t of готовые) {
+    const date = t.completedAt ? new Date(t.completedAt) : new Date(t.createdAt);
+    const ключ = форматДата(date) || 'давно';
+    if (!поДням[ключ]) поДням[ключ] = [];
+    поДням[ключ].push(t);
+  }
+
+  return Object.entries(поДням).map(([день, items]) => `
+    <div class="card" style="margin-bottom:12px;border-top:2px solid #00E396">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:#00E396;letter-spacing:.05em">✅ ${день.toUpperCase()}</div>
+          <div style="font-size:9px;color:rgba(232,237,245,.35);margin-top:1px">${items.length} выполнено</div>
+        </div>
+        <span class="num" style="font-size:14px;color:#00E396">+${items.length * 50} XP</span>
+      </div>
+      ${items.map(t => doneItemHTML(t)).join('')}
+    </div>
+  `).join('');
+}
+
+function doneItemHTML(t) {
+  const cc = CAT_COLOR[t.cat] || 'rgba(232,237,245,.1)';
+  return `<div class="task-item done" style="opacity:.7">
+    <div class="checkbox checked" style="background:#00E396;border-color:#00E396;color:#000" onclick="window.toggleTask('${t.id}')">✓</div>
+    <div style="flex:1;cursor:pointer" onclick="window.openTaskDetail('${t.id}')">
+      <div class="task-text" style="font-size:12px;font-weight:500;text-decoration:line-through">${t.text}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+      <span class="badge" style="background:${cc}18;color:${cc};border:1px solid ${cc}30">${t.cat || '—'}</span>
+      <button class="btn btn-ghost" style="font-size:9px;padding:2px 6px" onclick="window.toggleTask('${t.id}')">↩ Вернуть</button>
+    </div>
+  </div>`;
 }
 
 function renderList(tasks) {
@@ -104,16 +206,23 @@ function renderMatrix(tasks) {
 
 function taskItemHTML(t, quadColor) {
   const cc = CAT_COLOR[t.cat] || 'rgba(232,237,245,.1)';
-  return `<div class="task-item${t.done?' done':''}" onclick="window.toggleTask('${t.id}')">
-    <div class="checkbox${t.done?' checked':''}" style="${t.done?`background:${quadColor};border-color:${quadColor};color:#000`:''}">
+  const quad = QUADS.find(q => q.key === t.quadrant);
+  const quadEmoji = quad ? quad.label.split(' ')[0] : '';
+  const дата = t.start_iso ? new Date(t.start_iso) : (t.due_date ? new Date(t.due_date) : null);
+  const датаСтр = дата ? форматДата(дата, { compact: true }) : (t.time || '');
+  return `<div class="task-item${t.done?' done':''}">
+    <div class="checkbox${t.done?' checked':''}" style="${t.done?`background:${quadColor};border-color:${quadColor};color:#000`:''}" onclick="event.stopPropagation();window.toggleTask('${t.id}')">
       ${t.done?'✓':''}
     </div>
-    <div style="flex:1">
+    <div style="flex:1;cursor:pointer;min-width:0" onclick="window.openTaskDetail('${t.id}')">
       <div class="task-text" style="font-size:12px;font-weight:500">${t.text}</div>
+      <div class="row" style="gap:6px;margin-top:3px;font-size:9px;color:rgba(232,237,245,.4)">
+        ${quadEmoji ? `<span>${quadEmoji}</span>` : ''}
+        ${датаСтр ? `<span>· ${датаСтр}</span>` : ''}
+      </div>
     </div>
-    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
-      <span class="badge" style="background:${cc}18;color:${cc};border:1px solid ${cc}30">${t.cat}</span>
-      <span style="font-size:9px;color:rgba(232,237,245,.35)">${t.time || ''}</span>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">
+      <span class="badge" style="background:${cc}18;color:${cc};border:1px solid ${cc}30">${t.cat || '—'}</span>
     </div>
   </div>`;
 }
@@ -202,6 +311,11 @@ window.toggleTask = function(id) {
   const task = DB.toggleTask(id);
   if (task) { onTaskToggled(task); TG.hapticImpact('medium'); }
   renderTasks();
+};
+
+window.openTaskDetail = function(id) {
+  const task = DB.getTasks().find(t => t.id === id);
+  if (task) openTaskDetail(task, renderTasks);
 };
 
 window.setTaskView = function(mode) {

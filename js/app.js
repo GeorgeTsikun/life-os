@@ -71,15 +71,15 @@ Sync.инициализироватьSupabase().then(async (ок) => {
 window._дбHook = function(тип, объект) {
   if (!Sync.активен()) return;
   switch (тип) {
-    case 'task':     Sync.сохранитьЗадачу(объект);     break;
-    case 'project':  Sync.сохранитьПроект(объект);     break;
-    case 'profile':  Sync.сохранитьПрофиль(объект);    break;
-    case 'daily':    Sync.сохранитьДневник(объект);    break;
-    case 'health':   Sync.сохранитьЗдоровье(объект);   break;
-    case 'ach':      Sync.разблокироватьДостижение(объект); break;
-    case 'content_item':
-      Sync.сохранитьКонтентЭлемент(объект); break;
-    case 'content':  // массив целиком — пуш по одному элементу
+    case 'task':         Sync.сохранитьЗадачу(объект);             break;
+    case 'task_delete':  Sync.удалитьЗадачу(объект.id);            break;
+    case 'project':      Sync.сохранитьПроект(объект);             break;
+    case 'profile':      Sync.сохранитьПрофиль(объект);            break;
+    case 'daily':        Sync.сохранитьДневник(объект);            break;
+    case 'health':       Sync.сохранитьЗдоровье(объект);           break;
+    case 'ach':          Sync.разблокироватьДостижение(объект);    break;
+    case 'content_item': Sync.сохранитьКонтентЭлемент(объект);     break;
+    case 'content':
       if (Array.isArray(объект)) объект.forEach(x => Sync.сохранитьКонтентЭлемент(x));
       break;
   }

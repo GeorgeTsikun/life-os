@@ -142,14 +142,31 @@ export async function сохранитьЗадачу(задача) {
   if (!активен()) return;
   await запросUpsert('tasks', {
     ...(uuidValid(задача.id) ? { id: задача.id } : {}),
-    owner:      владелец,
-    text:       задача.text,
-    quadrant:   задача.quadrant,
-    cat:        задача.cat,
-    time_label: задача.time,
-    done:       задача.done,
-    xp_value:   задача.xpValue,
+    owner:        владелец,
+    text:         задача.text,
+    quadrant:     задача.quadrant,
+    cat:          задача.cat,
+    time_label:   задача.time,
+    done:         задача.done,
+    xp_value:     задача.xpValue,
+    due_date:     задача.due_date    || null,
+    start_iso:    задача.start_iso   || null,
+    completed_at: задача.completedAt || null,
+    notes:        задача.notes       || null,
+    subtasks:     задача.subtasks    || [],
+    duration_min: задача.duration_min || 60,
   });
+}
+
+export async function удалитьЗадачу(id) {
+  if (!активен()) return;
+  if (!uuidValid(id)) return;
+  try {
+    await fetch(`${базаURL}/tasks?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: заголовки(),
+    });
+  } catch (err) { console.warn('[Supabase delete task]', err); }
 }
 
 export async function сохранитьПроект(проект) {
@@ -248,6 +265,14 @@ function маппингЗадачи(t) {
     id: t.id, text: t.text, cat: t.cat, time: t.time_label,
     quadrant: t.quadrant, done: t.done, xpValue: t.xp_value,
     createdAt: new Date(t.created_at).getTime(),
+    due_date:    t.due_date     || null,
+    start_iso:   t.start_iso    || null,
+    completedAt: t.completed_at || null,
+    notes:       t.notes        || '',
+    subtasks:    t.subtasks     || [],
+    duration_min: t.duration_min || 60,
+    google_event_id:   t.google_event_id   || null,
+    google_event_link: t.google_event_link || null,
   };
 }
 
