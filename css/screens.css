@@ -1,3 +1,108 @@
+/* ── ПИТАНИЕ: лента еды + аналитика ──────────────────────────────────────── */
+.nut-top {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.nut-top > .card { margin-bottom: 0; }
+
+.meal-feed { display: flex; flex-direction: column; }
+
+.meal-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+}
+.meal-row:last-child { border-bottom: none; padding-bottom: 0; }
+.meal-time {
+  flex-shrink: 0;
+  width: 46px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(232,237,245,.55);
+  padding-top: 2px;
+}
+.meal-main { flex: 1; min-width: 0; }
+.meal-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+.meal-items { list-style: none; margin: 0; padding: 0; }
+.meal-items li {
+  font-size: 12px;
+  color: rgba(232,237,245,.75);
+  padding-left: 14px;
+  position: relative;
+  line-height: 1.6;
+}
+.meal-items li::before {
+  content: '•';
+  position: absolute;
+  left: 2px;
+  color: rgba(232,237,245,.35);
+}
+.meal-note { font-size: 11px; color: rgba(232,237,245,.4); font-style: italic; margin-top: 5px; }
+.meal-photo {
+  flex-shrink: 0;
+  width: 110px;
+  height: 82px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.08);
+}
+.meal-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.meal-macros { flex-shrink: 0; text-align: right; min-width: 92px; }
+.meal-macro-chips {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin: 6px 0;
+  font-size: 11px;
+  font-weight: 700;
+}
+.meal-macro-chips span {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 8px;
+  padding: 2px 6px;
+}
+.meal-edit {
+  font-size: 10px;
+  color: rgba(255,92,138,.7);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.meal-edit:hover { color: var(--pink); }
+
+/* Фото-CTA */
+.photo-cta {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+  cursor: pointer;
+  border: 1px dashed rgba(0,245,212,.3) !important;
+  background: linear-gradient(165deg, rgba(0,245,212,.05), rgba(0,245,212,.01)) !important;
+}
+.photo-cta:hover { border-color: rgba(0,245,212,.5) !important; }
+
+/* Мини-графики аналитики */
+.nut-analytics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.nut-advice {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
 /* ── DASHBOARD ───────────────────────────────────────────────────────────── */
 .dash-header {
   display: flex;

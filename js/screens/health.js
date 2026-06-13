@@ -1,7 +1,7 @@
 // ── HEALTH SCREEN (Health / Sport / Nutrition sub-tabs) ───────────────────────
-import { DB } from '../db.js?v=42';
-import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=42';
-import { TG } from '../telegram.js?v=42';
+import { DB } from '../db.js?v=43';
+import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=43';
+import { TG } from '../telegram.js?v=43';
 
 let sleepChart, pulseChart, hrvChart, revenueChart;
 let healthTab = 'health';
@@ -227,134 +227,213 @@ function sportTabHTML() {
   </div>`;
 }
 
-// ── КБЖУ ТРЕКЕР ──────────────────────────────────────────────────────────────
-function kbjuTrackerHTML(n) {
-  const meals = DB.getMeals();
+// ── ТИПЫ ПРИЁМОВ ПИЩИ ─────────────────────────────────────────────────────────
+const MEAL_TYPES = {
+  breakfast: { label:'Завтрак', icon:'☀️',  color:'#F5B942' },
+  lunch:     { label:'Обед',    icon:'🍽️', color:'#FF9F43' },
+  dinner:    { label:'Ужин',    icon:'🌙',  color:'#7C3AED' },
+  snack:     { label:'Перекус', icon:'🍎',  color:'#FF5C8A' },
+};
+const MEAL_ORDER = ['breakfast','lunch','dinner','snack'];
 
-  const cG  = n.caloriesGoal || 2200;
-  const pG  = n.proteinGoal  || 140;
-  const fG  = n.fatGoal      || 70;
-  const crbG= n.carbsGoal    || 220;
-
-  const cal = n.calories || 0;
-  const pro = n.protein  || 0;
-  const fat = n.fat      || 0;
-  const crb = n.carbs    || 0;
-
-  const macroBar = (val, goal, color, label, unit='г') => {
-    const pct = Math.min((val / Math.max(goal, 1)) * 100, 100);
-    return `<div style="margin-bottom:9px">
-      <div class="row" style="justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:10px;color:rgba(232,237,245,.5)">${label}</span>
-        <span style="font-size:10px;font-weight:700;color:${color}">${val}<span style="font-weight:400;color:rgba(232,237,245,.35)"> / ${goal}${unit}</span></span>
-      </div>
-      <div style="height:6px;border-radius:3px;background:rgba(255,255,255,.07)">
-        <div style="height:100%;border-radius:3px;width:${pct.toFixed(1)}%;background:${color};box-shadow:0 0 6px ${color}55;transition:width .3s"></div>
-      </div>
-    </div>`;
-  };
-
-  return `<div class="card" style="margin-bottom:12px">
-    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div>
-        <div class="sec-label" style="margin:0 0 2px">🥗 КБЖУ</div>
-        <div style="font-size:9px;color:rgba(232,237,245,.35)">${meals.length} блюд сегодня</div>
-      </div>
-      <div style="text-align:right">
-        <div class="num" style="font-size:22px;color:#00E396">${cal}</div>
-        <div style="font-size:9px;color:rgba(232,237,245,.35)">/ ${cG} ккал</div>
-      </div>
-    </div>
-
-    ${macroBar(pro, pG,  '#FF9F43', '🥩 Белки', 'г')}
-    ${macroBar(crb, crbG,'#7B61FF', '🍞 Углеводы', 'г')}
-    ${macroBar(fat, fG,  '#FFD700', '🧈 Жиры', 'г')}
-
-    <div class="row" style="gap:8px;margin-top:12px">
-      <button onclick="window.openAddMealModal(false)" class="btn btn-ghost" style="flex:1;font-size:11px">✏️ Вручную</button>
-      <button onclick="window.openFoodCamera()" class="btn btn-teal" style="flex:2;font-size:11px">📷 Фото блюда</button>
-    </div>
-  </div>
-
-  ${meals.length > 0 ? `<div class="card" style="margin-bottom:12px">
-    <div class="sec-label" style="margin-bottom:8px">📋 ЖУРНАЛ БЛЮД</div>
-    ${meals.map(m => `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04)">
-      <div style="font-size:20px;flex-shrink:0">${m.emoji || '🍽️'}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:600;color:#E8EDF5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.name}</div>
-        <div style="font-size:9px;color:rgba(232,237,245,.35);margin-top:2px">Б:${m.protein}г · У:${m.carbs}г · Ж:${m.fat}г · ${m.time || ''}</div>
-      </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:12px;font-weight:700;color:#00E396">${m.calories} ккал</div>
-        <button onclick="window.deleteMealEntry('${m.id}')"
-          style="font-size:9px;color:rgba(255,69,96,.6);background:none;border:none;cursor:pointer;padding:2px 4px">🗑</button>
-      </div>
-    </div>`).join('')}
-  </div>` : ''}`;
+// Мини-спарклайн (инлайн SVG, без Chart.js — дёшево для 5 графиков)
+function sparkline(data, color, h = 38) {
+  const w = 120;
+  const vals = data.length ? data : [0];
+  const max = Math.max(...vals, 1), min = Math.min(...vals, 0);
+  const span = max - min || 1;
+  const pts = vals.map((v, i) => {
+    const x = vals.length > 1 ? (i / (vals.length - 1)) * w : w / 2;
+    const y = h - 4 - ((v - min) / span) * (h - 8);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const line = pts.join(' ');
+  const area = `0,${h} ${line} ${w},${h}`;
+  const id = 'sg' + Math.random().toString(36).slice(2, 7);
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:${h}px;display:block">
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${color}" stop-opacity=".35"/>
+      <stop offset="1" stop-color="${color}" stop-opacity="0"/>
+    </linearGradient></defs>
+    <polygon points="${area}" fill="url(#${id})"/>
+    <polyline points="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter:drop-shadow(0 0 4px ${color}80)"/>
+  </svg>`;
 }
 
 // ── NUTRITION TAB ─────────────────────────────────────────────────────────────
 function nutritionTabHTML() {
   const n = DB.getNutrition();
-  const waterPct = Math.min((n.water / n.waterGoal) * 100, 100);
+  const meals = DB.getMeals();
+  const score = DB.nutritionScore();
 
-  return `
-  <div class="card" style="margin-bottom:12px">
-    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px">
+  const cG = n.caloriesGoal || 2200, pG = n.proteinGoal || 140, fG = n.fatGoal || 70, crbG = n.carbsGoal || 220;
+  const filledGlasses = Math.min(10, Math.round((n.water || 0) / 0.25));
+
+  // ── 3 ВЕРХНИЕ КАРТЫ: ВОДА / КБЖУ / БАЛЛ ───────────────────────────────────
+  const waterCard = `<div class="card">
+    <div class="row" style="justify-content:space-between;align-items:baseline;margin-bottom:12px">
       <div class="sec-label" style="margin:0">💧 ВОДА</div>
-      <div class="row" style="gap:6px;align-items:baseline">
-        <span class="num" style="font-size:22px;color:#00C9FF">${(n.water*1000).toFixed(0)}</span>
-        <span style="font-size:10px;color:rgba(232,237,245,.4)">/ ${(n.waterGoal*1000).toFixed(0)} мл</span>
-      </div>
+      <div><span class="num" style="font-size:22px;color:#00D4FF">${(n.water*1000).toFixed(0)}</span><span style="font-size:11px;color:rgba(232,237,245,.4)"> / ${(n.waterGoal*1000).toFixed(0)} мл</span></div>
     </div>
-
-    <!-- 10 стаканов по 250мл = 2500мл -->
-    ${(()=>{
-      const GLASS = 0.25; // 250мл
-      const total = 10;
-      const filled = Math.min(total, Math.round(n.water / GLASS));
-      return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-        ${Array.from({length: total}, (_, i) => {
-          const done = i < filled;
-          return `<button onclick="window.setWaterGlasses(${i+1})"
-            style="flex:1;min-width:calc(10% - 6px);aspect-ratio:1;border-radius:10px;border:1.5px solid ${done?'#00C9FF':'rgba(255,255,255,.1)'};
-                   background:${done?'rgba(0,201,255,.18)':'rgba(255,255,255,.03)'};
-                   font-size:16px;cursor:pointer;transition:all .15s;
-                   box-shadow:${done?'0 0 8px rgba(0,201,255,.3)':'none'}">
-            ${done?'💧':'○'}
-          </button>`;
-        }).join('')}
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:9px;color:rgba(232,237,245,.3);margin-bottom:10px">
-        <span>0</span><span>500мл</span><span>1л</span><span>1.5л</span><span>2л</span><span>2.5л</span>
-      </div>`;
-    })()}
-
-    <div class="row" style="gap:8px">
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px">
+      ${Array.from({length:10},(_,i)=>{const done=i<filledGlasses;return `<button onclick="window.setWaterGlasses(${i+1})" style="flex:1;min-width:calc(10% - 5px);aspect-ratio:1;border-radius:10px;border:1.5px solid ${done?'#00D4FF':'rgba(255,255,255,.1)'};background:${done?'rgba(0,212,255,.18)':'rgba(255,255,255,.03)'};font-size:15px;cursor:pointer;transition:all .15s;box-shadow:${done?'0 0 8px rgba(0,212,255,.3)':'none'}">${done?'💧':'○'}</button>`;}).join('')}
+    </div>
+    <div class="row" style="gap:6px">
       <button class="btn btn-ghost" style="flex:1;font-size:11px" onclick="window.addWater(-0.25)">− стакан</button>
-      <button class="btn btn-teal"  style="flex:2;font-size:11px" onclick="window.addWater(0.25)">+ стакан 250мл 💧</button>
+      <button class="btn btn-teal" style="flex:2;font-size:11px" onclick="window.addWater(0.25)">+ стакан 250мл</button>
       <button class="btn btn-ghost" style="flex:1;font-size:11px" onclick="window.addWater(0.5)">+ 500мл</button>
     </div>
-  </div>
+  </div>`;
 
-  ${kbjuTrackerHTML(n)}
+  const macroBar = (val, goal, color, label) => {
+    const pct = Math.min((val / Math.max(goal,1)) * 100, 100);
+    return `<div style="margin-bottom:10px">
+      <div class="row" style="justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:11px;color:rgba(232,237,245,.6)">${label}</span>
+        <span style="font-size:11px;font-weight:700;color:${color}">${val}<span style="font-weight:400;color:rgba(232,237,245,.35)"> / ${goal} г</span></span>
+      </div>
+      <div style="height:7px;border-radius:4px;background:rgba(255,255,255,.07)"><div style="height:100%;border-radius:4px;width:${pct.toFixed(1)}%;background:${color};box-shadow:0 0 6px ${color}66;transition:width .4s"></div></div>
+    </div>`;
+  };
+  const kbjuCard = `<div class="card">
+    <div class="row" style="justify-content:space-between;align-items:baseline;margin-bottom:14px">
+      <div class="sec-label" style="margin:0">🍽 КБЖУ</div>
+      <div><span class="num" style="font-size:22px;color:#00E396">${n.calories||0}</span><span style="font-size:11px;color:rgba(232,237,245,.4)"> / ${cG} ккал</span></div>
+    </div>
+    ${macroBar(n.protein||0, pG,  '#FF9F43', 'Белки')}
+    ${macroBar(n.fat||0,     fG,  '#7C3AED', 'Жиры')}
+    ${macroBar(n.carbs||0,   crbG,'#F5B942', 'Углеводы')}
+  </div>`;
 
-  <div class="card" style="margin-bottom:12px">
+  const scoreColor = score >= 75 ? '#00E396' : score >= 50 ? '#F5B942' : '#FF5C8A';
+  const scoreLabel = score >= 75 ? 'Отлично' : score >= 50 ? 'Норма' : score > 0 ? 'Слабо' : 'Нет данных';
+  const r = 46, circ = 2*Math.PI*r, off = circ - (score/100)*circ;
+  const scoreCard = `<div class="card" style="display:flex;flex-direction:column;align-items:center;text-align:center">
+    <div class="sec-label" style="align-self:flex-start">🎯 БАЛЛ ПИТАНИЯ</div>
+    <div style="position:relative;width:120px;height:120px;margin:6px 0 10px">
+      <svg width="120" height="120">
+        <circle cx="60" cy="60" r="${r}" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="8"/>
+        <circle cx="60" cy="60" r="${r}" fill="none" stroke="${scoreColor}" stroke-width="8" stroke-linecap="round"
+          stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 60 60)" style="filter:drop-shadow(0 0 6px ${scoreColor});transition:stroke-dashoffset .6s"/>
+      </svg>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+        <span class="num" style="font-size:34px;font-weight:800;color:${scoreColor};line-height:1">${score}</span>
+        <span style="font-size:10px;color:rgba(232,237,245,.35)">/ 100</span>
+      </div>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:${scoreColor}">● ${scoreLabel}</div>
+    <button onclick="window.showNutritionScoreInfo()" style="font-size:10px;color:#00D4FF;background:none;border:none;cursor:pointer;margin-top:4px">Что это значит?</button>
+  </div>`;
+
+  // ── ЛЕНТА ПИТАНИЯ ─────────────────────────────────────────────────────────
+  const sorted = [...meals].sort((a,b) => (a.time||'').localeCompare(b.time||''));
+  const feedRows = sorted.length ? sorted.map(m => {
+    const mt = MEAL_TYPES[m.mealType] || { label: m.name || 'Приём пищи', icon:'🍽️', color:'#00E396' };
+    const items = Array.isArray(m.items) && m.items.length ? m.items : (m.name ? [m.name] : []);
+    return `<div class="meal-row">
+      <div class="meal-time">${m.time || ''}</div>
+      <div class="meal-main">
+        <div class="meal-title" style="color:${mt.color}">${mt.icon} ${mt.label}</div>
+        <ul class="meal-items">${items.map(it => `<li>${it}</li>`).join('')}</ul>
+        ${m.note ? `<div class="meal-note">${m.note}</div>` : ''}
+      </div>
+      ${m.photo ? `<div class="meal-photo"><img src="${m.photo}" alt=""></div>` : ''}
+      <div class="meal-macros">
+        <div class="num" style="font-size:18px;color:#F5B942">${m.calories||0} <span style="font-size:11px;color:rgba(232,237,245,.4)">ккал</span></div>
+        <div class="meal-macro-chips">
+          <span style="color:#FF9F43">Б ${m.protein||0}</span>
+          <span style="color:#7C3AED">Ж ${m.fat||0}</span>
+          <span style="color:#F5B942">У ${m.carbs||0}</span>
+        </div>
+        <button class="meal-edit" onclick="window.deleteMealEntry('${m.id}')">🗑 Удалить</button>
+      </div>
+    </div>`;
+  }).join('') : `<div style="text-align:center;padding:30px 16px;color:rgba(232,237,245,.4)">
+      <div style="font-size:40px;margin-bottom:8px">🍽️</div>
+      <div style="font-size:13px">Сегодня пока ничего не добавлено</div>
+      <div style="font-size:11px;margin-top:6px">Сфотографируй блюдо или добавь вручную</div>
+    </div>`;
+
+  const feedCard = `<div class="card">
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div class="sec-label" style="margin:0">🍱 ЛЕНТА ПИТАНИЯ · сегодня</div>
+      <div class="row" style="gap:8px">
+        <button class="btn btn-ghost" style="font-size:11px;padding:7px 12px" onclick="window.openAddMealModal(false)">✏️ Вручную</button>
+        <button class="btn btn-teal" style="font-size:11px;padding:7px 14px" onclick="window.openFoodCamera()">+ Добавить еду</button>
+      </div>
+    </div>
+    <div class="meal-feed">${feedRows}</div>
+  </div>`;
+
+  // Фото-CTA
+  const photoCTA = `<button class="card photo-cta" onclick="window.openFoodCamera()">
+    <span style="font-size:24px">📷</span>
+    <div style="text-align:left">
+      <div style="font-size:14px;font-weight:700;color:#00F5D4">Сфотографировать еду или загрузить фото</div>
+      <div style="font-size:11px;color:rgba(232,237,245,.45);margin-top:2px">ИИ-анализ и подсчёт КБЖУ автоматически</div>
+    </div>
+    <span style="margin-left:auto;font-size:18px;color:rgba(232,237,245,.4)">›</span>
+  </button>`;
+
+  // ── АНАЛИТИКА ─────────────────────────────────────────────────────────────
+  const period = window._nutPeriod || 7;
+  const hist = DB.getNutritionHistory(period);
+  const avg = (k) => hist.length ? Math.round(hist.reduce((s,d)=>s+(d[k]||0),0) / hist.length) : 0;
+  const avgWater = hist.length ? (hist.reduce((s,d)=>s+(d.water||0),0)/hist.length).toFixed(1) : '0';
+  const periodBtn = (d,l) => `<button onclick="window.setNutPeriod(${d})" style="padding:5px 12px;border-radius:10px;font-size:11px;cursor:pointer;border:1px solid ${period===d?'rgba(0,245,212,.4)':'rgba(255,255,255,.1)'};background:${period===d?'rgba(0,245,212,.12)':'transparent'};color:${period===d?'#00F5D4':'rgba(232,237,245,.5)'}">${l}</button>`;
+  const miniChart = (title, value, unit, color, key, mul=1) => `<div style="background:var(--surface3);border:1px solid var(--border);border-radius:14px;padding:12px">
+    <div class="row" style="justify-content:space-between;margin-bottom:6px"><span style="font-size:10px;color:rgba(232,237,245,.5)">${title}</span><span style="font-size:9px;color:rgba(232,237,245,.3)">сред.</span></div>
+    <div class="num" style="font-size:18px;color:${color};margin-bottom:6px">${value}<span style="font-size:10px;color:rgba(232,237,245,.35)"> ${unit}</span></div>
+    ${sparkline(hist.map(d => (d[key]||0)*mul), color)}
+  </div>`;
+  const analyticsCard = `<div class="card">
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div class="sec-label" style="margin:0">📊 АНАЛИТИКА</div>
+      <div class="row" style="gap:6px">${periodBtn(7,'7 дней')}${periodBtn(30,'30 дней')}${periodBtn(90,'90 дней')}</div>
+    </div>
+    <div class="nut-analytics">
+      ${miniChart('Калории', avg('calories'), 'ккал', '#F5B942', 'calories')}
+      ${miniChart('Белки', avg('protein'), 'г', '#FF9F43', 'protein')}
+      ${miniChart('Вода', avgWater, 'л', '#00D4FF', 'water')}
+      ${miniChart('Углеводы', avg('carbs'), 'г', '#7C3AED', 'carbs')}
+      ${miniChart('Жиры', avg('fat'), 'г', '#FF5C8A', 'fat')}
+    </div>
+  </div>`;
+
+  // Советы
+  const proteinLow = (n.protein || 0) < pG * 0.7;
+  const adviceCard = `<div class="nut-advice">
+    <div class="card" style="margin:0">
+      <div class="sec-label">💡 СОВЕТ ДНЯ</div>
+      <div style="font-size:12px;color:rgba(232,237,245,.7);line-height:1.5">После силовой тренировки важно получить 20–40 г белка в течение 2 часов.</div>
+    </div>
+    <div class="card" style="margin:0">
+      <div class="sec-label">🥩 БЕЛОК</div>
+      <div style="font-size:12px;color:rgba(232,237,245,.7);line-height:1.5">${proteinLow ? `Съедено <b style="color:#FF9F43">${n.protein||0}</b> из ${pG} г. Добей до нормы — творог, яйца, мясо.` : `Норма белка почти закрыта (${n.protein||0}/${pG} г) 👍`}</div>
+    </div>
+  </div>`;
+
+  // Чекбоксы
+  const checkboxes = `<div class="card">
     <div class="sec-label">💊 ЕЖЕДНЕВНЫЕ ЧЕКБОКСЫ</div>
     <div class="nutrition-checklist">
-      ${[
-        {key:'supplements',icon:'💊',label:'БАДы / СДВГ',xp:20},
-        {key:'shower',     icon:'🚿',label:'Контрастный душ',xp:20},
-      ].map(item=>`<div class="check-row${n[item.key]?' checked':''}" onclick="window.toggleNutritionCheck('${item.key}')">
-        <div class="checkbox${n[item.key]?' checked':''}">
-          ${n[item.key]?'✓':''}
-        </div>
+      ${[{key:'supplements',icon:'💊',label:'БАДы / СДВГ',xp:20},{key:'shower',icon:'🚿',label:'Контрастный душ',xp:20}].map(item=>`<div class="check-row${n[item.key]?' checked':''}" onclick="window.toggleNutritionCheck('${item.key}')">
+        <div class="checkbox${n[item.key]?' checked':''}">${n[item.key]?'✓':''}</div>
         <span style="font-size:20px">${item.icon}</span>
         <span style="font-size:13px;flex:1">${item.label}</span>
-        <span style="font-size:10px;color:#FFD700">+${item.xp} XP</span>
+        <span style="font-size:10px;color:#F5B942">+${item.xp} XP</span>
       </div>`).join('')}
     </div>
   </div>`;
+
+  return `
+    <div class="nut-top">${waterCard}${kbjuCard}${scoreCard}</div>
+    ${feedCard}
+    ${photoCTA}
+    ${analyticsCard}
+    ${adviceCard}
+    ${checkboxes}
+  `;
 }
 
 // ── RING SVG ──────────────────────────────────────────────────────────────────
@@ -477,10 +556,18 @@ window.submitWorkout = function() {
   renderHealth('sport');
 };
 
+// Снимок воды за сегодня — чтобы аналитика показывала прошлые дни
+function snapshotWater(liters) {
+  const d = new Date();
+  const key = 'lifeos_water_' + `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  try { localStorage.setItem(key, String(liters)); } catch {}
+}
+
 window.addWater = function(amount) {
   const n = DB.getNutrition();
   n.water = Math.max(0, Math.min(5, +(n.water + amount).toFixed(2)));
   DB.saveNutrition(n);
+  snapshotWater(n.water);
   if (n.water >= 2) onNutritionUpdated(n);
   renderHealth('nutrition');
   TG.hapticImpact('light');
@@ -494,6 +581,7 @@ window.setWaterGlasses = function(glassCount) {
   const currentGlasses = Math.round(n.water / 0.25);
   n.water = currentGlasses === glassCount ? Math.max(0, newWater - 0.25) : newWater;
   DB.saveNutrition(n);
+  snapshotWater(n.water);
   if (n.water >= 2) onNutritionUpdated(n);
   renderHealth('nutrition');
   TG.hapticImpact('light');
@@ -556,62 +644,89 @@ window.loadHealthAI = async function() {
   }
 };
 
-// ── КБЖУ: добавить вручную ─────────────────────────────────────────────────
+// ── ДОБАВИТЬ ЕДУ: модалка (тип приёма + продукты + КБЖУ + фото) ─────────────
 window.openAddMealModal = function(prefilled = null) {
   document.getElementById('meal-modal')?.remove();
   const div = document.createElement('div');
   div.id = 'meal-modal';
   div.className = 'modal-overlay';
   const p = prefilled || {};
+  window._mealPhoto = p.photo || null;       // превью-фото для сохранения
+  window._mealType  = p.mealType || autoMealType();
+  const itemsText = Array.isArray(p.items) ? p.items.join('\n') : (p.items || p.name || '');
+
   div.innerHTML = `<div class="modal-sheet">
     <div class="modal-handle"></div>
-    <div class="modal-title">🍽️ Добавить блюдо</div>
-    ${p._loading ? `<div style="text-align:center;padding:20px;color:#00F5D4;font-size:12px">
-      <div style="width:24px;height:24px;border-radius:50%;border:3px solid #00F5D4;border-top-color:transparent;animation:spin .8s linear infinite;margin:0 auto 10px"></div>
-      Анализирую фото...
-    </div>` : ''}
-    <div id="meal-form-body" style="${p._loading?'display:none':''}">
-      ${p._error ? `<div style="color:#FF4560;font-size:11px;margin-bottom:12px">⚠️ ${p._error}</div>` : ''}
-      ${p.name !== undefined && p._confidence ? `<div style="font-size:10px;color:rgba(0,245,212,.7);margin-bottom:10px">🤖 AI распознал — проверь и скорректируй</div>` : ''}
-      <input id="meal-name" class="input" placeholder="Название блюда" value="${p.name || ''}" style="margin-bottom:10px">
-      <div class="grid2" style="margin-bottom:10px;gap:8px">
-        <div>
-          <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">ккал</div>
-          <input id="meal-cal" class="input" type="number" placeholder="400" value="${p.calories || ''}" style="width:100%">
-        </div>
-        <div>
-          <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Белки (г)</div>
-          <input id="meal-pro" class="input" type="number" placeholder="30" value="${p.protein || ''}" style="width:100%">
-        </div>
-        <div>
-          <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Углеводы (г)</div>
-          <input id="meal-crb" class="input" type="number" placeholder="50" value="${p.carbs || ''}" style="width:100%">
-        </div>
-        <div>
-          <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Жиры (г)</div>
-          <input id="meal-fat" class="input" type="number" placeholder="15" value="${p.fat || ''}" style="width:100%">
-        </div>
+    <div class="modal-title">🍽️ Добавить еду</div>
+    ${p._loading ? `<div style="text-align:center;padding:24px;color:#00F5D4;font-size:13px">
+      <div style="width:26px;height:26px;border-radius:50%;border:3px solid #00F5D4;border-top-color:transparent;animation:spin .8s linear infinite;margin:0 auto 12px"></div>
+      Анализирую фото через ИИ…
+    </div>` : `
+    <div id="meal-form-body">
+      ${p._error ? `<div style="color:#FF5C8A;font-size:11px;margin-bottom:12px">⚠️ ${p._error}</div>` : ''}
+      ${p._confidence ? `<div style="font-size:10px;color:rgba(0,245,212,.7);margin-bottom:10px">🤖 ИИ распознал — проверь и скорректируй</div>` : ''}
+
+      ${p.photo ? `<div style="border-radius:14px;overflow:hidden;margin-bottom:12px;max-height:160px"><img src="${p.photo}" style="width:100%;object-fit:cover;display:block"></div>` : ''}
+
+      <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:6px">ПРИЁМ ПИЩИ</div>
+      <div class="cat-pills" id="meal-type-pills" style="margin-bottom:12px">
+        ${MEAL_ORDER.map(k => `<button class="cat-pill${window._mealType===k?' active':''}" data-mt="${k}" onclick="window._pickMealType('${k}')" style="--cc:${MEAL_TYPES[k].color}">${MEAL_TYPES[k].icon} ${MEAL_TYPES[k].label}</button>`).join('')}
       </div>
-      ${p.note ? `<div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:10px;padding:6px 10px;background:rgba(255,255,255,.04);border-radius:8px">${p.note}</div>` : ''}
+
+      <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">ПРОДУКТЫ (каждый с новой строки)</div>
+      <textarea id="meal-items" class="input" rows="3" placeholder="Омлет из 3 яиц&#10;Кофе&#10;Тост" style="margin-bottom:12px;resize:vertical">${itemsText}</textarea>
+
+      <div class="grid2" style="margin-bottom:12px;gap:8px">
+        <div><div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Калории</div><input id="meal-cal" class="input" type="number" placeholder="650" value="${p.calories || ''}" style="width:100%"></div>
+        <div><div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Белки, г</div><input id="meal-pro" class="input" type="number" placeholder="42" value="${p.protein || ''}" style="width:100%"></div>
+        <div><div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Жиры, г</div><input id="meal-fat" class="input" type="number" placeholder="28" value="${p.fat || ''}" style="width:100%"></div>
+        <div><div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Углеводы, г</div><input id="meal-crb" class="input" type="number" placeholder="25" value="${p.carbs || ''}" style="width:100%"></div>
+      </div>
+
+      <input id="meal-note" class="input" placeholder="Заметка (необязательно)" value="${p.note || ''}" style="margin-bottom:14px;font-size:12px">
+
       <div style="display:flex;gap:8px">
         <button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('meal-modal').remove()">Отмена</button>
-        <button class="btn btn-teal" style="flex:2" onclick="window._submitMeal()">Добавить</button>
+        <button class="btn btn-teal" style="flex:2" onclick="window._submitMeal()">Добавить ✓</button>
       </div>
-    </div>
+    </div>`}
   </div>`;
   div.addEventListener('click', e => { if (e.target === div) div.remove(); });
   document.body.appendChild(div);
 };
 
+function autoMealType() {
+  const h = new Date().getHours();
+  if (h < 11) return 'breakfast';
+  if (h < 16) return 'lunch';
+  if (h < 21) return 'dinner';
+  return 'snack';
+}
+
+window._pickMealType = function(k) {
+  window._mealType = k;
+  document.querySelectorAll('#meal-type-pills .cat-pill').forEach(b => b.classList.remove('active'));
+  document.querySelector(`#meal-type-pills [data-mt="${k}"]`)?.classList.add('active');
+  TG.hapticSelection();
+};
+
 window._submitMeal = function() {
-  const name     = document.getElementById('meal-name')?.value?.trim();
+  const itemsRaw = document.getElementById('meal-items')?.value?.trim() || '';
+  const items    = itemsRaw.split('\n').map(s => s.trim()).filter(Boolean);
   const calories = parseInt(document.getElementById('meal-cal')?.value) || 0;
   const protein  = parseInt(document.getElementById('meal-pro')?.value) || 0;
   const carbs    = parseInt(document.getElementById('meal-crb')?.value) || 0;
   const fat      = parseInt(document.getElementById('meal-fat')?.value) || 0;
-  if (!name) { TG.hapticError(); return; }
+  const note     = document.getElementById('meal-note')?.value?.trim() || '';
+  if (!items.length) { TG.hapticError(); return; }
 
-  DB.addMeal({ name, calories, protein, carbs, fat, emoji: '🍽️' });
+  DB.addMeal({
+    mealType: window._mealType || 'snack',
+    name: items[0],
+    items, calories, protein, carbs, fat, note,
+    photo: window._mealPhoto || null,
+  });
+  window._mealPhoto = null;
   document.getElementById('meal-modal')?.remove();
   renderHealth('nutrition');
   TG.hapticSuccess();
@@ -623,7 +738,17 @@ window.deleteMealEntry = function(id) {
   TG.hapticImpact('light');
 };
 
-// ── КБЖУ: фото еды → GPT-4o Vision ─────────────────────────────────────────
+window.setNutPeriod = function(days) {
+  window._nutPeriod = days;
+  renderHealth('nutrition');
+  TG.hapticSelection();
+};
+
+window.showNutritionScoreInfo = function() {
+  window.showToast?.('Балл = насколько день сбалансирован: калории (30%), белок (40%), вода (30%) относительно целей.', 'info');
+};
+
+// ── ФОТО ЕДЫ → GPT-4o Vision (со сжатием для хранения превью) ──────────────
 window.openFoodCamera = function() {
   const input = document.createElement('input');
   input.type = 'file';
@@ -636,11 +761,11 @@ window.openFoodCamera = function() {
     input.remove();
     if (!file) return;
 
-    // Show loading modal
     window.openAddMealModal({ _loading: true });
 
     try {
-      const base64 = await fileToBase64(file);
+      const base64 = await fileToBase64(file);          // для отправки в ИИ
+      const thumb  = await downscaleImage(file, 480);   // лёгкое превью для хранения
       const res = await fetch('/api/analyze-food', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -649,14 +774,12 @@ window.openFoodCamera = function() {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
-      // Show prefilled form
       window.openAddMealModal({
-        name:       data.name,
-        calories:   data.calories,
-        protein:    data.protein,
-        carbs:      data.carbs,
-        fat:        data.fat,
-        note:       data.note || '',
+        mealType: autoMealType(),
+        items:    data.name ? [data.name] : [],
+        calories: data.calories, protein: data.protein, carbs: data.carbs, fat: data.fat,
+        note:     data.note || '',
+        photo:    thumb,
         _confidence: data.confidence,
       });
       TG.hapticImpact('medium');
@@ -672,6 +795,29 @@ function fileToBase64(file) {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result.split(',')[1]); // strip data:*;base64,
     reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// Сжимаем фото в небольшой data-URL (JPEG), чтобы не забивать localStorage
+function downscaleImage(file, maxSize = 480) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        try { resolve(canvas.toDataURL('image/jpeg', 0.6)); }
+        catch { resolve(null); }
+      };
+      img.onerror = () => resolve(null);
+      img.src = reader.result;
+    };
+    reader.onerror = () => resolve(null);
     reader.readAsDataURL(file);
   });
 }

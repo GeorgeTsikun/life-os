@@ -528,6 +528,49 @@ export const DB = {
     n.carbs    = meals.reduce((s, m) => s + (m.carbs    || 0), 0);
     this.saveNutrition(n);
   },
+  // Ключ блюд за произвольную дату
+  _mealsKeyFor(d) {
+    return `lifeos_meals_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  },
+  getMealsForDate(d) {
+    return JSON.parse(localStorage.getItem(this._mealsKeyFor(d)) || '[]');
+  },
+  // История за N дней (для графиков): [{date, calories, protein, fat, carbs, water}]
+  getNutritionHistory(days = 7) {
+    const out = [];
+    const todayKey = this._mealsKey();
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const meals = this.getMealsForDate(d);
+      const sum = (k) => meals.reduce((s, m) => s + (m[k] || 0), 0);
+      // Вода сегодня берётся из nutrition, прошлые дни — из снимков если есть
+      let water = 0;
+      if (this._mealsKeyFor(d) === todayKey) water = this.getNutrition().water || 0;
+      else water = JSON.parse(localStorage.getItem('lifeos_water_' + this._mealsKeyFor(d).slice(13)) || '0') || 0;
+      out.push({
+        date: d, label: ['вс','пн','вт','ср','чт','пт','сб'][d.getDay()],
+        calories: sum('calories'), protein: sum('protein'), fat: sum('fat'), carbs: sum('carbs'), water,
+      });
+    }
+    return out;
+  },
+  // Балл питания 0-100: насколько день сбалансирован относительно целей
+  nutritionScore() {
+    const n = this.getNutrition();
+    const meals = this.getMeals();
+    if (!meals.length) return 0;
+    const ratio = (val, goal) => {
+      if (!goal) return 0;
+      const r = val / goal;
+      return r <= 1 ? r : Math.max(0, 2 - r); // перебор тоже штрафует
+    };
+    const cal = ratio(n.calories, n.caloriesGoal || 2200);
+    const pro = ratio(n.protein,  n.proteinGoal  || 140);
+    const wat = ratio((n.water || 0), (n.waterGoal || 2.5));
+    // белок и вода важнее
+    const score = (cal * 0.3 + pro * 0.4 + wat * 0.3) * 100;
+    return Math.round(Math.max(0, Math.min(100, score)));
+  },
 
   // Тренировки
   getWorkouts()   { return this.get('workouts'); },
