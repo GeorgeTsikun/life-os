@@ -199,6 +199,7 @@ export const DB = {
   init() {
     инициализировать();
     this.migrateTaskIdsToUUID();   // §migration: t-id → UUID для корректного upsert
+    this.migrateRelativeDatesToISO(); // §migration: 'завтра'/'сегодня' → реальные ISO даты
     this.applyDailyDecay();
     this.resetDailyQuests();
     const moved = this.sweepQ4toIdeaBank();
@@ -224,6 +225,49 @@ export const DB = {
       console.log(`[migration] обновил ${counter} task id → UUID`);
     }
     localStorage.setItem('lifeos_uuid_migrated_v1', '1');
+  },
+
+  // ── МИГРАЦИЯ: 'завтра'/'сегодня'/etc → реальная ISO дата ────────────────────
+  // Задачи, созданные до исправления, имеют time='завтра' и due_date=null.
+  // парсДату('завтра') считает дату динамически — задача ВЕЧНО "завтра".
+  // Эта миграция конвертирует относительные строки в реальные ISO даты.
+  migrateRelativeDatesToISO() {
+    const КЛЮЧ = 'lifeos_reldate_migrated_v1';
+    if (localStorage.getItem(КЛЮЧ) === '1') return;
+
+    // Инлайн-реализация парсера (нельзя импортировать ES module из plain object)
+    const parseRel = (s) => {
+      if (!s || typeof s !== 'string') return null;
+      const low = s.trim().toLowerCase();
+      if (!low || low === '—' || low === '-') return null;
+      // Уже ISO
+      if (/^\d{4}-\d{2}-\d{2}/.test(low)) return null; // уже ок
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0);
+      if (low.includes('сегодн'))  return today;
+      if (low.includes('завтра'))  { const d = new Date(today); d.setDate(d.getDate()+1); return d; }
+      if (low.includes('послезавтра')) { const d = new Date(today); d.setDate(d.getDate()+2); return d; }
+      if (low.includes('вчера'))   { const d = new Date(today); d.setDate(d.getDate()-1); return d; }
+      return null;
+    };
+
+    const задачи = this.getTasks();
+    let counter = 0;
+    задачи.forEach(t => {
+      if (!t.due_date && t.time) {
+        const d = parseRel(t.time);
+        if (d) {
+          // Сохраняем как ISO, оригинальный time не трогаем (для отображения)
+          t.due_date = d.toISOString();
+          counter++;
+        }
+      }
+    });
+    if (counter > 0) {
+      this.saveTasks(задачи);
+      console.log(`[migration] ${counter} задач: relative time → ISO due_date`);
+    }
+    localStorage.setItem(КЛЮЧ, '1');
   },
 
   get(ключ)       { return хранилищеПолучить(ключ) ?? ДАННЫЕ[ключ]; },

@@ -1,6 +1,6 @@
 // ── PROJECTS SCREEN ───────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=31';
-import { TG } from '../telegram.js?v=31';
+import { DB } from '../db.js?v=32';
+import { TG } from '../telegram.js?v=32';
 
 let revenueChart;
 

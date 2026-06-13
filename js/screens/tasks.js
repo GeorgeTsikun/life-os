@@ -1,7 +1,7 @@
 // ── TASKS SCREEN ──────────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=31';
-import { onTaskToggled } from '../gamification.js?v=31';
-import { TG } from '../telegram.js?v=31';
+import { DB } from '../db.js?v=32';
+import { onTaskToggled } from '../gamification.js?v=32';
+import { TG } from '../telegram.js?v=32';
 import { парсДату, бакет, форматДата, БАКЕТЫ_UI, ПОРЯДОК_БАКЕТОВ, вISO } from '../utils/date.js';
 import { openTaskDetail } from './_taskDetail.js';
 
@@ -745,13 +745,18 @@ window.submitAddTask = async function() {
   const customTime = document.getElementById('task-time-custom')?.value?.trim();
   const финальноеВремя = customTime || time || '—';
 
+  // ⚠️ КРИТИЧНО: конвертируем 'завтра'/'сегодня'/etc в реальный ISO, иначе задача зависнет навечно
+  const parsedDate = парсДату(финальноеВремя);
+  const isoDate    = parsedDate ? вISO(parsedDate) : null;
+
   const finalQuad = quad === 'auto' ? 'schedule' : quad;
   DB.addTask({
     text,
     cat:        cat === 'auto' ? 'Работа' : cat,
-    time:       финальноеВремя,
+    time:       финальноеВремя,   // human-readable для отображения
+    due_date:   isoDate,           // реальная дата — не меняется со временем
     quadrant:   finalQuad,
-    difficulty: finalQuad === 'do' ? 3 : 2,  // Q1 → сложность 3 по умолчанию
+    difficulty: finalQuad === 'do' ? 3 : 2,
   });
   window.closeAddTask();
   TG.hapticSuccess();
