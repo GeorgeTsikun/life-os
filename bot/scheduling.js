@@ -83,10 +83,10 @@ export async function утреннийАвтоБрифинг({ bot, supa, openai
         .then(r => ({ data: r.data ? [r.data] : [] }))
         .catch(() => ({ data: [] })),
       // Последние данные здоровья
-      supa.from('health_logs')
-        .select('hrv,sleep_hours,resting_hr,steps')
+      supa.from('health_metrics')
+        .select('hrv_ms,sleep_h,resting_hr,steps')
         .eq('owner', 'george')
-        .order('logged_at', { ascending: false })
+        .order('date', { ascending: false })
         .limit(1)
         .maybeSingle()
         .catch(() => ({ data: null })),
@@ -94,6 +94,15 @@ export async function утреннийАвтоБрифинг({ bot, supa, openai
 
     задачиСегодня = резСегодня.data || [];
     просроченные  = (резПросроч.data || []).filter(t => t.due_date < сегодня);
+    // Нормализуем имена колонок health_metrics → hrv/sleep_hours
+    if (резЗдор.data) {
+      резЗдор.data = {
+        hrv:          резЗдор.data.hrv_ms,
+        sleep_hours:  резЗдор.data.sleep_h,
+        resting_hr:   резЗдор.data.resting_hr,
+        steps:        резЗдор.data.steps,
+      };
+    }
     // Ожидания: пробуем и новую таблицу и старую waitings
     if (!ожидания.length) {
       const резWait = await supa.from('waitings')
@@ -300,7 +309,7 @@ async function вечернийАвтоЧекин({ bot, ownerTgId, безКэш
   let стрик = 0;
   if (supa) {
     try {
-      const { data: prof } = await supa.from('profiles').select('streak').eq('owner', 'george').maybeSingle();
+      const { data: prof } = await supa.from('profile').select('streak').eq('owner', 'george').maybeSingle();
       стрик = prof?.streak || 0;
     } catch {}
   }
