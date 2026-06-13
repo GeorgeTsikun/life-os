@@ -1,7 +1,7 @@
 // ── TASKS SCREEN ──────────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=34';
-import { onTaskToggled } from '../gamification.js?v=34';
-import { TG } from '../telegram.js?v=34';
+import { DB } from '../db.js?v=35';
+import { onTaskToggled } from '../gamification.js?v=35';
+import { TG } from '../telegram.js?v=35';
 import { парсДату, бакет, форматДата, БАКЕТЫ_UI, ПОРЯДОК_БАКЕТОВ, вISO } from '../utils/date.js';
 import { openTaskDetail } from './_taskDetail.js';
 
@@ -35,7 +35,6 @@ const QUADS = [
 
 let viewMode   = 'dates'; // 'dates' | 'matrix' | 'done' | 'ideas' | 'kanban'
 let catFilter  = 'all';  // 'all' | 'work' | 'personal' | 'cat:X'
-let kbExpanded = null;   // id раскрытой kanban-карточки
 
 const WORK_CATS_T = new Set(['Работа','Контент','Эксперименты','Стратегия','Обучение','Деньги','Бизнес','Клуб','Операционка','Привлечение клиентов','Развитие','Эффективность']);
 const LIFE_CATS_T = new Set(['Семья','Встречи','Быт','Здоровье','Chill','Личное','Личные дела','Домашние дела']);
@@ -100,20 +99,106 @@ export function renderTasks() {
   TG.hideMainButton();
   TG.hideBackButton();
 
-  // Dot-индикатор скролла канбана
+  // Dot-индикатор скролла канбана + восстановление позиции + drag-and-drop
   if (viewMode === 'kanban') {
     requestAnimationFrame(() => {
       const wrap = document.getElementById('kanban-scroll');
-      if (!wrap || wrap._kbListener) return;
-      wrap._kbListener = true;
-      wrap.addEventListener('scroll', () => {
-        const idx = Math.round(wrap.scrollLeft / 220);
-        document.querySelectorAll('.kanban-hint-dot').forEach((d, i) => {
-          d.classList.toggle('active', i === idx);
-        });
-      }, { passive: true });
+      if (!wrap) return;
+      // Восстанавливаем горизонтальную прокрутку после ре-рендера
+      if (_kbScrollLeft) wrap.scrollLeft = _kbScrollLeft;
+      if (!wrap._kbListener) {
+        wrap._kbListener = true;
+        wrap.addEventListener('scroll', () => {
+          const idx = Math.round(wrap.scrollLeft / 220);
+          document.querySelectorAll('.kanban-hint-dot').forEach((d, i) => {
+            d.classList.toggle('active', i === idx);
+          });
+        }, { passive: true });
+      }
+      настроитьDragDrop();
     });
   }
+}
+
+// ── DRAG & DROP канбана (touch + mouse через Pointer Events) ──────────────────
+function настроитьDragDrop() {
+  const STATUS_BY_COL = { inbox:'inbox', working:'working', waiting:'waiting' };
+  let drag = null; // { card, taskId, clone, fromCol }
+
+  document.querySelectorAll('.kb-drag-handle').forEach(handle => {
+    if (handle._dndBound) return;
+    handle._dndBound = true;
+
+    handle.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const card = handle.closest('.kb-card');
+      if (!card) return;
+      const taskId = card.dataset.taskId;
+      const rect = card.getBoundingClientRect();
+
+      // Плавающий клон, который следует за пальцем
+      const clone = card.cloneNode(true);
+      clone.style.cssText = `position:fixed;z-index:9999;width:${rect.width}px;left:${rect.left}px;top:${rect.top}px;
+        pointer-events:none;opacity:.92;transform:rotate(2deg) scale(1.03);
+        box-shadow:0 12px 40px rgba(0,0,0,.5);transition:none;margin:0`;
+      document.body.appendChild(clone);
+      card.style.opacity = '.3';
+
+      drag = { card, taskId, clone, offX: e.clientX - rect.left, offY: e.clientY - rect.top, moved: false };
+      handle.setPointerCapture(e.pointerId);
+      TG.hapticImpact('medium');
+    });
+
+    handle.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      drag.moved = true;
+      drag.clone.style.left = (e.clientX - drag.offX) + 'px';
+      drag.clone.style.top  = (e.clientY - drag.offY) + 'px';
+
+      // Подсветка колонки под пальцем
+      drag.clone.style.display = 'none';
+      const podEl = document.elementFromPoint(e.clientX, e.clientY);
+      drag.clone.style.display = '';
+      const col = podEl?.closest('.kanban-col');
+      document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('kb-col-over'));
+      if (col && col.dataset.col !== 'done') col.classList.add('kb-col-over');
+    });
+
+    const finish = (e) => {
+      if (!drag) return;
+      drag.clone.style.display = 'none';
+      const podEl = document.elementFromPoint(e.clientX, e.clientY);
+      drag.clone.remove();
+      drag.card.style.opacity = '';
+      document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('kb-col-over'));
+
+      const col = podEl?.closest('.kanban-col');
+      const newCol = col?.dataset.col;
+      const taskId = drag.taskId;
+      const moved = drag.moved;
+      drag = null;
+
+      if (moved) {
+        _kbJustDragged = true;
+        setTimeout(() => { _kbJustDragged = false; }, 350);
+      }
+      if (moved && newCol && STATUS_BY_COL[newCol]) {
+        window.kbMove(taskId, STATUS_BY_COL[newCol]);
+      } else if (moved && newCol === 'done') {
+        window.kbDone(taskId);
+      }
+    };
+
+    handle.addEventListener('pointerup', finish);
+    handle.addEventListener('pointercancel', () => {
+      if (!drag) return;
+      drag.clone.remove();
+      drag.card.style.opacity = '';
+      document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('kb-col-over'));
+      drag = null;
+    });
+  });
 }
 
 // ── ГРУППИРОВКА ПО ДАТАМ ─────────────────────────────────────────────────────
@@ -328,39 +413,32 @@ function kbCardHTML(t, col) {
     ? `<span class="kb-chip" style="background:rgba(0,227,150,.07);color:#00E396;border:1px solid rgba(0,227,150,.2)">💡</span>`
     : '';
 
-  const isExpanded = kbExpanded === t.id;
-  // Кнопки движения зависят от колонки
+  // Кнопки движения зависят от колонки (всегда видимы — без раскрытия)
   const prevCol = col.id === 'working' ? 'inbox' : col.id === 'waiting' ? 'working' : null;
   const nextCol = col.id === 'inbox' ? 'working' : col.id === 'working' ? 'waiting' : null;
-  const prevLabel = prevCol === 'inbox' ? '← Входящие' : prevCol === 'working' ? '← В работе' : null;
-  const nextLabel = nextCol === 'working' ? 'В работе →' : nextCol === 'waiting' ? 'Ожидание →' : null;
 
-  const actionsHTML = col.id === 'done' ? `
-    <div class="kb-actions-inner">
-      <div class="kb-btn-row">
-        <button class="kb-btn kb-btn-edit" onclick="event.stopPropagation();window.openTaskDetail('${t.id}')">✏️ Открыть</button>
-        <button class="kb-btn" onclick="event.stopPropagation();window.toggleTask('${t.id}')">↩ Вернуть</button>
-      </div>
-    </div>` : `
-    <div class="kb-actions-inner">
-      <div class="kb-btn-row">
-        ${prevLabel ? `<button class="kb-btn" onclick="event.stopPropagation();window.kbMove('${t.id}','${prevCol}')" style="flex:1.4">${prevLabel}</button>` : '<div style="flex:1.4"></div>'}
-        <button class="kb-btn kb-btn-done" onclick="event.stopPropagation();window.kbDone('${t.id}')">✓</button>
-        ${nextLabel ? `<button class="kb-btn" onclick="event.stopPropagation();window.kbMove('${t.id}','${nextCol}')" style="flex:1.4">${nextLabel}</button>` : '<div style="flex:1.4"></div>'}
-      </div>
-      <div class="kb-btn-row">
-        <button class="kb-btn kb-btn-edit" onclick="event.stopPropagation();window.openTaskDetail('${t.id}')">✏️ Открыть</button>
-      </div>
-    </div>`;
+  const quickRow = col.id === 'done' ? `
+      <button class="kb-btn kb-btn-edit" onclick="event.stopPropagation();window.openTaskDetail('${t.id}')">✏️ Открыть</button>
+      <button class="kb-btn" onclick="event.stopPropagation();window.toggleTask('${t.id}')">↩ Вернуть</button>
+    ` : `
+      ${prevCol ? `<button class="kb-btn" title="Назад" onclick="event.stopPropagation();window.kbMove('${t.id}','${prevCol}')">◀</button>` : ''}
+      <button class="kb-btn kb-btn-done" title="Выполнено" onclick="event.stopPropagation();window.kbDone('${t.id}')">✓</button>
+      ${nextCol ? `<button class="kb-btn" title="Вперёд" onclick="event.stopPropagation();window.kbMove('${t.id}','${nextCol}')">▶</button>` : ''}
+      <button class="kb-btn kb-btn-edit" title="Открыть" onclick="event.stopPropagation();window.openTaskDetail('${t.id}')">✏️</button>
+    `;
 
-  return `<div class="kb-card${isExpanded?' kb-expanded':''}" style="color:${qColor}" onclick="window.kbExpand('${t.id}')">
-    <div class="kb-card-text">${t.text}</div>
+  return `<div class="kb-card" style="color:${qColor}" data-task-id="${t.id}" data-col="${col.id}"
+       onclick="window.openTaskDetail('${t.id}')">
+    <div class="kb-card-head">
+      <span class="kb-drag-handle" title="Перетащить">⠿</span>
+      <div class="kb-card-text">${t.text}</div>
+    </div>
     <div class="kb-card-meta">
       ${t.cat ? `<span class="kb-chip" style="background:${catColor}18;color:${catColor};border:1px solid ${catColor}30">${t.cat}</span>` : ''}
       ${deferBadge}${fiBadge}
       <span class="kb-xp">+${t.xpValue || 10} XP</span>
     </div>
-    <div class="kb-actions">${actionsHTML}</div>
+    <div class="kb-quick-row">${quickRow}</div>
   </div>`;
 }
 
@@ -528,6 +606,7 @@ window.toggleTask = function(id) {
 };
 
 window.openTaskDetail = function(id) {
+  if (_kbJustDragged) return; // не открывать деталь сразу после перетаскивания
   const task = DB.getTasks().find(t => t.id === id);
   if (task) openTaskDetail(task, renderTasks);
 };
@@ -545,29 +624,33 @@ window.matrixOpenKanban = function(quad) {
 };
 
 // ── KANBAN handlers ────────────────────────────────────────────────────────
-window.kbExpand = function(id) {
-  kbExpanded = kbExpanded === id ? null : id;
-  // Перерисовываем только kanban без полного сброса экрана
-  if (viewMode === 'kanban') renderTasks();
-};
-
 window.kbMove = function(id, newStatus) {
-  kbExpanded = null;
+  _kbSaveScroll();
   DB.setKanbanStatus(id, newStatus);
   const labels = { inbox:'📥 Входящие', working:'⚡ В работе', waiting:'⏳ Ожидание' };
   window.showToast?.(`${labels[newStatus] || newStatus}`, 'info');
+  TG.hapticImpact('light');
   renderTasks();
 };
 
 window.kbDone = function(id) {
-  kbExpanded = null;
+  _kbSaveScroll();
   const t = DB.getTasks().find(x => x.id === id);
   if (t && !t.done) {
     const result = DB.toggleTask(id);
     onTaskToggled(result);
   }
+  TG.hapticSuccess();
   renderTasks();
 };
+
+// Сохранение горизонтального скролла канбана между ре-рендерами
+let _kbScrollLeft = 0;
+let _kbJustDragged = false;
+function _kbSaveScroll() {
+  const wrap = document.getElementById('kanban-scroll');
+  if (wrap) _kbScrollLeft = wrap.scrollLeft;
+}
 
 
 window.ideaBankRevive = function(id) {
