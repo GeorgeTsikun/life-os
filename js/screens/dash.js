@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=38';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=38';
-import { TG } from '../telegram.js?v=38';
+import { DB } from '../db.js?v=39';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=39';
+import { TG } from '../telegram.js?v=39';
 
 let radarChart, energyChart;
 let _currentQuests = []; // для синхронизации taskId при completeQuest
@@ -44,6 +44,15 @@ export function renderDash() {
   const todayStats = DB.getTodayStats();
 
   const el = document.getElementById('content');
+  const isDesktop = window.matchMedia('(min-width: 1024px)').matches;
+
+  if (isDesktop) {
+    el.innerHTML = десктопныйДашборд({
+      profile, health, tasks, daily, rpg, level, prog, needXp, curXp, mult,
+      doneTasks, динамичныеКвесты, liveQuests, doneQuests,
+      earned, spent, balance, ratio, todayStats, unlockedAchs, photoSrc,
+    });
+  } else {
   el.innerHTML = `<div class="screen">
 
   <!-- ── ГЕРОЙ-КАРТА с фото ────────────────────────────────────────────────── -->
@@ -184,6 +193,7 @@ export function renderDash() {
 
   <div style="height:16px"></div>
 </div>`;
+  }
 
   requestAnimationFrame(() => {
     destroyCharts();
@@ -197,6 +207,132 @@ export function renderDash() {
 
   TG.hideMainButton();
   TG.hideBackButton();
+}
+
+// ── ДЕСКТОП-ДАШБОРД (отдельная раскладка с виджетами) ────────────────────────
+function десктопныйДашборд(p) {
+  const {
+    profile, health, tasks, daily, rpg, level, prog, needXp, curXp, mult,
+    doneTasks, динамичныеКвесты, liveQuests, doneQuests,
+    earned, spent, balance, ratio, todayStats, unlockedAchs, photoSrc,
+  } = p;
+
+  const stat = (i, v, l, c) => `<div class="stat-chip">
+    <div style="font-size:22px;margin-bottom:4px">${i}</div>
+    <div class="num" style="font-size:18px;color:${c}">${v}</div>
+    <div style="font-size:10px;color:rgba(232,237,245,.4);margin-top:2px">${l}</div>
+  </div>`;
+
+  // СОСТОЯНИЕ ГЕРОЯ — радар + шкалы + энергия
+  const heroState = `<div class="card">
+    <div class="sec-label">📊 СОСТОЯНИЕ ГЕРОЯ</div>
+    <div style="width:100%;height:250px;position:relative;margin-top:4px">
+      <canvas id="radar-chart" style="width:100%;height:100%"></canvas>
+    </div>
+    <div style="margin-top:14px">
+      ${RPG_STATS.map(s => {
+        const val = typeof rpg[s.key] === 'number' ? rpg[s.key] : 50;
+        return `<div class="stat-row" style="margin-bottom:7px">
+          <div class="stat-label" style="color:${s.color};font-size:10px;min-width:64px">${s.label}</div>
+          <div class="stat-bar" style="flex:1;height:7px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden;margin:0 8px">
+            <div style="height:100%;width:${val}%;background:${s.color};box-shadow:0 0 6px ${s.color}60;border-radius:4px;transition:width .4s ease"></div>
+          </div>
+          <div style="color:${s.color};font-size:11px;font-weight:700;min-width:24px;text-align:right">${val}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="margin-top:14px">
+      <div style="font-size:9px;color:rgba(232,237,245,.35);letter-spacing:.08em;margin-bottom:6px">⚡ ЭНЕРГИЯ / НЕДЕЛЯ</div>
+      <div style="height:80px;position:relative"><canvas id="energy-chart" style="width:100%;height:100%"></canvas></div>
+    </div>
+  </div>`;
+
+  // КВЕСТЫ ДНЯ
+  const questsCard = `<div class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <div class="sec-label" style="margin:0">⚡ КВЕСТЫ ДНЯ</div>
+      <span style="font-size:10px;color:rgba(232,237,245,.4)">${liveQuests.length} активных · ${doneQuests.length} ✓</span>
+    </div>
+    ${динамичныеКвесты.map(q => `
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer"
+           onclick="window.${q.done ? 'resetQuest' : 'completeQuest'}('${q.id}')">
+        <div style="width:28px;height:28px;border-radius:8px;background:${q.done ? 'rgba(0,245,212,.15)' : 'rgba(255,255,255,.05)'};display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${q.icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:${q.done ? 'rgba(232,237,245,.35)' : '#E8EDF5'};${q.done ? 'text-decoration:line-through' : ''};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${q.title}</div>
+          <div style="font-size:9px;color:rgba(0,245,212,.6);margin-top:1px">${q.done ? '✓ выполнено' : '+' + q.xp + ' XP'}</div>
+        </div>
+        <div style="font-size:18px;flex-shrink:0">${q.done ? '✅' : '⬜'}</div>
+      </div>`).join('')}
+  </div>`;
+
+  // ДОСТИЖЕНИЯ
+  const achCard = unlockedAchs.length > 0 ? `<div class="card">
+    <div class="sec-label">🏆 ДОСТИЖЕНИЯ</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+      ${unlockedAchs.slice(0, 6).map(a => `
+        <div style="background:${a.color}08;border:1px solid ${a.color}22;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px">
+          <span style="font-size:20px">${a.icon}</span>
+          <div style="min-width:0">
+            <div style="font-size:11px;font-weight:600;color:${a.color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.name}</div>
+            <div style="font-size:9px;color:rgba(232,237,245,.3)">✓ Получено</div>
+          </div>
+        </div>`).join('')}
+    </div>
+  </div>` : '';
+
+  return `<div class="screen dd">
+    <!-- ГЕРОЙ-БАННЕР -->
+    <div class="dd-hero">
+      <div class="dd-hero-photo">
+        <img src="${photoSrc}" alt="${profile.name}" onerror="this.style.display='none';this.parentElement.style.background='linear-gradient(135deg,#0a1628,#1a0a2e)'" style="width:100%;height:100%;object-fit:cover;display:block">
+      </div>
+      <div class="dd-hero-info">
+        <div class="num dd-hero-name">${profile.name}</div>
+        <div class="dd-hero-tag">${profile.tagline || 'ВИЗИОНЕР · СОЗДАТЕЛЬ · ЛИДЕР'}</div>
+        <div class="dd-hero-badges">
+          <span class="level-badge" style="border:1px solid rgba(0,245,212,.3);color:#00F5D4;font-weight:800">УР. ${level}</span>
+          <span class="streak-badge"><span class="flame" style="font-size:13px">🔥</span><span class="num" style="color:#FFD700;font-size:13px">${profile.streak || 1}</span><span style="font-size:9px;color:rgba(232,237,245,.6)">страйк${mult ? ' · ' + mult : ''}</span></span>
+          <button onclick="window._openAnalytics()" style="padding:5px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);color:#E8EDF5;font-size:11px;cursor:pointer">📊 Аналитика</button>
+        </div>
+        <div class="row" style="justify-content:space-between;margin:14px 0 5px">
+          <span style="font-size:10px;color:rgba(232,237,245,.5);letter-spacing:.08em">XP · УР.${level}</span>
+          <span class="num" style="font-size:10px;color:#00F5D4">${curXp.toLocaleString()} / ${needXp.toLocaleString()}</span>
+        </div>
+        <div class="xp-bar"><div class="xp-fill" style="width:${(prog * 100).toFixed(1)}%"></div></div>
+      </div>
+      <div class="dd-hero-balance">${renderBalanceBlock(balance, earned, spent, ratio, todayStats)}</div>
+    </div>
+
+    <!-- СТАТЫ -->
+    <div class="dd-stats">
+      ${stat('🌙', (health.sleep?.hours || 7.2) + 'ч', 'Сон', '#7B61FF')}
+      ${stat('⚡', (daily.energy || 7) + '/10', 'Энергия', '#FFD700')}
+      ${stat('✅', `${doneTasks}/${tasks.length}`, 'Задачи', '#00F5D4')}
+      ${stat('🎯', (daily.focus || 2.5) + 'ч', 'Фокус', '#00E396')}
+    </div>
+
+    ${renderQ1Alert(tasks)}
+
+    <!-- 3 КОЛОНКИ ВИДЖЕТОВ -->
+    <div class="dd-grid">
+      <div class="dd-col">
+        ${renderRcBlock(health, profile)}
+        ${heroState}
+      </div>
+      <div class="dd-col">
+        ${renderCheckinBlock(daily)}
+        ${renderTimelineBlock(tasks)}
+        ${renderFocusBlock(tasks, health, profile)}
+      </div>
+      <div class="dd-col">
+        ${questsCard}
+        ${renderInboxBlock()}
+        ${achCard}
+      </div>
+    </div>
+
+    <div style="height:8px"></div>
+  </div>`;
 }
 
 // ── БЛОК ДОФАМИН-БАЛАНСА ─────────────────────────────────────────────────────
