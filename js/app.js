@@ -1,18 +1,18 @@
 // ── LIFE OS — ГЛАВНЫЙ МОДУЛЬ ──────────────────────────────────────────────────
-import { DB } from './db.js?v=35';
-import { injectUI, checkAchievements, onQuestCompleted, applyDebuffMode } from './gamification.js?v=35';
-import { TG } from './telegram.js?v=35';
-import { renderDash }         from './screens/dash.js?v=35';
-import { renderTasks }        from './screens/tasks.js?v=35';
-import { renderHealth }       from './screens/health.js?v=35';
-import { renderProjects }     from './screens/projects.js?v=35';
-import { renderPeople }       from './screens/people.js?v=35';
-import { renderContent }      from './screens/content.js?v=35';
-import { renderAchievements } from './screens/achievements.js?v=35';
-import { renderOnboarding }   from './screens/onboarding.js?v=35';
-import { renderAnalytics }    from './screens/analytics.js?v=35';
-import * as Sync              from './supabaseSync.js?v=35';
-import { openVoiceCapture }  from './voiceCapture.js?v=35';
+import { DB } from './db.js?v=36';
+import { injectUI, checkAchievements, onQuestCompleted, applyDebuffMode } from './gamification.js?v=36';
+import { TG } from './telegram.js?v=36';
+import { renderDash }         from './screens/dash.js?v=36';
+import { renderTasks }        from './screens/tasks.js?v=36';
+import { renderHealth }       from './screens/health.js?v=36';
+import { renderProjects }     from './screens/projects.js?v=36';
+import { renderPeople }       from './screens/people.js?v=36';
+import { renderContent }      from './screens/content.js?v=36';
+import { renderAchievements } from './screens/achievements.js?v=36';
+import { renderOnboarding }   from './screens/onboarding.js?v=36';
+import { renderAnalytics }    from './screens/analytics.js?v=36';
+import * as Sync              from './supabaseSync.js?v=36';
+import { openVoiceCapture }  from './voiceCapture.js?v=36';
 
 // ── ИНИЦИАЛИЗАЦИЯ ─────────────────────────────────────────────────────────────
 const ОНБОРДИНГ_ПРОЙДЕН = localStorage.getItem('lifeos_onboarded') === 'true'
@@ -185,6 +185,8 @@ window.goTab = function(кнопка, таб) {
   уничтожитьВсеГрафики();
   текущийТаб = таб;
   window._текущийТаб = таб; // доступен глобально (для voiceCapture и др.)
+  const _c = document.getElementById('content');
+  if (_c) _c.dataset.tab = таб; // для десктоп-раскладки (CSS per-screen)
   window.ЭКРАНЫ = ЭКРАНЫ;   // доступен глобально
   const фн = ЭКРАНЫ[таб];
   if (фн) фн();
