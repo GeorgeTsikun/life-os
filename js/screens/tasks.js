@@ -1,7 +1,7 @@
 // ── TASKS SCREEN ──────────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=40';
-import { onTaskToggled } from '../gamification.js?v=40';
-import { TG } from '../telegram.js?v=40';
+import { DB } from '../db.js?v=41';
+import { onTaskToggled } from '../gamification.js?v=41';
+import { TG } from '../telegram.js?v=41';
 import { парсДату, бакет, форматДата, БАКЕТЫ_UI, ПОРЯДОК_БАКЕТОВ, вISO } from '../utils/date.js';
 import { openTaskDetail } from './_taskDetail.js';
 
@@ -357,7 +357,8 @@ const KB_COLS = [
 const QUAD_COLOR = { do:'#FF4560', schedule:'#00F5D4', delegate:'#7B61FF', eliminate:'rgba(232,237,245,.3)' };
 
 function renderKanban() {
-  const все   = DB.getTasks();
+  // Применяем фильтр категорий (Все / Работа / Личное / cat:X) — как в виде по датам
+  const все   = applyCatFilter(DB.getTasks());
   const сегодня = new Date().toDateString();
 
   // Распределяем активные по колонкам
