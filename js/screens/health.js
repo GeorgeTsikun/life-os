@@ -1,7 +1,8 @@
 // ── HEALTH SCREEN (Health / Sport / Nutrition sub-tabs) ───────────────────────
-import { DB } from '../db.js?v=43';
-import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=43';
-import { TG } from '../telegram.js?v=43';
+import { DB } from '../db.js?v=44';
+import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=44';
+import { TG } from '../telegram.js?v=44';
+import { PLAN_GOAL, STAGES, DAY_KEYS, DAY_LABELS, stageForWeek, planState, PLAN_WEEKS } from '../data/trainingPlan.js?v=44';
 
 let sleepChart, pulseChart, hrvChart, revenueChart;
 let healthTab = 'health';
@@ -175,7 +176,138 @@ function healthTabHTML() {
 }
 
 // ── SPORT TAB ────────────────────────────────────────────────────────────────
+// ── ПЛАН ТРАНСФОРМАЦИИ (10 недель) ───────────────────────────────────────────
+function transformBlockHTML() {
+  const startStr = localStorage.getItem('lifeos_plan_start') || undefined;
+  const st = planState(startStr);
+  const before = localStorage.getItem('lifeos_body_before') || '';
+  const target = localStorage.getItem('lifeos_body_target') || '';
+  const stage  = stageForWeek(st.week);
+  const stageNum = STAGES.indexOf(stage) + 1;
+
+  const photoSlot = (key, label, src) => `<div class="bp-slot" onclick="window.uploadBodyPhoto('${key}')">
+    ${src ? `<img src="${src}" alt="${label}">` : `<div class="bp-empty"><span style="font-size:26px">📷</span><span style="font-size:10px">Загрузить</span></div>`}
+    <span class="bp-label">${label}</span>
+  </div>`;
+
+  // ── Шапка: цель + фото ───────────────────────────────────────────────────
+  const goalCard = `<div class="card teal" style="margin-bottom:14px">
+    <div class="row" style="justify-content:space-between;margin-bottom:12px">
+      <div class="sec-label" style="margin:0">🎯 ПЛАН ТРАНСФОРМАЦИИ · 10 НЕДЕЛЬ</div>
+      <button onclick="window.openFullPlan()" style="font-size:10px;padding:4px 10px;border-radius:9px;border:1px solid rgba(0,245,212,.3);background:rgba(0,245,212,.06);color:#00F5D4;cursor:pointer">Весь план</button>
+    </div>
+    <div class="bp-photos">
+      ${photoSlot('before', '«До» — сейчас', before)}
+      <div class="bp-arrow">→</div>
+      ${photoSlot('target', 'Цель', target)}
+    </div>
+    <div style="font-size:11px;color:rgba(232,237,245,.6);line-height:1.55;margin-top:12px">${PLAN_GOAL.summary}</div>
+  </div>`;
+
+  // ── Прогресс по неделям ────────────────────────────────────────────────────
+  let statusBlock = '';
+  if (st.status === 'before') {
+    const startDate = st.start.toLocaleDateString('ru-RU', { day:'numeric', month:'long' });
+    statusBlock = `<div class="card gold" style="margin-bottom:14px;text-align:center">
+      <div style="font-size:30px;margin-bottom:6px">🚀</div>
+      <div style="font-size:15px;font-weight:800;color:#F5B942">Старт в понедельник, ${startDate}</div>
+      <div style="font-size:12px;color:rgba(232,237,245,.55);margin-top:4px">Через ${st.daysToStart} ${st.daysToStart===1?'день':'дн.'} — этап 1: «${STAGES[0].name}». Отдохни в выходные, в понедельник погнали.</div>
+    </div>`;
+  } else if (st.status === 'done') {
+    statusBlock = `<div class="card teal" style="margin-bottom:14px;text-align:center">
+      <div style="font-size:30px;margin-bottom:6px">🏆</div>
+      <div style="font-size:15px;font-weight:800;color:#00F5D4">10 недель пройдено!</div>
+      <div style="font-size:12px;color:rgba(232,237,245,.55);margin-top:4px">Сделай финальное фото с пампом и сравни с «До». Загрузи новое фото в слот.</div>
+    </div>`;
+  } else {
+    const pct = Math.round((st.week / PLAN_WEEKS) * 100);
+    statusBlock = `<div class="card" style="margin-bottom:14px">
+      <div class="row" style="justify-content:space-between;margin-bottom:8px">
+        <div><span class="num" style="font-size:18px;color:#00F5D4">Неделя ${st.week}</span><span style="font-size:12px;color:rgba(232,237,245,.4)"> / ${PLAN_WEEKS}</span></div>
+        <span style="font-size:11px;padding:3px 10px;border-radius:10px;background:rgba(124,58,237,.15);color:#9B7CFF;border:1px solid rgba(124,58,237,.3)">Этап ${stageNum}: ${stage.name}</span>
+      </div>
+      <div class="prog-bar" style="height:7px"><div class="prog-fill" style="width:${pct}%;background:linear-gradient(90deg,#00F5D4,#7C3AED)"></div></div>
+      <div style="font-size:10px;color:rgba(232,237,245,.4);margin-top:6px">${stage.subtitle}</div>
+    </div>`;
+  }
+
+  // ── Тренировка дня / превью недели ─────────────────────────────────────────
+  let todayCard = '';
+  const renderDay = (day, dayKey, isToday) => {
+    if (day.rest) {
+      return `<div class="card" style="margin-bottom:14px;text-align:center">
+        <div style="font-size:26px;margin-bottom:4px">${day.emoji}</div>
+        <div style="font-size:14px;font-weight:700;color:#9B7CFF">${isToday?'Сегодня — ':''}${day.title}</div>
+        ${day.note?`<div style="font-size:11px;color:rgba(232,237,245,.5);margin-top:4px">${day.note}</div>`:''}
+      </div>`;
+    }
+    const dateKey = new Date().toISOString().split('T')[0];
+    const doneEx = JSON.parse(localStorage.getItem('lifeos_plan_ex_' + dateKey) || '[]');
+    return `<div class="card" style="margin-bottom:14px;border-left:3px solid ${day.color}">
+      <div class="row" style="justify-content:space-between;margin-bottom:12px">
+        <div>
+          <div style="font-size:10px;color:rgba(232,237,245,.4);letter-spacing:.06em">${isToday?'ТРЕНИРОВКА СЕГОДНЯ':'ТРЕНИРОВКА'}</div>
+          <div style="font-size:15px;font-weight:800;color:${day.color};margin-top:2px">${day.emoji} ${day.title}</div>
+        </div>
+        <span style="font-size:11px;color:rgba(232,237,245,.4)">${day.exercises.length} упр.</span>
+      </div>
+      <div>
+        ${day.exercises.map((e, i) => {
+          const done = doneEx.includes(i);
+          return `<div onclick="window.togglePlanExercise(${i})" style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer">
+            <div class="checkbox${done?' checked':''}" style="${done?`background:${day.color};border-color:${day.color};color:#000`:''}">${done?'✓':''}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;color:${done?'rgba(232,237,245,.4)':'#E8EDF5'};${done?'text-decoration:line-through':''}">${e.n}</div>
+            </div>
+            <div class="num" style="font-size:11px;color:${day.color};flex-shrink:0">${e.s}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <button class="btn btn-teal" style="width:100%;margin-top:14px;padding:12px" onclick="window.completeTodayWorkout('${day.title.replace(/'/g,'')}','${day.emoji}')">✓ Записать тренировку (+XP)</button>
+    </div>`;
+  };
+
+  if (st.status === 'active') {
+    todayCard = renderDay(stage.days[st.dayKey], st.dayKey, true);
+  } else if (st.status === 'before') {
+    todayCard = renderDay(STAGES[0].days.mon, 'mon', false);
+  }
+
+  // ── Сплит недели (мини) ────────────────────────────────────────────────────
+  const todayKey = st.status === 'active' ? st.dayKey : null;
+  const splitCard = `<div class="card" style="margin-bottom:14px">
+    <div class="sec-label">📅 СПЛИТ НЕДЕЛИ · ЭТАП ${stageNum}</div>
+    <div class="plan-split">
+      ${DAY_KEYS.map(k => {
+        const d = stage.days[k];
+        const isToday = k === todayKey;
+        return `<div class="plan-day${isToday?' today':''}" style="${isToday?`border-color:${d.color}88;box-shadow:0 0 14px ${d.color}33`:''}">
+          <div class="plan-day-label">${DAY_LABELS[k]}</div>
+          <div style="font-size:18px;margin:4px 0">${d.emoji}</div>
+          <div class="plan-day-title">${d.rest?'Отдых':d.title.split(' + ')[0].split(' (')[0]}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  // ── Питание под план ───────────────────────────────────────────────────────
+  const nutCard = `<div class="card purple" style="margin-bottom:14px">
+    <div class="sec-label">🍖 ПИТАНИЕ ПОД ПЛАН</div>
+    ${PLAN_GOAL.nutrition.map(n => `<div style="display:flex;gap:10px;align-items:flex-start;padding:6px 0">
+      <span style="font-size:16px;flex-shrink:0">${n.icon}</span>
+      <span style="font-size:12px;color:rgba(232,237,245,.7);line-height:1.5">${n.text}</span>
+    </div>`).join('')}
+  </div>`;
+
+  return `${goalCard}${statusBlock}${todayCard}${splitCard}${nutCard}${sportLegacyHTML()}`;
+}
+
 function sportTabHTML() {
+  return transformBlockHTML();
+}
+
+// Оставшаяся стандартная часть спорта (неделя + последние тренировки)
+function sportLegacyHTML() {
   const workouts = DB.getWorkouts();
   const gymDays  = DB.getGymDays();
   const days     = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
@@ -554,6 +686,80 @@ window.submitWorkout = function() {
   document.getElementById('workout-modal')?.remove();
   onWorkoutLogged(xp);
   renderHealth('sport');
+};
+
+// ── ПЛАН ТРАНСФОРМАЦИИ: обработчики ──────────────────────────────────────────
+window.uploadBodyPhoto = function(key) {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'image/*'; input.style.display = 'none';
+  document.body.appendChild(input);
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0]; input.remove();
+    if (!file) return;
+    const thumb = await downscaleImage(file, 600);
+    try {
+      localStorage.setItem(key === 'before' ? 'lifeos_body_before' : 'lifeos_body_target', thumb || '');
+      window.showToast?.(key === 'before' ? '📷 Фото «До» сохранено' : '🎯 Фото цели сохранено', 'success');
+    } catch { window.showToast?.('Не удалось сохранить фото', 'error'); }
+    renderHealth('sport');
+    TG.hapticSuccess();
+  });
+  input.click();
+};
+
+window.togglePlanExercise = function(idx) {
+  const dateKey = new Date().toISOString().split('T')[0];
+  const k = 'lifeos_plan_ex_' + dateKey;
+  const arr = JSON.parse(localStorage.getItem(k) || '[]');
+  const pos = arr.indexOf(idx);
+  if (pos === -1) arr.push(idx); else arr.splice(pos, 1);
+  localStorage.setItem(k, JSON.stringify(arr));
+  renderHealth('sport');
+  TG.hapticImpact('light');
+};
+
+window.completeTodayWorkout = function(title, emoji) {
+  // Лог тренировки + XP + отметка дня недели
+  const xp = 120;
+  DB.logWorkout({ type: title || 'Тренировка по плану', duration: 50, xp, emoji: emoji || '💪' });
+  onWorkoutLogged(xp);
+  // Отметить сегодняшний день в «неделе тренировок»
+  const dow = new Date().getDay();
+  const idx = dow === 0 ? 6 : dow - 1;
+  const days = DB.getGymDays();
+  days[idx] = true;
+  DB.set('gymDays', days);
+  window.showToast?.(`💪 Тренировка засчитана! +${xp} XP`, 'success');
+  renderHealth('sport');
+  TG.hapticSuccess();
+};
+
+window.openFullPlan = function() {
+  const rows = STAGES.map((s, si) => `
+    <div style="margin-bottom:18px">
+      <div style="font-size:13px;font-weight:800;color:#00F5D4;margin-bottom:2px">Этап ${si+1}: ${s.name}</div>
+      <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:10px">Недели ${s.weeks.join('–')} · ${s.subtitle}</div>
+      ${DAY_KEYS.map(k => {
+        const d = s.days[k];
+        if (d.rest) return `<div style="font-size:11px;color:rgba(232,237,245,.4);padding:4px 0">${DAY_LABELS[k]} · ${d.emoji} Отдых${d.note?' — '+d.note:''}</div>`;
+        return `<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+          <div style="font-size:12px;font-weight:700;color:${d.color};margin-bottom:4px">${DAY_LABELS[k]} · ${d.emoji} ${d.title}</div>
+          ${d.exercises.map(e => `<div style="display:flex;justify-content:space-between;font-size:11px;color:rgba(232,237,245,.6);padding:2px 0"><span>${e.n}</span><span class="num" style="color:rgba(232,237,245,.45);flex-shrink:0;margin-left:10px">${e.s}</span></div>`).join('')}
+        </div>`;
+      }).join('')}
+    </div>`).join('');
+  const div = document.createElement('div');
+  div.className = 'modal-overlay';
+  div.innerHTML = `<div class="modal-sheet" style="max-height:88vh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🗓 Полный план · 10 недель</div>
+    ${PLAN_GOAL.nutrition.map(n=>`<div style="display:flex;gap:8px;font-size:11px;color:rgba(232,237,245,.6);padding:3px 0"><span>${n.icon}</span><span>${n.text}</span></div>`).join('')}
+    <div style="height:14px"></div>
+    ${rows}
+    <button class="btn btn-teal" style="width:100%;margin-top:8px" onclick="this.closest('.modal-overlay').remove()">Понял, погнали 💪</button>
+  </div>`;
+  div.addEventListener('click', e => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
 };
 
 // Снимок воды за сегодня — чтобы аналитика показывала прошлые дни
