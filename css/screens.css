@@ -1,3 +1,80 @@
+/* ── PROJECT OS ──────────────────────────────────────────────────────────── */
+.proj-kpi {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.proj-kpi > .card { margin-bottom: 0; }
+.proj-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.proj-grid > .project-card { margin-bottom: 0; }
+.proj-trio {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+  align-items: start;
+}
+.proj-trio > .card { margin-bottom: 0; }
+
+.proj-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+  margin-bottom: 12px;
+}
+.proj-stats > div { display: flex; justify-content: space-between; font-size: 11px; }
+.proj-stats span { color: rgba(232,237,245,.45); }
+.proj-stats b { color: #E8EDF5; font-family: var(--font-mono); }
+
+.proj-card-actions { display: flex; gap: 6px; }
+.proj-card-actions button {
+  flex: 1;
+  padding: 8px 4px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.04);
+  color: rgba(232,237,245,.7);
+  transition: all .15s;
+}
+.proj-card-actions button:hover { background: rgba(0,245,212,.1); border-color: rgba(0,245,212,.3); color: #00F5D4; }
+
+.radar-tbl { font-size: 11px; overflow-x: auto; }
+.radar-row {
+  display: grid;
+  grid-template-columns: 1.5fr repeat(6, 1fr);
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+  min-width: 320px;
+}
+.radar-row span { text-align: center; font-family: var(--font-mono); font-weight: 700; }
+.radar-row span:first-child { text-align: left; font-family: var(--font-body); font-weight: 600; }
+.radar-head span { font-size: 9px; color: rgba(232,237,245,.4); font-family: var(--font-body); font-weight: 600; }
+
+.fin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+}
+.fin-col {
+  background: var(--surface3);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 12px;
+  padding: 12px;
+}
+.fin-line { display: flex; justify-content: space-between; font-size: 11px; padding: 3px 0; }
+.fin-line span { color: rgba(232,237,245,.45); }
+
 /* ── СПОРТ: план трансформации ───────────────────────────────────────────── */
 .bp-photos {
   display: flex;

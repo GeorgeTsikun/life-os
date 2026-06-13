@@ -139,6 +139,9 @@
     flex-direction: column;
     gap: 18px;
   }
+
+  /* Project OS управляет раскладкой сам (внутренние grid-блоки) */
+  #content[data-tab="projects"] .screen.proj-os { display: block; }
   .screen.dd > * { margin-bottom: 0 !important; }
 
   /* Герой-баннер: фото слева, инфо в центре, дофамин-баланс справа */
