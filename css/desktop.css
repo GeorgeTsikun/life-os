@@ -94,43 +94,80 @@
     font-size: 22px !important;
   }
 
-  /* ── MASONRY: карточки в 2-3 колонки ────────────────────────────────────── */
-  /* В колонки уходят ТОЛЬКО карточки-контента. Всё остальное (заголовки,
-     фильтры, доски, сфера, переключатели) — на всю ширину. Это надёжно для
-     любого экрана, т.к. не зависит от точной структуры разметки. */
+  /* ── CSS GRID: карточки в 2 колонки (стабильно, без наложений) ──────────── */
+  /* column-count рвал контент и накладывал блоки + ломал Chart.js. Grid не
+     фрагментирует элементы — каждый блок целостен, ничего не «скачет». */
   #content[data-tab="dash"] .screen,
   #content[data-tab="projects"] .screen,
   #content[data-tab="people"] .screen,
   #content[data-tab="content"] .screen,
   #content[data-tab="health"] .screen,
   #content[data-tab="tasks"] .screen {
-    column-count: 2;
-    column-gap: 20px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    align-items: start;
+    grid-auto-flow: row dense;
   }
 
-  /* Карточки-контента — флоу по колонкам, без разрыва */
+  /* Карточки занимают свою ячейку; собственный margin убираем — отступы через gap */
   #content[data-tab] .screen > .card,
   #content[data-tab] .screen > .grid2,
   #content[data-tab] .screen > .grid3 {
-    break-inside: avoid;
-    -webkit-column-break-inside: avoid;
-    margin-bottom: 20px;
+    margin-bottom: 0 !important;
+    align-self: start;
   }
 
-  /* Всё, что НЕ карточка — на всю ширину контента (заголовки, фильтры, доски) */
+  /* Всё, что НЕ карточка (заголовки, фильтры, доски, баннер, сфера) — на всю ширину */
   #content[data-tab] .screen > *:not(.card):not(.grid2):not(.grid3) {
-    column-span: all;
-    -webkit-column-span: all;
+    grid-column: 1 / -1;
+    margin-bottom: 0 !important;
   }
 
-  /* ── КАРТОЧКИ: hover-эффект ──────────────────────────────────────────────── */
+  /* Доски и матрица — всегда на всю ширину */
+  #content .screen > .kanban-wrap,
+  #content .screen > .quadrant-grid {
+    grid-column: 1 / -1;
+  }
+
+  /* ── ГЕРОЙ-БАННЕР: компактнее, не гигантское фото ───────────────────────── */
+  #content[data-tab="dash"] .screen > .hero-card {
+    grid-column: 1 / -1;
+  }
+  /* Фото-блок героя: вместо квадрата 16:10 — узкий баннер */
+  .hero-card > div:first-child {
+    aspect-ratio: auto !important;
+    height: 188px !important;
+  }
+  .hero-card:hover { transform: none; }   /* баннер не «подпрыгивает» */
+
+  /* ── КАРТОЧКИ: мягкий hover (без сдвига — чтобы ничего не «прыгало») ──────── */
   .card {
-    transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+    transition: box-shadow .18s ease, border-color .18s ease;
   }
   .card:hover {
-    transform: translateY(-3px);
     border-color: rgba(0,245,212,.22);
-    box-shadow: 0 10px 34px rgba(0,0,0,.4), 0 0 0 1px rgba(0,245,212,.06);
+    box-shadow: 0 6px 26px rgba(0,0,0,.35), inset 0 0 0 1px rgba(0,245,212,.08);
+  }
+
+  /* ── ПЕРЕХОДЫ МЕЖДУ ЭКРАНАМИ ─────────────────────────────────────────────── */
+  #content .screen {
+    animation: deskScreenIn .34s cubic-bezier(.22,.9,.3,1) both;
+  }
+  @keyframes deskScreenIn {
+    from { opacity: 0; transform: translateY(14px) scale(.992); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  /* Карточки появляются каскадом */
+  #content .screen > .card { animation: deskCardIn .4s ease both; }
+  #content .screen > .card:nth-child(2) { animation-delay: .03s; }
+  #content .screen > .card:nth-child(3) { animation-delay: .06s; }
+  #content .screen > .card:nth-child(4) { animation-delay: .09s; }
+  #content .screen > .card:nth-child(5) { animation-delay: .12s; }
+  #content .screen > .card:nth-child(n+6) { animation-delay: .15s; }
+  @keyframes deskCardIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
 
   /* ── КНОПКИ: hover ───────────────────────────────────────────────────────── */
@@ -236,11 +273,10 @@
 
 /* ── ОЧЕНЬ ШИРОКИЙ ЭКРАН: 3 колонки карточек ──────────────────────────────── */
 @media (min-width: 1500px) {
-  #content[data-tab="dash"] .screen,
   #content[data-tab="projects"] .screen,
   #content[data-tab="people"] .screen,
   #content[data-tab="content"] .screen,
   #content[data-tab="health"] .screen {
-    column-count: 3;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
