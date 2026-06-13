@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=39';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=39';
-import { TG } from '../telegram.js?v=39';
+import { DB } from '../db.js?v=40';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=40';
+import { TG } from '../telegram.js?v=40';
 
 let radarChart, energyChart;
 let _currentQuests = []; // для синхронизации taskId при completeQuest
@@ -25,13 +25,9 @@ export function renderDash() {
   const unlockedAchs = achs.filter(a => a.unlocked);
 
   const photoSrc  = profile.photo || 'assets/avatar.jpg';
-  // Динамические квесты — привязываем первый к реальной Q1-задаче
-  const q1Tasks = tasks.filter(t => !t.done && t.quadrant === 'do');
-  const topQ1 = q1Tasks[0];
-  const динамичныеКвесты = DB.getQuests().map((q, i) => {
-    if (i === 0 && topQ1) return { ...q, title: topQ1.text, xp: topQ1.xpValue || 20, taskId: topQ1.id };
-    return q;
-  });
+  // Квесты дня — самостоятельные ежедневные привычки (НЕ подменяем на задачи,
+  // иначе задача дублируется и в «Квестах», и в «Фокусе»). Задачи живут в Фокусе.
+  const динамичныеКвесты = DB.getQuests();
   _currentQuests = динамичныеКвесты; // сохраняем для completeQuest
   const liveQuests = динамичныеКвесты.filter(q => !q.done);
   const doneQuests = динамичныеКвесты.filter(q => q.done);
