@@ -113,13 +113,15 @@
   /* Карточки занимают свою ячейку; собственный margin убираем — отступы через gap */
   #content[data-tab] .screen > .card,
   #content[data-tab] .screen > .grid2,
-  #content[data-tab] .screen > .grid3 {
+  #content[data-tab] .screen > .grid3,
+  #content[data-tab] .screen > .project-card,
+  #content[data-tab] .screen > .person-card {
     margin-bottom: 0 !important;
     align-self: start;
   }
 
   /* Всё, что НЕ карточка (заголовки, фильтры, доски, баннер, сфера) — на всю ширину */
-  #content[data-tab] .screen > *:not(.card):not(.grid2):not(.grid3) {
+  #content[data-tab] .screen > *:not(.card):not(.grid2):not(.grid3):not(.project-card):not(.person-card) {
     grid-column: 1 / -1;
     margin-bottom: 0 !important;
   }
@@ -245,6 +247,53 @@
     box-shadow: 0 24px 80px rgba(0,0,0,.6);
   }
   .modal-handle { display: none; }   /* «ручка» снизу не нужна для центр-диалога */
+
+  /* ── ДЕСКТОП-КАРТОЧКИ: ПРОЕКТЫ ───────────────────────────────────────────── */
+  .project-card {
+    padding: 20px;
+    border-radius: var(--radius-lg);
+    position: relative;
+    overflow: hidden;
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+  /* Цветная полоса-акцент сверху берётся из прогресс-бара проекта (inline color) */
+  .project-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, rgba(0,245,212,.7), rgba(123,97,255,.5));
+    opacity: .8;
+  }
+  .project-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(0,245,212,.3);
+    box-shadow: 0 14px 40px rgba(0,0,0,.45), 0 0 0 1px rgba(0,245,212,.1);
+  }
+  .project-card:active { transform: translateY(-2px) scale(.995); }
+  /* Эмодзи проекта крупнее */
+  .project-card .row .num,
+  .project-card [style*="font-size:24px"],
+  .project-card [style*="font-size:26px"] { font-size: 30px !important; }
+
+  /* ── ДЕСКТОП-КАРТОЧКИ: ЛЮДИ ──────────────────────────────────────────────── */
+  .person-card {
+    padding: 18px;
+    border-radius: var(--radius-lg);
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+  .person-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 14px 40px rgba(0,0,0,.45), 0 0 0 1px rgba(0,245,212,.08);
+  }
+  .person-card:active { transform: translateY(-2px) scale(.995); }
+  /* Аватар крупнее на десктопе */
+  .person-card .person-avatar {
+    width: 54px;
+    height: 54px;
+    font-size: 28px;
+    border-radius: 16px;
+  }
 
   /* ── FAB: крупнее, ярче ──────────────────────────────────────────────────── */
   #fab {
