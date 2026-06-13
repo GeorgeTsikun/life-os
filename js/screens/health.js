@@ -1,7 +1,7 @@
 // ── HEALTH SCREEN (Health / Sport / Nutrition sub-tabs) ───────────────────────
-import { DB } from '../db.js?v=41';
-import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=41';
-import { TG } from '../telegram.js?v=41';
+import { DB } from '../db.js?v=42';
+import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=42';
+import { TG } from '../telegram.js?v=42';
 
 let sleepChart, pulseChart, hrvChart, revenueChart;
 let healthTab = 'health';

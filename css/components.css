@@ -1,21 +1,36 @@
-/* ── CARDS ───────────────────────────────────────────────────────────────── */
+/* ── CARDS (премиальная карточка: глубина + мягкое стекло) ────────────────── */
 .card {
-  background: var(--surface);
+  position: relative;
+  background:
+    linear-gradient(165deg, var(--surface2) 0%, var(--surface) 100%);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 14px;
-  margin-bottom: 12px;
-  transition: border-color .2s;
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 14px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04), var(--shadow-card);
+  transition: border-color .2s, box-shadow .2s, transform .16s ease;
 }
 
-.card.gold   { border-color: var(--border-gold); background: rgba(255,215,0,.03); }
-.card.purple { border-color: var(--border-purple); background: rgba(123,97,255,.04); }
-.card.teal   { border-color: var(--border-teal); background: rgba(0,245,212,.03); }
+/* Тонкая верхняя «блик-линия» — премиальная деталь */
+.card::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent);
+  pointer-events: none;
+}
 
-.card.accent-red    { border-top: 2px solid var(--red); }
-.card.accent-teal   { border-top: 2px solid var(--teal); }
-.card.accent-violet { border-top: 2px solid var(--purple); }
-.card.accent-gray   { border-top: 2px solid rgba(232,237,245,.18); }
+.card.gold   { border-color: var(--border-gold);   box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 10px 30px rgba(0,0,0,.35), 0 0 0 1px rgba(245,185,66,.06); }
+.card.purple { border-color: var(--border-purple); box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 10px 30px rgba(0,0,0,.35), 0 0 0 1px rgba(124,58,237,.08); }
+.card.teal   { border-color: var(--border-teal);   box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 10px 30px rgba(0,0,0,.35), 0 0 0 1px rgba(0,245,212,.08); }
+
+/* Цветной акцент-кант слева (вместо тонкой полоски сверху — заметнее, премиальнее) */
+.card.accent-red    { border-left: 3px solid var(--red); }
+.card.accent-teal   { border-left: 3px solid var(--teal); }
+.card.accent-violet { border-left: 3px solid var(--purple); }
+.card.accent-gray   { border-left: 3px solid rgba(232,237,245,.18); }
 
 /* ── LABELS ──────────────────────────────────────────────────────────────── */
 .sec-label {
@@ -73,11 +88,12 @@
 
 /* ── STAT CHIP ───────────────────────────────────────────────────────────── */
 .stat-chip {
-  background: var(--surface);
+  background: linear-gradient(165deg, var(--surface2), var(--surface));
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 10px 6px;
   text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
 }
 
 /* ── TASK ITEM ───────────────────────────────────────────────────────────── */
@@ -119,7 +135,8 @@
   background: var(--teal);
   border-color: var(--teal);
   color: #000;
-  animation: questComplete .3s ease;
+  box-shadow: 0 0 12px rgba(0,245,212,.55);
+  animation: checkFlash .45s ease-out;
 }
 
 /* ── LEVEL BADGE ─────────────────────────────────────────────────────────── */
