@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=32';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=32';
-import { TG } from '../telegram.js?v=32';
+import { DB } from '../db.js?v=33';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=33';
+import { TG } from '../telegram.js?v=33';
 
 let radarChart, energyChart;
 let _currentQuests = []; // для синхронизации taskId при completeQuest
@@ -129,6 +129,9 @@ export function renderDash() {
         <div style="font-size:18px;flex-shrink:0">${q.done ? '✅' : '⬜'}</div>
       </div>`).join('')}
   </div>
+
+  <!-- ── РАСПИСАНИЕ ДНЯ (таймлайн) ─────────────────────────────────────────── -->
+  ${renderTimelineBlock(tasks)}
 
   <!-- ── ФОКУС ДНЯ ──────────────────────────────────────────────────────────── -->
   ${renderFocusBlock(tasks, health, profile)}
@@ -620,6 +623,62 @@ function renderRcBlock(health, profile) {
 const WORK_CATS  = new Set(['Работа','Контент','Эксперименты','Стратегия','Обучение','Деньги','Бизнес','Клуб','Операционка','Привлечение клиентов','Развитие','Эффективность']);
 const LIFE_CATS  = new Set(['Семья','Встречи','Быт','Здоровье','Chill','Личное','Личные дела','Домашние дела']);
 const ALL_CATS   = ['Работа','Контент','Эксперименты','Семья','Встречи','Быт','Стратегия','Обучение','Деньги','Здоровье','Chill','Личное'];
+
+// ── РАСПИСАНИЕ ДНЯ (таймлайн) ─────────────────────────────────────────────────
+function renderTimelineBlock(allTasks) {
+  // Локальная дата сегодня (YYYY-MM-DD по местному времени, не UTC)
+  const сейчас = new Date();
+  const ло = n => String(n).padStart(2, '0');
+  const сегодняСтр = `${сейчас.getFullYear()}-${ло(сейчас.getMonth()+1)}-${ло(сейчас.getDate())}`;
+
+  // Задачи на сегодня с конкретным временем (start_iso содержит 'T...')
+  const сВременем = allTasks
+    .filter(t => !t.done && !t.cancelled && t.start_iso && t.start_iso.includes('T'))
+    .map(t => {
+      const d = new Date(t.start_iso);
+      return { ...t, _d: d, _date: t.start_iso.split('T')[0] };
+    })
+    .filter(t => t._date === сегодняСтр && !isNaN(t._d.getTime()))
+    .sort((a, b) => a._d - b._d);
+
+  // Если на сегодня нет задач с временем — блок не показываем
+  if (сВременем.length === 0) return '';
+
+  const иконкаКв = { do:'⚡', schedule:'🏔️', delegate:'⚙️', eliminate:'🌀' };
+  const цветКв   = { do:'#FF4560', schedule:'#00F5D4', delegate:'#7B61FF', eliminate:'rgba(232,237,245,.4)' };
+  const сейчасTS = сейчас.getTime();
+
+  // Ближайшая будущая задача — подсветим
+  const ближайшая = сВременем.find(t => t._d.getTime() > сейчасTS);
+
+  return `<div class="card" style="margin-bottom:12px">
+    <div class="row" style="justify-content:space-between;margin-bottom:12px">
+      <div class="sec-label" style="margin:0">🗓️ РАСПИСАНИЕ ДНЯ</div>
+      <span style="font-size:10px;color:rgba(232,237,245,.4)">${сВременем.length} по времени</span>
+    </div>
+    <div style="position:relative;padding-left:6px">
+      ${сВременем.map(t => {
+        const прошло  = t._d.getTime() < сейчасTS;
+        const текущая = ближайшая && t.id === ближайшая.id;
+        const цвет    = цветКв[t.quadrant] || '#00F5D4';
+        const время   = t._d.toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
+        return `<div onclick="window.openTaskDetail?.('${t.id}')" style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;cursor:pointer;opacity:${прошло ? '.4' : '1'}">
+          <div style="flex-shrink:0;width:42px;text-align:right">
+            <div class="num" style="font-size:12px;font-weight:700;color:${текущая ? цвет : 'rgba(232,237,245,.7)'}">${время}</div>
+          </div>
+          <div style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;padding-top:2px">
+            <div style="width:10px;height:10px;border-radius:50%;background:${текущая ? цвет : 'transparent'};border:2px solid ${цвет};box-shadow:${текущая ? `0 0 8px ${цвет}` : 'none'}"></div>
+            <div style="width:2px;flex:1;min-height:14px;background:rgba(255,255,255,.08);margin-top:2px"></div>
+          </div>
+          <div style="flex:1;min-width:0;padding-bottom:2px">
+            <div style="font-size:12px;font-weight:600;color:#E8EDF5;${прошло ? 'text-decoration:line-through' : ''}">${иконкаКв[t.quadrant] || '📋'} ${t.text}</div>
+            <div style="font-size:9px;color:rgba(232,237,245,.4);margin-top:2px">${t.cat || ''}${t.duration_min ? ` · ${t.duration_min} мин` : ''}${текущая ? ' · 🔜 ближайшая' : прошло ? ' · прошло' : ''}</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
 
 // ── ФОКУС ДНЯ ────────────────────────────────────────────────────────────────
 function renderFocusBlock(allTasks, health, profile) {

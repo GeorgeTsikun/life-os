@@ -40,7 +40,160 @@ export function запуститьРасписание({ bot, supa, openai, owne
       .catch(err => console.error('[cron 21:00]', err.message));
   }, { timezone: 'Europe/Moscow' });
 
-  console.log('[cron] ✅ Расписание запущено: брифинг 08:00 + чекин 21:00 Europe/Moscow');
+  // ⏰ НАПОМИНАНИЯ ПО ВРЕМЕНИ — каждые 5 минут сканируем задачи с конкретным временем
+  cron.schedule('*/5 * * * *', () => {
+    сканироватьНапоминания({ bot, supa, ownerTgId, безКэша })
+      .catch(err => console.error('[cron reminders]', err.message));
+  }, { timezone: 'Europe/Moscow' });
+
+  // 🤖 ПРОАКТИВНЫЕ ВОПРОСЫ — Вт и Пт в 12:00: бот сам спрашивает про застрявшее
+  cron.schedule('0 12 * * 2,5', () => {
+    проактивныйВопрос({ bot, supa, openai, ownerTgId, безКэша, ДИРЕКТОР_ПРОМТ })
+      .catch(err => console.error('[cron proactive]', err.message));
+  }, { timezone: 'Europe/Moscow' });
+
+  console.log('[cron] ✅ Расписание: брифинг 08:00 · чекин 21:00 · напоминания /5мин · проактив Вт/Пт 12:00');
+}
+
+// ── ⏰ НАПОМИНАНИЯ ПО ВРЕМЕНИ ──────────────────────────────────────────────────
+// Раз в 5 мин ищем задачи, у которых start_iso в ближайшие ~15 мин, и пингуем.
+// Дедуп — in-memory Set (сбрасывается при рестарте процесса, это ок).
+const _напомнено = new Set();
+
+async function сканироватьНапоминания({ bot, supa, ownerTgId, безКэша }) {
+  if (!supa) return;
+
+  const сегодня = сегодняМосква();
+  // Берём незакрытые задачи на сегодня с конкретным временем
+  const { data: задачи } = await supa.from('tasks')
+    .select('id,text,quadrant,cat,start_iso,due_date')
+    .eq('owner', 'george')
+    .eq('done', false)
+    .eq('cancelled', false)
+    .not('start_iso', 'is', null)
+    .limit(50);
+
+  if (!задачи?.length) return;
+
+  const сейчасTS = Date.now();
+  for (const з of задачи) {
+    if (!з.start_iso || !з.start_iso.includes('T')) continue; // только задачи с временем
+    if (_напомнено.has(з.id)) continue;
+
+    // start_iso трактуем как московское локальное время
+    const isoСTZ = /[zZ]|[+\-]\d{2}:\d{2}$/.test(з.start_iso) ? з.start_iso : з.start_iso + '+03:00';
+    const startTS = new Date(isoСTZ).getTime();
+    if (isNaN(startTS)) continue;
+
+    const доНачалаМин = (startTS - сейчасTS) / 60000;
+    // Окно: напоминаем в промежутке [0, 15] минут до начала
+    if (доНачалаМин > 0 && доНачалаМин <= 15) {
+      _напомнено.add(з.id);
+      const иконка = { do:'⚡', schedule:'🏔️', delegate:'⚙️', eliminate:'🌀' }[з.quadrant] || '📋';
+      const время = new Date(startTS).toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit', timeZone:'Europe/Moscow' });
+      const мин = Math.round(доНачалаМин);
+
+      const клав = new InlineKeyboard()
+        .text('✅ Сделал', `defer:${з.id}:done`)
+        .text('⏭ Перенести', `defer:${з.id}:tomorrow`).row()
+        .webApp('🔍 Открыть', безКэша());
+
+      await bot.api.sendMessage(ownerTgId,
+        `⏰ *Через ${мин} мин* (${время})\n${иконка} *${з.text}*\n_${з.cat || '—'}_`,
+        { parse_mode: 'Markdown', reply_markup: клав }
+      ).catch(e => console.warn('[reminder send]', e.message));
+      console.log(`[reminder] ✓ ${з.text} (через ${мин}мин)`);
+    }
+  }
+}
+
+// ── 🤖 ПРОАКТИВНЫЙ ВОПРОС ─────────────────────────────────────────────────────
+// Бот сам инициирует разговор: смотрит застрявшие проекты, давно не тронутые
+// задачи, горящие ожидания — и задаёт ОДИН точный вопрос голосом директора.
+async function проактивныйВопрос({ bot, supa, openai, ownerTgId, безКэша, ДИРЕКТОР_ПРОМТ }) {
+  if (!supa) return;
+
+  const сегодня = сегодняМосква();
+
+  // 1. Проекты (которые двигаются медленно / давно без апдейта)
+  const { data: проекты } = await supa.from('projects')
+    .select('name,progress,stage,current,target,updated_at')
+    .eq('owner', 'george')
+    .order('progress', { ascending: true })
+    .limit(10);
+
+  // 2. Задачи, перенесённые 2+ раза (избегание) или давно просроченные
+  const { data: застрявшие } = await supa.from('tasks')
+    .select('text,defer_count,due_date,quadrant')
+    .eq('owner', 'george')
+    .eq('done', false)
+    .eq('cancelled', false)
+    .gte('defer_count', 2)
+    .order('defer_count', { ascending: false })
+    .limit(5);
+
+  // 3. Ожидания на грани/просроченные
+  const { data: ожидания } = await supa.from('expectations')
+    .select('what,owner_name,deadline')
+    .eq('owner', 'george')
+    .eq('status', 'pending')
+    .order('deadline', { ascending: true })
+    .limit(5)
+    .catch(() => ({ data: [] }));
+
+  const проектыТекст = (проекты || [])
+    .map(p => `• ${p.name}: ${p.progress}% (${p.stage || '—'})`)
+    .join('\n') || 'нет проектов';
+  const застрявшиеТекст = (застрявшие || [])
+    .map(t => `• "${t.text}" — перенесена ${t.defer_count}×`)
+    .join('\n') || 'нет';
+  const ожиданияТекст = (ожидания || [])
+    .map(o => `• ${o.what} ← ${o.owner_name || '?'} (до ${o.deadline || '?'})`)
+    .join('\n') || 'нет';
+
+  let вопрос = '';
+  if (openai) {
+    try {
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: ДИРЕКТОР_ПРОМТ },
+          { role: 'system', content:
+            `Сегодня ${сегодня}. Ты сам инициируешь разговор (НЕ отвечаешь — спрашиваешь).\n\n` +
+            `СОСТОЯНИЕ ПРОЕКТОВ:\n${проектыТекст}\n\n` +
+            `ЗАСТРЯВШИЕ ЗАДАЧИ (избегание):\n${застрявшиеТекст}\n\n` +
+            `ГОРЯЩИЕ ОЖИДАНИЯ:\n${ожиданияТекст}\n\n` +
+            `Задай ОДИН точный, неудобный вопрос про самое застрявшее. Например про проект ` +
+            `с низким прогрессом или задачу, которую переносят. Коротко (1-2 строки), как директор ` +
+            `самому себе. Не перечисляй всё — выбери ОДНО самое важное. Жди голосовой ответ.`
+          },
+          { role: 'user', content: 'Что спросить?' },
+        ],
+        temperature: 0.8,
+        max_tokens: 160,
+      });
+      вопрос = completion.choices[0].message.content;
+    } catch (err) {
+      console.error('[proactive] GPT:', err.message);
+    }
+  }
+
+  if (!вопрос) {
+    // Fallback без GPT — берём проект с минимальным прогрессом
+    const топ = (проекты || [])[0];
+    вопрос = топ
+      ? `🤔 *${топ.name}* застрял на ${топ.progress}%. Что мешает двинуть его дальше?`
+      : 'Как продвигаются твои проекты? Расскажи голосом — раскидаю по задачам.';
+  }
+
+  const клав = new InlineKeyboard()
+    .text('🎙️ Ответить голосом', 'proactive:voice').row()
+    .webApp('📊 Открыть проекты', безКэша('?tab=projects'));
+
+  await bot.api.sendMessage(ownerTgId, `🤖 ${вопрос}`,
+    { parse_mode: 'Markdown', reply_markup: клав }
+  ).catch(e => console.warn('[proactive send]', e.message));
+  console.log('[proactive] ✓ вопрос отправлен');
 }
 
 // ── УТРЕННИЙ БРИФИНГ (авто в 8:00) ───────────────────────────────────────────
@@ -461,5 +614,11 @@ export function зарегистрироватьОбработчики({ bot, su
   bot.callbackQuery('checkin:voice', async (ctx) => {
     await ctx.answerCallbackQuery();
     await ctx.reply('🎙️ Жду голосовое — расскажи как прошёл день.');
+  });
+
+  // Ответ на проактивный вопрос
+  bot.callbackQuery('proactive:voice', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.reply('🎙️ Давай — расскажи голосом что происходит. Раскидаю по задачам и обновлю проекты.');
   });
 }
