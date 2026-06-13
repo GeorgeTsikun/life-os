@@ -1,7 +1,7 @@
 // ── TASKS SCREEN ──────────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=33';
-import { onTaskToggled } from '../gamification.js?v=33';
-import { TG } from '../telegram.js?v=33';
+import { DB } from '../db.js?v=34';
+import { onTaskToggled } from '../gamification.js?v=34';
+import { TG } from '../telegram.js?v=34';
 import { парсДату, бакет, форматДата, БАКЕТЫ_UI, ПОРЯДОК_БАКЕТОВ, вISO } from '../utils/date.js';
 import { openTaskDetail } from './_taskDetail.js';
 
@@ -747,14 +747,19 @@ window.submitAddTask = async function() {
 
   // ⚠️ КРИТИЧНО: конвертируем 'завтра'/'сегодня'/etc в реальный ISO, иначе задача зависнет навечно
   const parsedDate = парсДату(финальноеВремя);
-  const isoDate    = parsedDate ? вISO(parsedDate) : null;
+  const isoFull    = parsedDate ? вISO(parsedDate) : null;
+  const isoDate    = isoFull ? isoFull.split('T')[0] : null;
+  // Если в тексте указано конкретное время (есть HH:MM) — пишем start_iso для таймлайна и Google Calendar
+  const естьВремя  = /\d{1,2}:\d{2}/.test(финальноеВремя);
+  const startIso   = (естьВремя && parsedDate) ? вISO(parsedDate) : null;
 
   const finalQuad = quad === 'auto' ? 'schedule' : quad;
   DB.addTask({
     text,
     cat:        cat === 'auto' ? 'Работа' : cat,
     time:       финальноеВремя,   // human-readable для отображения
-    due_date:   isoDate,           // реальная дата — не меняется со временем
+    due_date:   isoDate,           // реальная дата (YYYY-MM-DD) — не меняется со временем
+    start_iso:  startIso,          // ISO с временем — только если время указано
     quadrant:   finalQuad,
     difficulty: finalQuad === 'do' ? 3 : 2,
   });

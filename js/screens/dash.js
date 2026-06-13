@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=33';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=33';
-import { TG } from '../telegram.js?v=33';
+import { DB } from '../db.js?v=34';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=34';
+import { TG } from '../telegram.js?v=34';
 
 let radarChart, energyChart;
 let _currentQuests = []; // для синхронизации taskId при completeQuest
@@ -636,9 +636,11 @@ function renderTimelineBlock(allTasks) {
     .filter(t => !t.done && !t.cancelled && t.start_iso && t.start_iso.includes('T'))
     .map(t => {
       const d = new Date(t.start_iso);
-      return { ...t, _d: d, _date: t.start_iso.split('T')[0] };
+      // Локальная дата задачи (а не UTC-split) — чтобы вечерние задачи не уезжали на день
+      const локДата = isNaN(d.getTime()) ? '' : `${d.getFullYear()}-${ло(d.getMonth()+1)}-${ло(d.getDate())}`;
+      return { ...t, _d: d, _date: локДата };
     })
-    .filter(t => t._date === сегодняСтр && !isNaN(t._d.getTime()))
+    .filter(t => t._date === сегодняСтр)
     .sort((a, b) => a._d - b._d);
 
   // Если на сегодня нет задач с временем — блок не показываем
