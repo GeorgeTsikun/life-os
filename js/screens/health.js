@@ -1,8 +1,8 @@
 // ── HEALTH SCREEN (Health / Sport / Nutrition sub-tabs) ───────────────────────
-import { DB } from '../db.js?v=44';
-import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=44';
-import { TG } from '../telegram.js?v=44';
-import { PLAN_GOAL, STAGES, DAY_KEYS, DAY_LABELS, stageForWeek, planState, PLAN_WEEKS } from '../data/trainingPlan.js?v=44';
+import { DB } from '../db.js?v=45';
+import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=45';
+import { TG } from '../telegram.js?v=45';
+import { PLAN_GOAL, STAGES, DAY_KEYS, DAY_LABELS, stageForWeek, planState, PLAN_WEEKS } from '../data/trainingPlan.js?v=45';
 
 let sleepChart, pulseChart, hrvChart, revenueChart;
 let healthTab = 'health';
@@ -273,20 +273,43 @@ function transformBlockHTML() {
     todayCard = renderDay(STAGES[0].days.mon, 'mon', false);
   }
 
-  // ── Сплит недели (мини) ────────────────────────────────────────────────────
+  // ── Неделя тренировок — карточки дней с иконками (по сплиту этапа) ──────────
   const todayKey = st.status === 'active' ? st.dayKey : null;
+  const gymDays  = DB.getGymDays();
+  const workouts = DB.getWorkouts();
+  const monthCount = workouts.filter(w => { const d = new Date(w.date); return d.getMonth() === new Date().getMonth(); }).length;
+
+  const dayShort = (d) => d.rest ? 'ОТДЫХ'
+    : d.title.split(/[+(·]/)[0].trim().toUpperCase();
+  const dayDur = (d) => d.rest ? '—'
+    : /кардио|плаван|сапборд|топка|велосипед/i.test(d.title) ? '45 мин' : '55 мин';
+
   const splitCard = `<div class="card" style="margin-bottom:14px">
-    <div class="sec-label">📅 СПЛИТ НЕДЕЛИ · ЭТАП ${stageNum}</div>
-    <div class="plan-split">
-      ${DAY_KEYS.map(k => {
+    <div class="row" style="justify-content:space-between;margin-bottom:14px">
+      <div class="sec-label" style="margin:0">💪 НЕДЕЛЯ ТРЕНИРОВОК · ЭТАП ${stageNum}</div>
+    </div>
+    <div class="wk-grid">
+      ${DAY_KEYS.map((k, i) => {
         const d = stage.days[k];
         const isToday = k === todayKey;
-        return `<div class="plan-day${isToday?' today':''}" style="${isToday?`border-color:${d.color}88;box-shadow:0 0 14px ${d.color}33`:''}">
-          <div class="plan-day-label">${DAY_LABELS[k]}</div>
-          <div style="font-size:18px;margin:4px 0">${d.emoji}</div>
-          <div class="plan-day-title">${d.rest?'Отдых':d.title.split(' + ')[0].split(' (')[0]}</div>
+        const done = !!gymDays[i];
+        return `<div class="wk-day${isToday?' today':''}${done?' done':''}" style="${isToday?`border-color:${d.color}aa;box-shadow:0 0 16px ${d.color}3a`:''}">
+          <div class="wk-day-label">${DAY_LABELS[k]}</div>
+          <div class="wk-day-icon" style="${d.rest?'opacity:.4':''}">${d.emoji}</div>
+          <div class="wk-day-type" style="color:${d.rest?'rgba(232,237,245,.4)':d.color}">${dayShort(d)}</div>
+          <div class="wk-day-dur">${dayDur(d)}</div>
+          ${d.rest
+            ? `<div class="wk-check rest">—</div>`
+            : `<button class="wk-check${done?' done':''}" onclick="event.stopPropagation();window.toggleGymDay(${i})" style="${done?`background:${d.color};border-color:${d.color};color:#031`:''}">${done?'✓':''}</button>`}
         </div>`;
       }).join('')}
+    </div>
+    <div style="margin-top:14px">
+      <div class="row" style="justify-content:space-between;margin-bottom:5px">
+        <span style="font-size:11px;color:rgba(232,237,245,.45)">Месяц: ${monthCount} тренировок</span>
+        <span style="font-size:11px;color:#00F5D4">цель 16</span>
+      </div>
+      <div class="prog-bar"><div class="prog-fill" style="width:${Math.min((monthCount/16)*100,100)}%;background:linear-gradient(90deg,#00F5D4,#7C3AED);box-shadow:0 0 6px rgba(0,245,212,.4)"></div></div>
     </div>
   </div>`;
 
@@ -306,56 +329,29 @@ function sportTabHTML() {
   return transformBlockHTML();
 }
 
-// Оставшаяся стандартная часть спорта (неделя + последние тренировки)
+// Кнопка записи + журнал последних тренировок (неделя теперь в splitCard)
 function sportLegacyHTML() {
   const workouts = DB.getWorkouts();
-  const gymDays  = DB.getGymDays();
-  const days     = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
-  const today    = new Date().getDay();
-  const todayIdx = today === 0 ? 6 : today - 1;
-  const monthCount = workouts.filter(w => {
-    const d = new Date(w.date);
-    return d.getMonth() === new Date().getMonth();
-  }).length;
 
   return `
-  <div class="card" style="margin-bottom:12px">
-    <div class="sec-label">💪 НЕДЕЛЯ ТРЕНИРОВОК</div>
-    <div class="row" style="gap:6px">
-      ${gymDays.map((done,i)=>`<div class="day-dot">
-        <div class="day-circle${done?' done':''}${i===todayIdx?' today':''}" onclick="window.toggleGymDay(${i})">
-          ${done?'💪':''}
-        </div>
-        <span style="font-size:9px;color:rgba(232,237,245,.35)">${days[i]}</span>
-      </div>`).join('')}
-    </div>
-    <div style="margin-top:12px">
-      <div class="row" style="justify-content:space-between;margin-bottom:5px">
-        <span style="font-size:11px;color:rgba(232,237,245,.4)">Месяц: ${monthCount} тренировок</span>
-        <span style="font-size:11px;color:#00F5D4">цель 16</span>
-      </div>
-      <div class="prog-bar"><div class="prog-fill" style="width:${Math.min((monthCount/16)*100,100)}%;background:#00F5D4;box-shadow:0 0 6px rgba(0,245,212,.4)"></div></div>
-    </div>
-  </div>
-
-  <button class="btn btn-teal" style="width:100%;margin-bottom:12px;padding:12px" onclick="window.openLogWorkout()">
-    + Записать тренировку
+  <button class="btn btn-teal" style="width:100%;margin-bottom:14px;padding:13px" onclick="window.openLogWorkout()">
+    + Записать тренировку вручную
   </button>
 
-  <div class="card" style="margin-bottom:12px">
+  <div class="card" style="margin-bottom:14px">
     <div class="sec-label">📋 ПОСЛЕДНИЕ ТРЕНИРОВКИ</div>
-    ${workouts.slice(0,5).map(w=>`<div class="workout-item">
+    ${workouts.slice(0,6).map(w=>`<div class="workout-item">
       <div class="workout-type-icon">${w.emoji||'🏋️'}</div>
-      <div style="flex:1">
-        <div style="font-size:12px;font-weight:600">${w.type}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700">${w.type}</div>
         <div style="font-size:10px;color:rgba(232,237,245,.4)">${w.date}</div>
       </div>
-      <div style="text-align:right">
-        <div style="font-size:12px;color:#00F5D4">${w.duration} мин</div>
-        <div style="font-size:10px;color:#FFD700">+${w.xp} XP</div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:12px;color:#00F5D4">${w.duration} мин${w.calories?` · 🔥 ${w.calories}`:''}</div>
+        <div style="font-size:10px;color:#F5B942">+${w.xp} XP</div>
       </div>
     </div>`).join('')}
-    ${workouts.length === 0 ? '<div style="text-align:center;padding:12px 0;font-size:12px;color:rgba(232,237,245,.3)">Нет тренировок. Начни прямо сейчас!</div>' : ''}
+    ${workouts.length === 0 ? '<div style="text-align:center;padding:16px 0;font-size:12px;color:rgba(232,237,245,.3)">Пока пусто. Отметь тренировку дня выше 👆</div>' : ''}
   </div>`;
 }
 
