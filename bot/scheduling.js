@@ -5,6 +5,7 @@
 import cron from 'node-cron';
 import { InlineKeyboard } from 'grammy';
 import { sendRichWithFallback, briefingBlocks, checkinBlocks, T, B } from './rich.js';
+import { отправитьПланДня, отправитьОтчётЗаДень } from './reports.js';
 
 // Московское смещение в мс (+3ч)
 const MOSCOW_OFFSET = 3 * 60 * 60 * 1000;
@@ -34,10 +35,19 @@ export function запуститьРасписание({ bot, supa, openai, owne
       .catch(err => console.error('[cron 8:00]', err.message));
   }, { timezone: 'Europe/Moscow' });
 
+  // 08:05 по Москве — план дня (расписание + фокус), сразу после брифинга
+  cron.schedule('5 8 * * *', () => {
+    отправитьПланДня({ supa, chatId: ownerTgId, безКэша })
+      .catch(err => console.error('[cron 8:05 план]', err.message));
+  }, { timezone: 'Europe/Moscow' });
+
   // 21:00 по Москве
-  cron.schedule('0 21 * * *', () => {
-    вечернийАвтоЧекин({ bot, ownerTgId, безКэша, supa })
+  cron.schedule('0 21 * * *', async () => {
+    await вечернийАвтоЧекин({ bot, ownerTgId, безКэша, supa })
       .catch(err => console.error('[cron 21:00]', err.message));
+    // Итог дня с GPT-резюме отдельным сообщением
+    await отправитьОтчётЗаДень({ supa, openai, chatId: ownerTgId, безКэша, ДИРЕКТОР_ПРОМТ })
+      .catch(err => console.error('[cron 21:00 итог]', err.message));
   }, { timezone: 'Europe/Moscow' });
 
   // ⏰ НАПОМИНАНИЯ ПО ВРЕМЕНИ — каждые 5 минут сканируем задачи с конкретным временем
@@ -52,7 +62,7 @@ export function запуститьРасписание({ bot, supa, openai, owne
       .catch(err => console.error('[cron proactive]', err.message));
   }, { timezone: 'Europe/Moscow' });
 
-  console.log('[cron] ✅ Расписание: брифинг 08:00 · чекин 21:00 · напоминания /5мин · проактив Вт/Пт 12:00');
+  console.log('[cron] ✅ Расписание: брифинг 08:00 · план 08:05 · чекин+итог 21:00 · напоминания /5мин · проактив Вт/Пт 12:00');
 }
 
 // ── ⏰ НАПОМИНАНИЯ ПО ВРЕМЕНИ ──────────────────────────────────────────────────
@@ -372,10 +382,13 @@ export async function утреннийАвтоБрифинг({ bot, supa, openai
   ].filter(Boolean).join('\n');
 
   const клавиатура = new InlineKeyboard()
-    .webApp('⚡ Открыть LIFE OS', безКэша())
-    .row();
+    .webApp('⚡ Открыть LIFE OS', безКэша()).row()
+    .text('📊 Дашборд', 'rep:dashboard')
+    .text('📋 Канбан', 'rep:kanban').row()
+    .text('🗓 План дня', 'rep:plan')
+    .text('📈 Итог дня', 'rep:report');
 
-  const token = process.env.BOT_TOKEN;
+  const token = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN;
   await sendRichWithFallback(token, ownerTgId, richBlocks, markdownFallback, {
     reply_markup: клавиатура,
   });
@@ -486,7 +499,7 @@ async function вечернийАвтоЧекин({ bot, ownerTgId, безКэш
     : '📭 Задач не закрыто — расскажи почему?';
   const markdownFallback = `🌙 *Вечерний чек-ин*\n${статБлок}\n\nКак прошёл день? Расскажи голосом или напиши.`;
 
-  const token = process.env.BOT_TOKEN;
+  const token = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN;
   await sendRichWithFallback(token, ownerTgId, richBlocks, markdownFallback, {
     reply_markup: клавиатура,
   });
