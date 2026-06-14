@@ -1,5 +1,5 @@
 // ── ЭКРАН ОНБОРДИНГА: голосовое заполнение всей системы ──────────────────────
-import { DB } from '../db.js?v=51';
+import { DB } from '../db.js?v=52';
 
 const БЛОКИ = [
   {
@@ -525,6 +525,14 @@ async function завершить() {
     <div style="margin-top:30px;font-size:11px;color:rgba(232,237,245,.35)">Это займёт 15–30 секунд</div>
   </div>`;
 
+  // ── Сохраняем СЫРЫЕ ответы до отправки в AI — чтобы они не терялись ─────────
+  try {
+    localStorage.setItem('lifeos_onboarding_answers', JSON.stringify({
+      at: new Date().toISOString(),
+      answers: ответы,
+    }));
+  } catch (e) { console.warn('save onboarding answers:', e.message); }
+
   try {
     const res = await fetch('/api/extract-onboarding', {
       method: 'POST',
@@ -569,6 +577,9 @@ async function завершить() {
       <button class="btn btn-teal" style="margin-top:32px;padding:14px 30px;font-size:14px" onclick="window.location.href='/'">
         ⚡ Запустить LIFE OS
       </button>
+      <button class="btn btn-ghost" style="margin-top:12px;padding:10px 22px;font-size:12px" onclick="window.copyOnboardingAnswers()">
+        📋 Скопировать мои ответы
+      </button>
     </div>`;
   } catch (err) {
     el.innerHTML = `<div class="screen" style="text-align:center;padding-top:60px">
@@ -580,6 +591,30 @@ async function завершить() {
     </div>`;
   }
 }
+
+// Собрать ответы онбординга в один текстовый документ и скопировать
+window.copyOnboardingAnswers = function() {
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem('lifeos_onboarding_answers') || 'null'); }
+  catch { saved = null; }
+  if (!saved?.answers) { window.showToast?.('Сохранённых ответов не найдено', 'error'); return; }
+
+  const a = saved.answers;
+  const дата = new Date(saved.at || Date.now()).toLocaleString('ru-RU');
+  let doc = `# Мой онбординг LIFE OS\n_${дата}_\n\n`;
+  for (const блок of БЛОКИ) {
+    if (блок.key === 'hrv_baseline') continue; // это число, не текст
+    const ответ = a[блок.key];
+    if (!ответ) continue;
+    doc += `## ${блок.title}\n${ответ}\n\n`;
+  }
+  if (a['hrv_baseline']) doc += `## Калибровка HRV\nБазовый HRV: ${a['hrv_baseline']} мс\n`;
+
+  navigator.clipboard?.writeText(doc).then(
+    () => window.showToast?.('📋 Ответы скопированы в буфер', 'success'),
+    () => { prompt('Скопируй вручную:', doc); }
+  );
+};
 
 // Anim для записи
 const style = document.createElement('style');

@@ -1,18 +1,18 @@
 // ── LIFE OS — ГЛАВНЫЙ МОДУЛЬ ──────────────────────────────────────────────────
-import { DB } from './db.js?v=51';
-import { injectUI, checkAchievements, onQuestCompleted, applyDebuffMode } from './gamification.js?v=51';
-import { TG } from './telegram.js?v=51';
-import { renderDash }         from './screens/dash.js?v=51';
-import { renderTasks }        from './screens/tasks.js?v=51';
-import { renderHealth }       from './screens/health.js?v=51';
-import { renderProjects }     from './screens/projects.js?v=51';
-import { renderPeople }       from './screens/people.js?v=51';
-import { renderContent }      from './screens/content.js?v=51';
-import { renderAchievements } from './screens/achievements.js?v=51';
-import { renderOnboarding }   from './screens/onboarding.js?v=51';
-import { renderAnalytics }    from './screens/analytics.js?v=51';
-import * as Sync              from './supabaseSync.js?v=51';
-import { openVoiceCapture }  from './voiceCapture.js?v=51';
+import { DB } from './db.js?v=52';
+import { injectUI, checkAchievements, onQuestCompleted, applyDebuffMode } from './gamification.js?v=52';
+import { TG } from './telegram.js?v=52';
+import { renderDash }         from './screens/dash.js?v=52';
+import { renderTasks }        from './screens/tasks.js?v=52';
+import { renderHealth }       from './screens/health.js?v=52';
+import { renderProjects }     from './screens/projects.js?v=52';
+import { renderPeople }       from './screens/people.js?v=52';
+import { renderContent }      from './screens/content.js?v=52';
+import { renderAchievements } from './screens/achievements.js?v=52';
+import { renderOnboarding }   from './screens/onboarding.js?v=52';
+import { renderAnalytics }    from './screens/analytics.js?v=52';
+import * as Sync              from './supabaseSync.js?v=52';
+import { openVoiceCapture }  from './voiceCapture.js?v=52';
 
 // ── ИНИЦИАЛИЗАЦИЯ ─────────────────────────────────────────────────────────────
 const ОНБОРДИНГ_ПРОЙДЕН = localStorage.getItem('lifeos_onboarded') === 'true'
