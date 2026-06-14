@@ -120,6 +120,14 @@ export async function загрузитьВсё() {
         return mapped;
       });
 
+      // ── СОХРАНЯЕМ ЛОКАЛЬНЫЕ задачи, которых ещё нет в облаке ──────────────────
+      // (созданы офлайн / до синка / без валидного UUID). Иначе pull их затирал —
+      // приложение и бот расходились. Заливку в облако делает pushAllLocal().
+      const serverIds = new Set(deduped.keys());
+      for (const local of localRaw) {
+        if (!serverIds.has(local.id)) merged.push(local);
+      }
+
       localStorage.setItem('lifeos_tasks', JSON.stringify(merged));
     }
     if (projects?.length) {
@@ -231,6 +239,34 @@ export async function удалитьЗадачу(id) {
       headers: заголовки(),
     });
   } catch (err) { console.warn('[Supabase delete task]', err); }
+}
+
+// ── PUSH ALL: заливаем ВСЕ локальные задачи в облако ─────────────────────────
+// Чинит расхождение «в приложении есть, а бот не видит»: задачи без валидного
+// UUID получают новый UUID, затем все задачи upsert-ятся в Supabase.
+export async function pushAllLocal() {
+  if (!активен()) return;
+  let локальные;
+  try { локальные = JSON.parse(localStorage.getItem('lifeos_tasks') || '[]'); }
+  catch { return; }
+  if (!Array.isArray(локальные) || !локальные.length) return;
+
+  // 1. Мигрируем не-UUID id → валидный UUID (иначе сохранитьЗадачу их пропускает)
+  let мигрировали = false;
+  for (const t of локальные) {
+    if (!uuidValid(t.id)) {
+      t.id = (crypto?.randomUUID?.() || t.id);
+      if (uuidValid(t.id)) мигрировали = true;
+    }
+  }
+  if (мигрировали) localStorage.setItem('lifeos_tasks', JSON.stringify(локальные));
+
+  // 2. Заливаем всё в облако (по очереди, чтобы не словить rate-limit)
+  let залито = 0;
+  for (const t of локальные) {
+    if (uuidValid(t.id)) { await сохранитьЗадачу(t); залито++; }
+  }
+  console.log(`[Supabase] pushAllLocal: залито задач=${залито}`);
 }
 
 export async function сохранитьПроект(проект) {

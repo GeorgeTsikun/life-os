@@ -1,18 +1,18 @@
 // ── LIFE OS — ГЛАВНЫЙ МОДУЛЬ ──────────────────────────────────────────────────
-import { DB } from './db.js?v=46';
-import { injectUI, checkAchievements, onQuestCompleted, applyDebuffMode } from './gamification.js?v=46';
-import { TG } from './telegram.js?v=46';
-import { renderDash }         from './screens/dash.js?v=46';
-import { renderTasks }        from './screens/tasks.js?v=46';
-import { renderHealth }       from './screens/health.js?v=46';
-import { renderProjects }     from './screens/projects.js?v=46';
-import { renderPeople }       from './screens/people.js?v=46';
-import { renderContent }      from './screens/content.js?v=46';
-import { renderAchievements } from './screens/achievements.js?v=46';
-import { renderOnboarding }   from './screens/onboarding.js?v=46';
-import { renderAnalytics }    from './screens/analytics.js?v=46';
-import * as Sync              from './supabaseSync.js?v=46';
-import { openVoiceCapture }  from './voiceCapture.js?v=46';
+import { DB } from './db.js?v=47';
+import { injectUI, checkAchievements, onQuestCompleted, applyDebuffMode } from './gamification.js?v=47';
+import { TG } from './telegram.js?v=47';
+import { renderDash }         from './screens/dash.js?v=47';
+import { renderTasks }        from './screens/tasks.js?v=47';
+import { renderHealth }       from './screens/health.js?v=47';
+import { renderProjects }     from './screens/projects.js?v=47';
+import { renderPeople }       from './screens/people.js?v=47';
+import { renderContent }      from './screens/content.js?v=47';
+import { renderAchievements } from './screens/achievements.js?v=47';
+import { renderOnboarding }   from './screens/onboarding.js?v=47';
+import { renderAnalytics }    from './screens/analytics.js?v=47';
+import * as Sync              from './supabaseSync.js?v=47';
+import { openVoiceCapture }  from './voiceCapture.js?v=47';
 
 // ── ИНИЦИАЛИЗАЦИЯ ─────────────────────────────────────────────────────────────
 const ОНБОРДИНГ_ПРОЙДЕН = localStorage.getItem('lifeos_onboarded') === 'true'
@@ -30,6 +30,8 @@ Sync.инициализироватьSupabase().then(async (ок) => {
   if (ок) {
     // Подтягиваем актуальные данные из облака
     await Sync.загрузитьВсё();
+    // Заливаем все локальные задачи обратно в облако (чтобы бот видел то же самое)
+    await Sync.pushAllLocal();
     // Перерисовываем активный таб ТОЛЬКО если онбординг уже пройден
     if (ОНБОРДИНГ_ПРОЙДЕН) {
       const активныйТаб = document.querySelector('.nav-btn.active')?.dataset?.tab;

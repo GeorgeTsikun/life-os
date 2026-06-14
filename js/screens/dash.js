@@ -1,11 +1,12 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=46';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=46';
-import { TG } from '../telegram.js?v=46';
+import { DB } from '../db.js?v=47';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=47';
+import { TG } from '../telegram.js?v=47';
 
 let radarChart, energyChart;
 let _currentQuests = []; // для синхронизации taskId при completeQuest
 let focusFilter = 'all'; // 'all' | 'work' | 'personal' | 'cat:X'
+let focusExpanded = false; // показать все Q1-задачи в Фокусе дня, а не только 3
 
 export function renderDash() {
   const profile = DB.getProfile();
@@ -526,6 +527,11 @@ window.submitCheckin = function() {
   renderDash();
 };
 
+window.toggleFocusExpand = function() {
+  focusExpanded = !focusExpanded;
+  renderDash();
+};
+
 window.setFocusFilter = function(f) {
   focusFilter = f;
   // Скрываем меню категорий при выборе
@@ -893,10 +899,18 @@ function renderFocusBlock(allTasks, health, profile) {
   }
 
   const filtered = applyFilter(q1All);
-  const показываемые = filtered.slice(0, 3);
+  const показываемые = focusExpanded ? filtered : filtered.slice(0, 3);
+  const скрыто = filtered.length - показываемые.length;
   const badge = filtered.length !== q1All.length
     ? `<span class="badge" style="background:rgba(255,215,0,.12);color:#FFD700;border:1px solid rgba(255,215,0,.2)">${filtered.length} из ${q1All.length}</span>`
     : `<span class="badge" style="background:rgba(255,215,0,.12);color:#FFD700;border:1px solid rgba(255,215,0,.2)">${q1All.length} срочных</span>`;
+
+  // Кнопка раскрытия/сворачивания, если задач больше 3
+  const toggleBtn = (filtered.length > 3)
+    ? `<button onclick="window.toggleFocusExpand()" style="width:100%;margin-top:8px;padding:8px;border-radius:9px;border:1px solid rgba(0,245,212,.25);background:rgba(0,245,212,.06);color:#00F5D4;font-size:11px;font-weight:600;cursor:pointer">
+        ${focusExpanded ? '▲ Свернуть' : `▼ Показать все (ещё ${скрыто})`}
+      </button>`
+    : '';
 
   return `<div class="card" style="margin-bottom:12px">
     <div class="row" style="justify-content:space-between;margin-bottom:6px">
@@ -905,7 +919,7 @@ function renderFocusBlock(allTasks, health, profile) {
     </div>
     ${filterBar}
     ${показываемые.length
-      ? показываемые.map((t, i) => renderFocusItem(t, i, показываемые.length)).join('')
+      ? показываемые.map((t, i) => renderFocusItem(t, i, показываемые.length)).join('') + toggleBtn
       : `<div style="text-align:center;padding:14px 0">
           <div style="font-size:28px;margin-bottom:4px">✨</div>
           <div style="font-size:12px;color:rgba(232,237,245,.35)">${focusFilter !== 'all' ? 'Нет задач с таким фильтром' : 'Нет срочных задач — отличный день!'}</div>
