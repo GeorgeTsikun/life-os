@@ -501,6 +501,20 @@ bot.on('message:photo', async (ctx) => {
     const data = JSON.parse(m[0]);
     if (data.error) return ctx.reply(`🤷 ${data.error}`);
 
+    // Превью для хранения: берём размер ~320-512px (Telegram отдаёт несколько),
+    // чтобы не раздувать базу. Если такого нет — переиспользуем уже скачанный big.
+    let photoDataUrl = null;
+    try {
+      const small = photos.find(p => p.width >= 320 && p.width <= 600);
+      if (small && small.file_id !== big.file_id) {
+        const f2 = await ctx.api.getFile(small.file_id);
+        const r2 = await fetch(`https://api.telegram.org/file/bot${TOKEN}/${f2.file_path}`);
+        photoDataUrl = `data:image/jpeg;base64,${Buffer.from(await r2.arrayBuffer()).toString('base64')}`;
+      } else {
+        photoDataUrl = `data:image/jpeg;base64,${b64}`;
+      }
+    } catch (e) { console.warn('[meal photo store]', e.message); }
+
     // Сохраняем в Supabase → появится в Mini App
     let сохранено = false, mealId = null;
     if (supa) {
@@ -512,6 +526,7 @@ bot.on('message:photo', async (ctx) => {
         name: data.name || 'Блюдо', items: data.items || [],
         calories: data.calories||0, protein: data.protein||0, fat: data.fat||0, carbs: data.carbs||0,
         weight_g: data.weight_g||null, health_score: data.health_score||null, note: data.note||null,
+        photo: photoDataUrl,
       }).select();
       сохранено = !error;
       mealId = ins?.[0]?.id || null;
