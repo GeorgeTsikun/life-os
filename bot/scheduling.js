@@ -149,7 +149,7 @@ async function проактивныйВопрос({ bot, supa, openai, ownerTgId
     .eq('status', 'pending')
     .order('deadline', { ascending: true })
     .limit(5)
-    .catch(() => ({ data: [] }));
+    .then(r => r, () => ({ data: [] }));
 
   const проектыТекст = (проекты || [])
     .map(p => `• ${p.name}: ${p.progress}% (${p.stage || '—'})`)
@@ -252,7 +252,7 @@ export async function утреннийАвтоБрифинг({ bot, supa, openai
         .order('date', { ascending: false })
         .limit(1)
         .maybeSingle()
-        .catch(() => ({ data: null })),
+        .then(r => r, () => ({ data: null })),
     ]);
 
     задачиСегодня = резСегодня.data || [];
@@ -274,7 +274,7 @@ export async function утреннийАвтоБрифинг({ bot, supa, openai
         .eq('status', 'waiting')
         .lte('due_date', сегодня)
         .limit(5)
-        .catch(() => ({ data: [] }));
+        .then(r => r, () => ({ data: [] }));
       ожидания = (резWait.data || []).map(w => ({ owner_name: w.person_name, what: w.what, deadline: w.due_date }));
     }
     здоровье = резЗдор.data;
