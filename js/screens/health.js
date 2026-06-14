@@ -1,8 +1,8 @@
 // ── HEALTH SCREEN (Health / Sport / Nutrition sub-tabs) ───────────────────────
-import { DB } from '../db.js?v=48';
-import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=48';
-import { TG } from '../telegram.js?v=48';
-import { PLAN_GOAL, STAGES, DAY_KEYS, DAY_LABELS, stageForWeek, planState, PLAN_WEEKS } from '../data/trainingPlan.js?v=48';
+import { DB } from '../db.js?v=49';
+import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=49';
+import { TG } from '../telegram.js?v=49';
+import { PLAN_GOAL, STAGES, DAY_KEYS, DAY_LABELS, stageForWeek, planState, PLAN_WEEKS } from '../data/trainingPlan.js?v=49';
 
 let sleepChart, pulseChart, hrvChart, revenueChart;
 let healthTab = 'health';
@@ -444,6 +444,7 @@ function nutritionTabHTML() {
         ${ringMacro(n.fat||0, fG, '#7C3AED', 'Ж')}
       </div>
     </div>
+    ${!n.goalsMeta ? `<button onclick="window.openGoalsModal()" style="width:100%;margin-top:12px;padding:9px;border-radius:10px;border:1px solid rgba(245,185,66,.3);background:rgba(245,185,66,.08);color:#F5B942;font-size:11px;cursor:pointer">⚠️ Цели по умолчанию (${cG} ккал) — задай свои под себя →</button>` : ''}
   </div>`;
 
   // ── 3 ВЕРХНИЕ КАРТЫ: ВОДА / КБЖУ / БАЛЛ ───────────────────────────────────
@@ -506,11 +507,19 @@ function nutritionTabHTML() {
   const sorted = [...meals].sort((a,b) => (a.time||'').localeCompare(b.time||''));
   const feedRows = sorted.length ? sorted.map(m => {
     const mt = MEAL_TYPES[m.mealType] || { label: m.name || 'Приём пищи', icon:'🍽️', color:'#00E396' };
-    const items = Array.isArray(m.items) && m.items.length ? m.items : (m.name ? [m.name] : []);
+    const rawItems = Array.isArray(m.items) && m.items.length ? m.items : (m.name ? [m.name] : []);
+    const items = rawItems.map(it => {
+      if (typeof it === 'string') return it;
+      const cal = it.calories ? ` <span style="color:rgba(232,237,245,.35)">— ${it.calories} ккал</span>` : '';
+      return (it.name || '') + cal;
+    });
+    const hs = m.health_score ? `<span style="font-size:10px;color:${m.health_score>=7?'#00E396':m.health_score>=4?'#F5B942':'#FF5C8A'};margin-left:6px">❤️${m.health_score}/10</span>` : '';
+    const dish = m.name && m.name !== mt.label ? `<div style="font-size:11px;color:rgba(232,237,245,.5);margin-top:1px">${m.name}</div>` : '';
     return `<div class="meal-row">
       <div class="meal-time">${m.time || ''}</div>
       <div class="meal-main">
-        <div class="meal-title" style="color:${mt.color}">${mt.icon} ${mt.label}</div>
+        <div class="meal-title" style="color:${mt.color}">${mt.icon} ${mt.label}${hs}</div>
+        ${dish}
         <ul class="meal-items">${items.map(it => `<li>${it}</li>`).join('')}</ul>
         ${m.note ? `<div class="meal-note">${m.note}</div>` : ''}
       </div>
@@ -1111,7 +1120,26 @@ window._saveGoals = function() {
 };
 
 window.showNutritionScoreInfo = function() {
-  window.showToast?.('Балл = насколько день сбалансирован: калории (30%), белок (40%), вода (30%) относительно целей.', 'info');
+  const n = DB.getNutrition();
+  const setGoals = n.goalsMeta ? '' : `<div style="background:rgba(245,185,66,.1);border:1px solid rgba(245,185,66,.3);border-radius:10px;padding:10px 12px;margin-top:12px;font-size:11px;color:#F5B942">⚠️ Цели сейчас стоят по умолчанию (${n.caloriesGoal||2200} ккал). Задай свои в «⚙️ Цели» — балл станет точным.</div>`;
+  const div = document.createElement('div');
+  div.className = 'modal-overlay';
+  div.innerHTML = `<div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🎯 Как считается балл питания</div>
+    <div style="font-size:12px;color:rgba(232,237,245,.7);line-height:1.7">
+      Балл (0–100) показывает, насколько день близок к твоим целям:<br><br>
+      • 🥩 <b>Белок</b> — 40% (самое важное)<br>
+      • 🔥 <b>Калории</b> — 30%<br>
+      • 💧 <b>Вода</b> — 30%<br><br>
+      Считается как отношение <b>съедено / цель</b>. Перебор тоже снижает балл.<br>
+      <span style="color:rgba(232,237,245,.45)">Съеденное берётся из реальных блюд в ленте, цели — из «⚙️ Цели» (расчёт по весу/росту/возрасту).</span>
+    </div>
+    ${setGoals}
+    <button class="btn btn-teal" style="width:100%;margin-top:14px" onclick="this.closest('.modal-overlay').remove()">Понятно</button>
+  </div>`;
+  div.addEventListener('click', e => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
 };
 
 // ── ФОТО ЕДЫ → GPT-4o Vision (со сжатием для хранения превью) ──────────────

@@ -43,11 +43,11 @@ const ДАННЫЕ = {
     hrvData: [52,58,55,48,45,42,50,56,60],
   },
   nutrition: {
-    water: 1.8,
+    water: 0,
     waterGoal: 2.5,
-    score: 7,
-    supplements: true,
-    shower: true,
+    score: 0,
+    supplements: false,
+    shower: false,
     calories: 0,
     protein: 0,
     carbs: 0,
@@ -56,6 +56,7 @@ const ДАННЫЕ = {
     proteinGoal: 140,
     carbsGoal: 220,
     fatGoal: 70,
+    date: new Date().toDateString(),
   },
   workouts: [
     {id:'w1',date:new Date().toDateString(),type:'Силовая',duration:60,xp:100,emoji:'🏋️'},
@@ -202,6 +203,7 @@ export const DB = {
     this.migrateRelativeDatesToISO(); // §migration: 'завтра'/'сегодня' → реальные ISO даты
     this.applyDailyDecay();
     this.resetDailyQuests();
+    this.resetDailyNutrition();
     const moved = this.sweepQ4toIdeaBank();
     if (moved > 0) window.showToast?.(`💡 ${moved} идей из Q4 → Банк идей`, 'info');
   },
@@ -642,6 +644,32 @@ export const DB = {
     this.set('quests', квесты);
     p.lastQuestReset = сегодня;
     this.saveProfile(p);
+  },
+
+  // Авторесет питания каждый день: вода → 0, КБЖУ пересчёт из блюд за день,
+  // чекбоксы сбрасываются. Цели (caloriesGoal и т.д.) сохраняются.
+  resetDailyNutrition() {
+    const сегодня = new Date().toDateString();
+    const n = this.getNutrition();
+    if (n.date === сегодня) {
+      // тот же день — просто пересчитываем КБЖУ из реальных блюд
+      this._recalcNutritionFromMeals(this.getMeals());
+      return;
+    }
+    // новый день: снимок вчерашней воды (для графиков), затем обнуляем
+    if (n.date && n.water) {
+      const prev = new Date(n.date);
+      const key = `${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}-${String(prev.getDate()).padStart(2,'0')}`;
+      localStorage.setItem('lifeos_water_' + key, JSON.stringify(n.water));
+    }
+    n.water = 0;
+    n.supplements = false;
+    n.shower = false;
+    n.calories = 0; n.protein = 0; n.fat = 0; n.carbs = 0;
+    n.date = сегодня;
+    this.saveNutrition(n);
+    // пересчёт из блюд сегодняшнего дня (обычно 0)
+    this._recalcNutritionFromMeals(this.getMeals());
   },
 
   // Отменить задачу (не удалять, хранить в аналитике)

@@ -1,7 +1,7 @@
 // ── TASKS SCREEN ──────────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=48';
-import { onTaskToggled } from '../gamification.js?v=48';
-import { TG } from '../telegram.js?v=48';
+import { DB } from '../db.js?v=49';
+import { onTaskToggled } from '../gamification.js?v=49';
+import { TG } from '../telegram.js?v=49';
 import { парсДату, бакет, форматДата, БАКЕТЫ_UI, ПОРЯДОК_БАКЕТОВ, вISO } from '../utils/date.js';
 import { openTaskDetail } from './_taskDetail.js';
 
