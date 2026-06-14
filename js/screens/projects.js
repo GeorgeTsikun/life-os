@@ -1,6 +1,6 @@
 // ── PROJECTS SCREEN ───────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=55';
-import { TG } from '../telegram.js?v=55';
+import { DB } from '../db.js?v=56';
+import { TG } from '../telegram.js?v=56';
 
 const MONTH_GOAL = 3000000; // цель по выручке за месяц
 
@@ -362,40 +362,14 @@ window.deleteProject = function(id) {
   TG.hapticSuccess();
 };
 
-window.addTaskFromProject = function(projectId, projectName, projectColor) {
+window.addTaskFromProject = function(projectId, projectName) {
   document.querySelector('.detail-overlay')?.remove();
-  const div = document.createElement('div');
-  div.className = 'detail-overlay';
-  div.innerHTML = `<div class="detail-sheet">
-    <div class="modal-handle"></div>
-    <div style="font-size:14px;font-weight:700;margin-bottom:12px">+ Задача в проект: ${projectName}</div>
-    <input id="projtask-text" class="input" placeholder="Что сделать..." style="margin-bottom:10px" autofocus>
-    <div style="display:flex;gap:8px;margin-bottom:10px">
-      <select id="projtask-quad" class="input" style="flex:1">
-        <option value="do">⚡ Q1 Срочно</option>
-        <option value="schedule" selected>🏔️ Q2 Важно</option>
-      </select>
-      <input id="projtask-due" class="input" type="date" style="flex:1" value="${new Date().toISOString().split('T')[0]}">
-    </div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-ghost" style="flex:1" onclick="this.closest('.detail-overlay').remove()">Отмена</button>
-      <button class="btn btn-teal" style="flex:2" onclick="window._saveTaskFromProject('${projectId}','${projectName.replace(/'/g,"\\'")}')">Создать</button>
-    </div>
-  </div>`;
-  div.addEventListener('click', e => { if (e.target === div) div.remove(); });
-  document.body.appendChild(div);
-  setTimeout(() => document.getElementById('projtask-text')?.focus(), 100);
-};
-
-window._saveTaskFromProject = function(projectId, projectName) {
-  const text = document.getElementById('projtask-text')?.value?.trim();
-  if (!text) return;
-  const quad = document.getElementById('projtask-quad')?.value || 'schedule';
-  const due  = document.getElementById('projtask-due')?.value || null;
-  DB.addTask({ text, cat: 'Работа', quadrant: quad, due_date: due, project_id: projectId });
-  document.querySelector('.detail-overlay')?.remove();
-  window.showToast?.('✅', 'Задача создана', text, '');
-  TG.hapticSuccess();
+  // Умная модалка задачи (голос + AI авто-категория/срок) с привязкой к проекту
+  window.openAddTask?.({
+    project_id: projectId,
+    label: 'Проект: ' + projectName,
+    onClose: () => window.openProjectDetail?.(projectId),
+  });
 };
 
 window.saveProject = function(id) {

@@ -1,7 +1,7 @@
 // ── TASKS SCREEN ──────────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=55';
-import { onTaskToggled } from '../gamification.js?v=55';
-import { TG } from '../telegram.js?v=55';
+import { DB } from '../db.js?v=56';
+import { onTaskToggled } from '../gamification.js?v=56';
+import { TG } from '../telegram.js?v=56';
 import { парсДату, бакет, форматДата, БАКЕТЫ_UI, ПОРЯДОК_БАКЕТОВ, вISO } from '../utils/date.js';
 import { openTaskDetail } from './_taskDetail.js';
 
@@ -585,12 +585,14 @@ const ОСНОВНЫЕ_КАТЕГОРИИ = [
   'Стратегия','Обучение','Деньги','Здоровье','Chill'
 ];
 
-export function openAddTask() {
+export function openAddTask(link = null) {
   const existing = document.getElementById('add-task-modal');
   if (existing) existing.remove();
 
   // Состояние модалки: 'auto' = AI решит, конкретное значение = ручной выбор
   window._addState = { cat: 'auto', quad: 'auto', time: '', recording: null };
+  // Контекст привязки (проект/человек) — если задачу создают из их экрана
+  window._addTaskLink = link; // { project_id?, person_id?, label?, onClose? }
 
   const div = document.createElement('div');
   div.id = 'add-task-modal';
@@ -598,6 +600,7 @@ export function openAddTask() {
   div.innerHTML = `<div class="modal-sheet" style="max-height:90vh;overflow-y:auto">
     <div class="modal-handle"></div>
     <div class="modal-title">+ Новая задача</div>
+    ${link?.label ? `<div style="font-size:11px;color:#00F5D4;background:rgba(0,245,212,.08);border:1px solid rgba(0,245,212,.2);border-radius:8px;padding:6px 10px;margin-bottom:12px">🔗 ${link.label}</div>` : ''}
 
     <!-- ГОЛОСОВОЙ ВВОД -->
     <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
@@ -897,6 +900,7 @@ window.submitAddTask = async function() {
   const startIso   = (естьВремя && parsedDate) ? вISO(parsedDate) : null;
 
   const finalQuad = quad === 'auto' ? 'schedule' : quad;
+  const link = window._addTaskLink || {};
   DB.addTask({
     text,
     cat:        cat === 'auto' ? 'Работа' : cat,
@@ -905,10 +909,15 @@ window.submitAddTask = async function() {
     start_iso:  startIso,          // ISO с временем — только если время указано
     quadrant:   finalQuad,
     difficulty: finalQuad === 'do' ? 3 : 2,
+    ...(link.project_id ? { project_id: link.project_id } : {}),
+    ...(link.person_id  ? { person_id:  link.person_id }  : {}),
   });
+  const onClose = link.onClose;
+  window._addTaskLink = null;
   window.closeAddTask();
   TG.hapticSuccess();
-  renderTasks();
+  // Перерисовываем экран-источник (Проекты/Люди) или общий список задач
+  if (typeof onClose === 'function') onClose(); else renderTasks();
 };
 
 // Анимация для записи (если ещё не подгружена)

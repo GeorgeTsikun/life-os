@@ -1,6 +1,6 @@
 // ── PEOPLE / CRM SCREEN ───────────────────────────────────────────────────────
-import { DB } from '../db.js?v=55';
-import { TG } from '../telegram.js?v=55';
+import { DB } from '../db.js?v=56';
+import { TG } from '../telegram.js?v=56';
 
 const CHECKUPS = [
   {l:'Чекап здоровья — терапевт',d:'июль 2026',i:'🏥'},
@@ -229,6 +229,25 @@ window.openPersonDetail = function(id) {
       ${logItems}
     </div>` : ''}
 
+    ${(()=>{
+      const задачи = DB.getTasks().filter(t => t.person_id === p.id);
+      const active = задачи.filter(t => !t.done && !t.cancelled);
+      const done   = задачи.filter(t => t.done && !t.cancelled);
+      if (!задачи.length) return '';
+      return `<div style="margin-bottom:12px">
+        <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:8px">ЗАДАЧИ (${active.length} активных · ${done.length} готовых)</div>
+        ${active.slice(0,5).map(t=>`<div onclick="window.openTaskDetail?.('${t.id}')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+          <div style="width:6px;height:6px;border-radius:50%;background:#00F5D4;flex-shrink:0"></div>
+          <div style="flex:1;font-size:12px;color:#E8EDF5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.text}</div>
+          <span style="font-size:9px;padding:2px 6px;border-radius:8px;background:rgba(255,69,96,.12);color:#FF4560">${t.quadrant==='do'?'Q1':t.quadrant==='schedule'?'Q2':'Q3'}</span>
+        </div>`).join('')}
+        ${done.slice(0,3).map(t=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;opacity:.4">
+          <span style="font-size:10px">✓</span>
+          <div style="font-size:11px;text-decoration:line-through;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.text}</div>
+        </div>`).join('')}
+      </div>`;
+    })()}
+
     <div style="display:flex;gap:6px;margin-bottom:8px">
       <input id="p-log-text" class="input" placeholder="Записать взаимодействие..." style="flex:1">
       <button class="btn btn-teal" onclick="window.addPersonLog('${p.id}')">+</button>
@@ -297,42 +316,13 @@ window.deletePerson = function(id) {
 };
 
 window.addTaskFromPerson = function(personId, personName) {
-  const overlay = document.querySelector('.detail-overlay');
-  if (overlay) overlay.remove();
-
-  const div = document.createElement('div');
-  div.className = 'detail-overlay';
-  div.innerHTML = `<div class="detail-sheet">
-    <div class="modal-handle"></div>
-    <div style="font-size:14px;font-weight:700;margin-bottom:12px">+ Задача по контакту: ${personName}</div>
-    <input id="ptask-text" class="input" placeholder="Что сделать..." style="margin-bottom:10px" autofocus>
-    <div style="display:flex;gap:8px;margin-bottom:10px">
-      <select id="ptask-quad" class="input" style="flex:1">
-        <option value="do">⚡ Q1 Срочно</option>
-        <option value="schedule" selected>🏔️ Q2 Важно</option>
-        <option value="delegate">⚙️ Q3 Делегировать</option>
-      </select>
-      <input id="ptask-due" class="input" type="date" style="flex:1" value="${new Date().toISOString().split('T')[0]}">
-    </div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-ghost" style="flex:1" onclick="this.closest('.detail-overlay').remove()">Отмена</button>
-      <button class="btn btn-teal" style="flex:2" onclick="window._saveTaskFromPerson('${personId}','${personName.replace(/'/g,"\\'")}')">Создать</button>
-    </div>
-  </div>`;
-  div.addEventListener('click', e => { if (e.target === div) div.remove(); });
-  document.body.appendChild(div);
-  setTimeout(() => document.getElementById('ptask-text')?.focus(), 100);
-};
-
-window._saveTaskFromPerson = function(personId, personName) {
-  const text = document.getElementById('ptask-text')?.value?.trim();
-  if (!text) return;
-  const quad = document.getElementById('ptask-quad')?.value || 'schedule';
-  const due  = document.getElementById('ptask-due')?.value || null;
-  DB.addTask({ text, cat: 'Встречи', quadrant: quad, due_date: due, notes: `Контакт: ${personName}` });
   document.querySelector('.detail-overlay')?.remove();
-  window.showToast?.('✅', 'Задача создана', text, '');
-  TG.hapticSuccess();
+  // Умная модалка задачи (голос + AI авто-категория/срок) с привязкой к человеку
+  window.openAddTask?.({
+    person_id: personId,
+    label: 'Контакт: ' + personName,
+    onClose: () => window.openPersonDetail?.(personId),
+  });
 };
 
 window.openAddPerson = function() {

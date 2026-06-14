@@ -261,6 +261,8 @@ export async function сохранитьЗадачу(задача) {
     notes:        задача.notes       || null,
     subtasks:     задача.subtasks    || [],
     duration_min: задача.duration_min || 60,
+    project_id:   задача.project_id  || null,
+    person_id:    задача.person_id   || null,
   });
 }
 
@@ -519,6 +521,8 @@ function маппингЗадачи(t) {
     notes:       t.notes        || '',
     subtasks:    t.subtasks     || [],
     duration_min: t.duration_min || 60,
+    project_id:  t.project_id  || null,
+    person_id:   t.person_id   || null,
     google_event_id:   t.google_event_id   || null,
     google_event_link: t.google_event_link || null,
   };
