@@ -430,6 +430,75 @@ export async function отправитьОтчётЗаДень({ supa, openai, c
   });
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// 💰 ДЕНЬГИ
+// ════════════════════════════════════════════════════════════════════════════
+function финДнейДоПлатежа(p) {
+  const today = new Date(Date.now() + MOSCOW_OFFSET); today.setUTCHours(0,0,0,0);
+  if (typeof p.dueIn === 'number') return p.dueIn;
+  if (p.day) {
+    let d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), p.day));
+    if (d < today) d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth()+1, p.day));
+    return Math.round((d - today) / 86400000);
+  }
+  return null;
+}
+const финFmt = n => (typeof n === 'number' ? n.toLocaleString('ru-RU') + ' ₽' : (n || '—'));
+
+export async function отправитьДеньги({ supa, chatId, безКэша }) {
+  let fin = null;
+  if (supa) {
+    const { data } = await supa.from('finance').select('data').eq('owner', 'george').maybeSingle();
+    fin = data?.data || null;
+  }
+  if (!fin) {
+    await sendRichWithFallback(токен(), chatId, [B.heading('💰 Деньги')],
+      '💰 *Деньги*\n\nДанные ещё не синхронизированы. Открой вкладку «Деньги» в приложении.', {});
+    return;
+  }
+
+  const pays = (fin.payments || []).filter(p => p.status !== 'paid');
+  const monthlyDue = pays.reduce((s,p)=>s+(p.amount||0),0);
+  const debts = (fin.debts || []).filter(d => d.status === 'open');
+  const debtsTotal = debts.reduce((s,d)=>s+(d.amount||0),0);
+  const expected = (fin.expectedIncome || []).filter(i=>i.status!=='received');
+  const expectedTotal = expected.reduce((s,i)=>s+(typeof i.amount==='number'?i.amount:0),0);
+  const горящие = pays.map(p=>({p,d:финДнейДоПлатежа(p)})).filter(x=>x.d!=null && x.d<=2).sort((a,b)=>a.d-b.d);
+  const лиды = (fin.leads || []).filter(l => l.hot && l.status !== 'contacted');
+
+  const blocks = [
+    B.heading(T.cat('💰 ', T.bold('Деньги · ' + датаЧеловеку()))),
+    B.table([
+      [ {text:'🎯 Цель/мес',bold:true,align:'center'},{text:'📅 Платежи',bold:true,align:'center'},{text:'📈 Ждём',bold:true,align:'center'},{text:'💸 Долги',bold:true,align:'center'} ],
+      [ {text:финFmt(fin.incomeGoal),align:'center'},{text:финFmt(monthlyDue),align:'center'},{text:финFmt(expectedTotal),align:'center'},{text:финFmt(debtsTotal),align:'center'} ],
+    ]),
+  ];
+  if (горящие.length) {
+    blocks.push(B.heading(T.cat('🔥 ', T.bold('Горящие платежи'))));
+    blocks.push(B.list(горящие.map(({p,d}) => ({
+      text: T.bold(p.title + ' — ' + финFmt(p.amount)),
+      sub: d < 0 ? `просрочено ${-d} дн.` : d === 0 ? 'сегодня' : d === 1 ? 'завтра' : `через ${d} дн.`,
+    }))));
+  }
+  if (expected.length) {
+    blocks.push(B.details(T.cat('📈 Ждём прихода (', T.bold(String(expected.length)), ')'),
+      [B.list(expected.map(i => `${i.from} — ${финFmt(i.amount)} (${i.when})`))], true));
+  }
+  if (лиды.length) {
+    blocks.push(B.details(T.cat('🔥 Топ-лиды — написать (', T.bold(String(лиды.length)), ')'),
+      [B.list(лиды.map(l => l.name))], false));
+  }
+
+  const md = [
+    `💰 *Деньги · ${датаЧеловеку()}*`,
+    `🎯 Цель ${финFmt(fin.incomeGoal)} · 📅 платежи ${финFmt(monthlyDue)} · 📈 ждём ${финFmt(expectedTotal)} · 💸 долги ${финFmt(debtsTotal)}`,
+    горящие.length ? `\n🔥 *Горящие:*\n` + горящие.map(({p,d})=>`• ${p.title} — ${финFmt(p.amount)} (${d<0?'просрочено':d===0?'сегодня':d===1?'завтра':d+' дн.'})`).join('\n') : '',
+    лиды.length ? `\n🔥 *Написать:* ${лиды.map(l=>l.name).join(', ')}` : '',
+  ].filter(Boolean).join('\n');
+
+  await sendRichWithFallback(токен(), chatId, blocks, md, { reply_markup: вебКнопка(безКэша, '?tab=money', '💰 Открыть Деньги') });
+}
+
 // ── Роутер для callback rep:* и естественного текста ─────────────────────────
 export async function отправитьОтчёт(kind, deps) {
   switch (kind) {
@@ -438,6 +507,7 @@ export async function отправитьОтчёт(kind, deps) {
     case 'plan':       return отправитьПланДня(deps);
     case 'day_report':
     case 'report':     return отправитьОтчётЗаДень(deps);
+    case 'money':      return отправитьДеньги(deps);
     default:           return отправитьДашборд(deps);
   }
 }

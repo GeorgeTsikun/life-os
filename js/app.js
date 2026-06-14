@@ -1,19 +1,19 @@
 // ── LIFE OS — ГЛАВНЫЙ МОДУЛЬ ──────────────────────────────────────────────────
-import { DB } from './db.js?v=53';
-import { injectUI, checkAchievements, onQuestCompleted, applyDebuffMode } from './gamification.js?v=53';
-import { TG } from './telegram.js?v=53';
-import { renderDash }         from './screens/dash.js?v=53';
-import { renderTasks }        from './screens/tasks.js?v=53';
-import { renderHealth }       from './screens/health.js?v=53';
-import { renderProjects }     from './screens/projects.js?v=53';
-import { renderPeople }       from './screens/people.js?v=53';
-import { renderFinance }      from './screens/finance.js?v=53';
-import { renderContent }      from './screens/content.js?v=53';
-import { renderAchievements } from './screens/achievements.js?v=53';
-import { renderOnboarding }   from './screens/onboarding.js?v=53';
-import { renderAnalytics }    from './screens/analytics.js?v=53';
-import * as Sync              from './supabaseSync.js?v=53';
-import { openVoiceCapture }  from './voiceCapture.js?v=53';
+import { DB } from './db.js?v=54';
+import { injectUI, checkAchievements, onQuestCompleted, applyDebuffMode } from './gamification.js?v=54';
+import { TG } from './telegram.js?v=54';
+import { renderDash }         from './screens/dash.js?v=54';
+import { renderTasks }        from './screens/tasks.js?v=54';
+import { renderHealth }       from './screens/health.js?v=54';
+import { renderProjects }     from './screens/projects.js?v=54';
+import { renderPeople }       from './screens/people.js?v=54';
+import { renderFinance }      from './screens/finance.js?v=54';
+import { renderContent }      from './screens/content.js?v=54';
+import { renderAchievements } from './screens/achievements.js?v=54';
+import { renderOnboarding }   from './screens/onboarding.js?v=54';
+import { renderAnalytics }    from './screens/analytics.js?v=54';
+import * as Sync              from './supabaseSync.js?v=54';
+import { openVoiceCapture }  from './voiceCapture.js?v=54';
 
 // ── ИНИЦИАЛИЗАЦИЯ ─────────────────────────────────────────────────────────────
 const ОНБОРДИНГ_ПРОЙДЕН = localStorage.getItem('lifeos_onboarded') === 'true'
@@ -101,6 +101,7 @@ window._дбHook = function(тип, объект) {
     case 'idea_delete':  Sync.удалитьИдею(объект.id);               break;
     case 'meal':         Sync.сохранитьПриёмПищи(объект);           break;
     case 'meal_delete':  Sync.удалитьПриёмПищи(объект.id);          break;
+    case 'finance':      Sync.сохранитьФинансы(объект);             break;
   }
 };
 

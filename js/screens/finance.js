@@ -1,6 +1,6 @@
 // ── ДЕНЬГИ — платёжный календарь, приходы, долги, кэш, офферы, лиды ───────────
 // Самодостаточный экран: данные в localStorage 'lifeos_finance', сид — из онбординга.
-import { TG } from '../telegram.js?v=53';
+import { TG } from '../telegram.js?v=54';
 
 const KEY = 'lifeos_finance';
 
@@ -9,10 +9,10 @@ const SEED = {
   incomeGoal: 500000,
   // Платёжный календарь: recurring — ежемесячные; day — число месяца; date — разовое
   payments: [
-    { id:'p_pasha',  title:'Вернуть Паше',           amount:5000,   when:'завтра',     cat:'мелкий долг', status:'due' },
-    { id:'p_kolya',  title:'Вернуть Коле Боди',       amount:5000,   when:'сегодня-завтра', cat:'мелкий долг', status:'due' },
-    { id:'p_credit', title:'Кредит (ежемес. до ноября)', amount:32000, when:'26 числа', recurring:true, cat:'кредит', status:'due', note:'осталось ~192к за 6 мес' },
-    { id:'p_card',   title:'Кредитка — мин. платёж',  amount:18500,  when:'10 числа',  recurring:true, cat:'кредит', status:'due', note:'общий долг ~300к' },
+    { id:'p_pasha',  title:'Вернуть Паше',           amount:5000,   when:'завтра',     dueIn:1, cat:'мелкий долг', status:'due' },
+    { id:'p_kolya',  title:'Вернуть Коле Боди',       amount:5000,   when:'сегодня',    dueIn:0, cat:'мелкий долг', status:'due' },
+    { id:'p_credit', title:'Кредит (ежемес. до ноября)', amount:32000, when:'26 числа', day:26, recurring:true, cat:'кредит', status:'due', note:'осталось ~192к за 6 мес' },
+    { id:'p_card',   title:'Кредитка — мин. платёж',  amount:18500,  when:'10 числа', day:10, recurring:true, cat:'кредит', status:'due', note:'общий долг ~300к' },
     { id:'p_food',   title:'Еда',                     amount:30000,  recurring:true, cat:'жизнь', status:'due' },
     { id:'p_ai',     title:'Нейросети / подписки',    amount:12000,  recurring:true, cat:'жизнь', status:'due' },
     { id:'p_fuel',   title:'Бензин',                  amount:10000,  recurring:true, cat:'жизнь', status:'due' },
@@ -90,10 +90,10 @@ const SEED = {
 
 function getFin() {
   try { const s = JSON.parse(localStorage.getItem(KEY)); if (s) return s; } catch {}
-  localStorage.setItem(KEY, JSON.stringify(SEED));
+  saveFin(SEED);   // первый раз — сохраняем сид и пушим в Supabase
   return SEED;
 }
-function saveFin(f) { localStorage.setItem(KEY, JSON.stringify(f)); }
+function saveFin(f) { localStorage.setItem(KEY, JSON.stringify(f)); window._дбHook?.('finance', f); }
 const fmt = n => (typeof n === 'number' ? n.toLocaleString('ru-RU') + ' ₽' : n);
 
 export function renderFinance() {
@@ -127,23 +127,56 @@ export function renderFinance() {
     </div>
   </div>`;
 
-  // ── Платёжный календарь ─────────────────────────────────────────────────────
+  // ── Платёжный календарь (авто-подсветка по датам) ───────────────────────────
+  // Возвращает кол-во дней до платежа (null если без даты): <0 просрочено, 0 сегодня
+  const daysToPay = p => {
+    const today = new Date(); today.setHours(0,0,0,0);
+    if (typeof p.dueIn === 'number') return p.dueIn;
+    if (p.day) {
+      let d = new Date(today.getFullYear(), today.getMonth(), p.day);
+      if (d < today) d = new Date(today.getFullYear(), today.getMonth()+1, p.day);
+      return Math.round((d - today) / 86400000);
+    }
+    return null;
+  };
+  const urgency = d => {
+    if (d == null) return { color:'rgba(232,237,245,.4)', chip:'', glow:false };
+    if (d < 0)  return { color:'#FF4560', chip:`🔴 просрочено ${-d} дн.`, glow:true };
+    if (d === 0) return { color:'#FF4560', chip:'🔥 сегодня', glow:true };
+    if (d === 1) return { color:'#FF9F43', chip:'⚠️ завтра', glow:true };
+    if (d <= 3)  return { color:'#F5B942', chip:`через ${d} дн.`, glow:false };
+    return { color:'rgba(232,237,245,.4)', chip:`через ${d} дн.`, glow:false };
+  };
+
   const payRow = p => {
     const paid = p.status === 'paid';
+    const d = paid ? null : daysToPay(p);
+    const u = urgency(d);
     const когда = p.when || (p.recurring ? 'ежемесячно' : '');
     const tagC = p.cat==='кредит'?'#FF9F43':p.cat==='мелкий долг'?'#FF5C8A':p.cat==='разовое'?'#7C3AED':'#00D4FF';
-    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05);${paid?'opacity:.5':''}">
+    const chip = (!paid && u.chip) ? `<span style="font-size:9px;color:${u.color};border:1px solid ${u.color}55;border-radius:6px;padding:1px 6px;margin-left:6px">${u.chip}</span>` : '';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05);${paid?'opacity:.5':''}${u.glow&&!paid?';background:linear-gradient(90deg,'+u.color+'14,transparent);border-radius:8px;padding-left:8px':''}">
       <button onclick="window.finPay('${p.id}')" style="width:22px;height:22px;border-radius:6px;border:1.5px solid ${paid?'#00E396':'rgba(255,255,255,.2)'};background:${paid?'rgba(0,227,150,.2)':'transparent'};color:#00E396;font-size:12px;cursor:pointer;flex-shrink:0">${paid?'✓':''}</button>
       <div style="flex:1;min-width:0">
-        <div style="font-size:13px;${paid?'text-decoration:line-through':''}">${p.title}</div>
+        <div style="font-size:13px;${paid?'text-decoration:line-through':''}">${p.title}${chip}</div>
         <div style="font-size:10px;color:rgba(232,237,245,.4)">${когда}${p.note?' · '+p.note:''}</div>
       </div>
       <div class="num" style="font-size:14px;color:${tagC};flex-shrink:0">${fmt(p.amount)}</div>
     </div>`;
   };
+  // Сортировка: неоплаченные по срочности (ближе срок — выше), без даты — в конец, оплаченные — в самый низ
+  const sortedPays = f.payments.slice().sort((a,b) => {
+    if ((a.status==='paid') !== (b.status==='paid')) return a.status==='paid' ? 1 : -1;
+    const da = daysToPay(a), db = daysToPay(b);
+    if (da == null && db == null) return 0;
+    if (da == null) return 1;
+    if (db == null) return -1;
+    return da - db;
+  });
+  const горит = sortedPays.filter(p => p.status!=='paid' && (daysToPay(p) != null && daysToPay(p) <= 1)).length;
   const calendar = `<div class="card" style="margin-bottom:12px">
-    <div class="sec-label">📅 ПЛАТЁЖНЫЙ КАЛЕНДАРЬ</div>
-    ${f.payments.map(payRow).join('')}
+    <div class="row" style="justify-content:space-between"><div class="sec-label" style="margin:0">📅 ПЛАТЁЖНЫЙ КАЛЕНДАРЬ</div>${горит?`<span style="font-size:10px;color:#FF4560">🔥 горит: ${горит}</span>`:''}</div>
+    <div style="margin-top:8px">${sortedPays.map(payRow).join('')}</div>
   </div>`;
 
   // ── Долги ───────────────────────────────────────────────────────────────────

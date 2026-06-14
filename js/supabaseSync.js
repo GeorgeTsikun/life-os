@@ -201,6 +201,14 @@ export async function загрузитьВсё() {
       }
     } catch (e) { console.warn('[Supabase meals pull]', e.message); }
 
+    // Финансовый модуль (один JSON-документ)
+    try {
+      const finRows = await запросSelect('finance').catch(() => []);
+      if (finRows?.[0]?.data && Object.keys(finRows[0].data).length) {
+        localStorage.setItem('lifeos_finance', JSON.stringify(finRows[0].data));
+      }
+    } catch (e) { console.warn('[Supabase finance pull]', e.message); }
+
     // Инбокс — последние 50 записей (голосовые из бота)
     try {
       const inboxData = await запросSelect('inbox', 'order=created_at.desc&limit=50');
@@ -323,6 +331,12 @@ export async function удалитьПриёмПищи(id) {
   try {
     await fetch(`${базаURL}/meals?id=eq.${id}`, { method: 'DELETE', headers: заголовки() });
   } catch (err) { console.warn('[Supabase delete meal]', err); }
+}
+
+// ── ФИНАНСЫ (один JSON-документ) ─────────────────────────────────────────────
+export async function сохранитьФинансы(data) {
+  if (!активен()) return;
+  await запросUpsert('finance', { owner: владелец, data, updated_at: new Date().toISOString() }, 'owner');
 }
 
 export async function сохранитьПроект(проект) {
