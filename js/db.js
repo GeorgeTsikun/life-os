@@ -204,6 +204,7 @@ export const DB = {
     this.applyDailyDecay();
     this.resetDailyQuests();
     this.resetDailyNutrition();
+    this.pruneOldNutritionData();
     const moved = this.sweepQ4toIdeaBank();
     if (moved > 0) window.showToast?.(`💡 ${moved} идей из Q4 → Банк идей`, 'info');
   },
@@ -670,6 +671,24 @@ export const DB = {
     this.saveNutrition(n);
     // пересчёт из блюд сегодняшнего дня (обычно 0)
     this._recalcNutritionFromMeals(this.getMeals());
+  },
+
+  // Очистка старых данных питания (блюда с фото + снимки воды) старше N дней,
+  // чтобы localStorage не упёрся в лимит ~5 МБ. Последние 30 дней храним.
+  pruneOldNutritionData(keepDays = 30) {
+    try {
+      const граница = Date.now() - keepDays * 86400000;
+      const toRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        const m = key && key.match(/^lifeos_(?:meals|water)_(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) continue;
+        const ts = new Date(+m[1], +m[2] - 1, +m[3]).getTime();
+        if (ts < граница) toRemove.push(key);
+      }
+      toRemove.forEach(k => localStorage.removeItem(k));
+      if (toRemove.length) console.log(`[db] очищено старых записей питания: ${toRemove.length}`);
+    } catch (e) { console.warn('[db] pruneOldNutritionData:', e.message); }
   },
 
   // Отменить задачу (не удалять, хранить в аналитике)
