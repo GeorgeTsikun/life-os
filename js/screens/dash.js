@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=49';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=49';
-import { TG } from '../telegram.js?v=49';
+import { DB } from '../db.js?v=50';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=50';
+import { TG } from '../telegram.js?v=50';
 
 let radarChart, energyChart;
 let _currentQuests = []; // для синхронизации taskId при completeQuest
@@ -463,7 +463,8 @@ window.completeQuest = function(id) {
   const dynQ = _currentQuests.find(q => q.id === id);
   const q = DB.completeQuest(id);
   if (q) {
-    if (dynQ?.taskId) DB.toggleTask(dynQ.taskId); // синхронизируем задачу
+    onQuestCompleted(q);                            // XP / уровень / достижения
+    if (dynQ?.taskId) DB.toggleTask(dynQ.taskId);  // синхронизируем связанную задачу
     window.showToast?.(`${q.icon} ${(dynQ?.title || q.title).slice(0, 30)} · +${q.xp} XP`, 'success');
     TG.hapticSuccess();
     renderDash();

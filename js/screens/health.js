@@ -1,8 +1,8 @@
 // ── HEALTH SCREEN (Health / Sport / Nutrition sub-tabs) ───────────────────────
-import { DB } from '../db.js?v=49';
-import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=49';
-import { TG } from '../telegram.js?v=49';
-import { PLAN_GOAL, STAGES, DAY_KEYS, DAY_LABELS, stageForWeek, planState, PLAN_WEEKS } from '../data/trainingPlan.js?v=49';
+import { DB } from '../db.js?v=50';
+import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=50';
+import { TG } from '../telegram.js?v=50';
+import { PLAN_GOAL, STAGES, DAY_KEYS, DAY_LABELS, stageForWeek, planState, PLAN_WEEKS } from '../data/trainingPlan.js?v=50';
 
 let sleepChart, pulseChart, hrvChart, revenueChart;
 let healthTab = 'health';
@@ -942,6 +942,7 @@ window.openAddMealModal = function(prefilled = null) {
     ${p._loading ? `<div style="text-align:center;padding:24px;color:#00F5D4;font-size:13px">
       <div style="width:26px;height:26px;border-radius:50%;border:3px solid #00F5D4;border-top-color:transparent;animation:spin .8s linear infinite;margin:0 auto 12px"></div>
       Анализирую фото через ИИ…
+      <button class="btn btn-ghost" style="display:block;margin:14px auto 0;font-size:11px;padding:6px 16px" onclick="window._cancelFoodAnalysis()">Отмена</button>
     </div>` : `
     <div id="meal-form-body">
       ${p._error ? `<div style="color:#FF5C8A;font-size:11px;margin-bottom:12px">⚠️ ${p._error}</div>` : ''}
@@ -1157,6 +1158,10 @@ window.openFoodCamera = function() {
 
     window.openAddMealModal({ _loading: true });
 
+    // Таймаут 35 сек + возможность отмены
+    window._foodAbort = new AbortController();
+    const timer = setTimeout(() => window._foodAbort?.abort(), 35000);
+
     try {
       const base64 = await fileToBase64(file);          // для отправки в ИИ
       const thumb  = await downscaleImage(file, 480);   // лёгкое превью для хранения
@@ -1164,6 +1169,7 @@ window.openFoodCamera = function() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64: base64, mimeType: file.type }),
+        signal: window._foodAbort.signal,
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -1179,10 +1185,24 @@ window.openFoodCamera = function() {
       });
       TG.hapticImpact('medium');
     } catch (err) {
-      window.openAddMealModal({ _error: err.message });
+      if (err.name === 'AbortError') {
+        document.getElementById('meal-modal')?.remove();
+        window.showToast?.('Анализ отменён или превышено время', 'error');
+      } else {
+        window.openAddMealModal({ _error: err.message });
+      }
+    } finally {
+      clearTimeout(timer);
+      window._foodAbort = null;
     }
   });
   input.click();
+};
+
+// Отмена анализа фото из модалки загрузки
+window._cancelFoodAnalysis = function() {
+  window._foodAbort?.abort();
+  document.getElementById('meal-modal')?.remove();
 };
 
 function fileToBase64(file) {
