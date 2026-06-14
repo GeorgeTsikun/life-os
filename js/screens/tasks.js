@@ -1,7 +1,7 @@
 // ── TASKS SCREEN ──────────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=54';
-import { onTaskToggled } from '../gamification.js?v=54';
-import { TG } from '../telegram.js?v=54';
+import { DB } from '../db.js?v=55';
+import { onTaskToggled } from '../gamification.js?v=55';
+import { TG } from '../telegram.js?v=55';
 import { парсДату, бакет, форматДата, БАКЕТЫ_UI, ПОРЯДОК_БАКЕТОВ, вISO } from '../utils/date.js';
 import { openTaskDetail } from './_taskDetail.js';
 
@@ -74,6 +74,7 @@ export function renderTasks() {
     <button class="toggle-btn${viewMode==='kanban'?' active':''}" onclick="window.setTaskView('kanban')">🗂</button>
     <button class="toggle-btn${viewMode==='done'?' active':''}"   onclick="window.setTaskView('done')">✅</button>
     <button class="toggle-btn${viewMode==='ideas'?' active':''}"  onclick="window.setTaskView('ideas')" style="color:#FFD700">💡</button>
+    <button class="toggle-btn${viewMode==='knowledge'?' active':''}" onclick="window.setTaskView('knowledge')" style="color:#00D4FF">📚</button>
   </div>
 
   ${viewMode !== 'done' ? `
@@ -90,6 +91,7 @@ export function renderTasks() {
   ${viewMode === 'matrix' ? renderMatrix(filtered)
    : viewMode === 'done'  ? renderDone(готовые)
    : viewMode === 'ideas' ? renderIdeaBank()
+   : viewMode === 'knowledge' ? renderKnowledge()
    : viewMode === 'kanban'? renderKanban()
    : renderByDates(filtered)}
 
@@ -345,6 +347,63 @@ function renderIdeaBank() {
     </div>`).join('')}
   </div>`;
 }
+
+// ── БАЗА ЗНАНИЙ (скрипты, шаблоны, чек-листы) ────────────────────────────────
+function renderKnowledge() {
+  const items = DB.getKnowledge();
+  const fav = items.filter(i => i.fav);
+  const rest = items.filter(i => !i.fav);
+  const sorted = [...fav, ...rest];
+
+  const card = k => `<div class="card" style="margin-bottom:10px">
+    <div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px">
+      <div style="font-size:13px;font-weight:700;flex:1;cursor:pointer" onclick="window.knToggle('${k.id}')">${k.fav?'⭐ ':''}${k.title}</div>
+      <span style="font-size:9px;color:#00D4FF;background:rgba(0,212,255,.08);padding:2px 7px;border-radius:10px;flex-shrink:0">${k.cat||''}</span>
+    </div>
+    <div id="kn-body-${k.id}" style="display:none;margin-top:10px">
+      <pre style="white-space:pre-wrap;font-family:inherit;font-size:12px;line-height:1.55;color:rgba(232,237,245,.8);margin:0">${(k.body||'').replace(/</g,'&lt;')}</pre>
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn btn-teal" style="font-size:11px;padding:6px 12px" onclick="window.knCopy('${k.id}')">📋 Копировать</button>
+        <button class="btn btn-ghost" style="font-size:11px;padding:6px 12px" onclick="window.knFav('${k.id}')">${k.fav?'☆ Из избранного':'⭐ В избранное'}</button>
+        <button class="btn btn-ghost" style="font-size:11px;padding:6px 12px;color:#FF6B6B" onclick="window.knDelete('${k.id}')">🗑</button>
+      </div>
+    </div>
+  </div>`;
+
+  return `<div style="margin-bottom:8px">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700">📚 База знаний</div>
+      <button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="window.knAdd()">+ Добавить</button>
+    </div>
+    <div style="font-size:10px;color:rgba(232,237,245,.35);margin-bottom:10px">Скрипты, шаблоны, чек-листы. Нажми на заголовок — развернуть, потом «Копировать».</div>
+    ${sorted.map(card).join('')}
+  </div>`;
+}
+
+window.knToggle = function(id) {
+  const b = document.getElementById('kn-body-' + id);
+  if (b) b.style.display = b.style.display === 'none' ? 'block' : 'none';
+};
+window.knCopy = function(id) {
+  const k = DB.getKnowledge().find(x => x.id === id);
+  if (!k) return;
+  navigator.clipboard?.writeText(k.body).then(
+    () => window.showToast?.('📋 Скопировано', 'success'),
+    () => { prompt('Скопируй вручную:', k.body); }
+  );
+};
+window.knFav = function(id) { DB.toggleKnowledgeFav(id); renderTasks(); };
+window.knDelete = function(id) {
+  if (!confirm('Удалить запись из базы знаний?')) return;
+  DB.deleteKnowledge(id); renderTasks();
+};
+window.knAdd = function() {
+  const title = prompt('Заголовок записи:'); if (!title) return;
+  const body = prompt('Текст (скрипт/шаблон/чек-лист):') || '';
+  DB.addKnowledge({ title, body, cat: 'Заметки' });
+  renderTasks();
+  window.showToast?.('📚 Добавлено в базу знаний', 'success');
+};
 
 // ── KANBAN ─────────────────────────────────────────────────────────────────
 const KB_COLS = [

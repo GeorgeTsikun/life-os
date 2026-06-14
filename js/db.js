@@ -1,4 +1,5 @@
 // ── СЛОЙ ДАННЫХ ───────────────────────────────────────────────────────────────
+import { KNOWLEDGE_SEED } from './data/knowledge.js?v=55';
 // Приоритет: localStorage (работает без интернета).
 // Если заданы VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY — синхронизируется с Supabase.
 // Переменные окружения читаются из window.__ENV__ (injected Vercel) или import.meta.env
@@ -342,6 +343,27 @@ export const DB = {
   removeFromIdeaBank(id) {
     this.saveIdeaBank(this.getIdeaBank().filter(x => x.id !== id));
     window._дбHook?.('idea_delete', { id });
+  },
+
+  // ── БАЗА ЗНАНИЙ (скрипты, шаблоны, чек-листы) ────────────────────────────────
+  getKnowledge() {
+    try { const s = JSON.parse(localStorage.getItem('lifeos_knowledge')); if (s?.length) return s; } catch {}
+    localStorage.setItem('lifeos_knowledge', JSON.stringify(KNOWLEDGE_SEED));
+    return KNOWLEDGE_SEED;
+  },
+  saveKnowledge(arr) { localStorage.setItem('lifeos_knowledge', JSON.stringify(arr)); },
+  addKnowledge(item) {
+    const arr = this.getKnowledge();
+    arr.unshift({ id: 'kn_' + Date.now(), fav: false, cat: 'Заметки', ...item });
+    this.saveKnowledge(arr);
+  },
+  toggleKnowledgeFav(id) {
+    const arr = this.getKnowledge();
+    const k = arr.find(x => x.id === id);
+    if (k) { k.fav = !k.fav; this.saveKnowledge(arr); }
+  },
+  deleteKnowledge(id) {
+    this.saveKnowledge(this.getKnowledge().filter(x => x.id !== id));
   },
 
   // Перемещает Q4-задачи старше 48ч в Idea Bank
