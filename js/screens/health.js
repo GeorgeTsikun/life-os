@@ -1,8 +1,8 @@
 // ── HEALTH SCREEN (Health / Sport / Nutrition sub-tabs) ───────────────────────
-import { DB } from '../db.js?v=56';
-import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=56';
-import { TG } from '../telegram.js?v=56';
-import { PLAN_GOAL, STAGES, DAY_KEYS, DAY_LABELS, stageForWeek, planState, PLAN_WEEKS } from '../data/trainingPlan.js?v=56';
+import { DB } from '../db.js?v=57';
+import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=57';
+import { TG } from '../telegram.js?v=57';
+import { PLAN_GOAL, STAGES, DAY_KEYS, DAY_LABELS, stageForWeek, planState, PLAN_WEEKS } from '../data/trainingPlan.js?v=57';
 
 let sleepChart, pulseChart, hrvChart, revenueChart;
 let healthTab = 'health';
@@ -546,7 +546,8 @@ function nutritionTabHTML() {
       <div class="row" style="gap:8px;flex-wrap:wrap">
         <button class="btn btn-ghost" style="font-size:11px;padding:7px 12px" onclick="window.openAddMealModal(false)">✏️ Вручную</button>
         <button class="btn btn-ghost" style="font-size:11px;padding:7px 12px" onclick="window.openFoodText()">🤖 Описать</button>
-        <button class="btn btn-teal" style="font-size:11px;padding:7px 14px" onclick="window.openFoodCamera()">📷 Сфоткать</button>
+        <button class="btn btn-ghost" style="font-size:11px;padding:7px 12px" onclick="window.openFoodVoice()">🎙 Голос</button>
+        <button class="btn btn-teal" style="font-size:11px;padding:7px 14px" onclick="window.openFoodCamera()">📷 Фото</button>
       </div>
     </div>
     <div class="meal-feed">${feedRows}</div>
@@ -1007,14 +1008,15 @@ window._mealPortion = function(delta) {
 };
 
 // Описать еду текстом → ИИ оценивает КБЖУ (без фото)
-window.openFoodText = function() {
-  const txt = prompt('Опиши что съел — ИИ посчитает КБЖУ:\nНапр. «тарелка борща со сметаной и 2 куска хлеба»');
-  if (!txt || !txt.trim()) return;
+// Общий анализ еды по тексту (используют и текст, и голос) → модалка с КБЖУ
+async function _analyzeFoodText(txt) {
   window.openAddMealModal({ _loading: true });
-  fetch('/api/analyze-food', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: txt.trim() }),
-  }).then(r => r.json()).then(data => {
+  try {
+    const r = await fetch('/api/analyze-food', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: txt.trim() }),
+    });
+    const data = await r.json();
     if (data.error) throw new Error(data.error);
     window.openAddMealModal({
       mealType: autoMealType(),
@@ -1023,7 +1025,87 @@ window.openFoodText = function() {
       health_score: data.health_score, note: data.note || '', _confidence: data.confidence,
     });
     TG.hapticImpact('medium');
-  }).catch(err => window.openAddMealModal({ _error: err.message }));
+  } catch (err) { window.openAddMealModal({ _error: err.message }); }
+}
+
+window.openFoodText = function() {
+  const txt = prompt('Опиши что съел — ИИ посчитает КБЖУ:\nНапр. «тарелка борща со сметаной и 2 куска хлеба»');
+  if (!txt || !txt.trim()) return;
+  _analyzeFoodText(txt);
+};
+
+// 🎙 Голосовой ввод еды → транскрипция → тот же анализ КБЖУ
+let _foodRec = null;
+window.openFoodVoice = function() {
+  document.getElementById('food-voice-modal')?.remove();
+  const div = document.createElement('div');
+  div.id = 'food-voice-modal';
+  div.className = 'modal-overlay';
+  div.innerHTML = `<div class="modal-sheet" style="text-align:center">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🎙️ Расскажи, что съел</div>
+    <div id="fv-hint" style="font-size:12px;color:rgba(232,237,245,.55);margin:8px 0 18px">Нажми и говори — например «овсянка с бананом и кофе»</div>
+    <button id="fv-btn" onclick="window._foodVoiceToggle()" style="width:84px;height:84px;border-radius:50%;border:none;cursor:pointer;background:linear-gradient(135deg,#00E396,#00F5D4);font-size:34px;box-shadow:0 0 28px rgba(0,245,212,.4)">🎙️</button>
+    <div id="fv-timer" style="font-family:'Orbitron';font-size:14px;color:#00F5D4;margin-top:12px;min-height:18px"></div>
+    <button class="btn btn-ghost" style="width:100%;margin-top:18px" onclick="window._foodVoiceCancel()">Отмена</button>
+  </div>`;
+  div.addEventListener('click', e => { if (e.target === div) window._foodVoiceCancel(); });
+  document.body.appendChild(div);
+};
+
+window._foodVoiceToggle = async function() {
+  const btn = document.getElementById('fv-btn');
+  const hint = document.getElementById('fv-hint');
+  const timerEl = document.getElementById('fv-timer');
+  // Идёт запись → стоп
+  if (_foodRec?.recorder && _foodRec.recorder.state === 'recording') {
+    _foodRec.recorder.stop();
+    return;
+  }
+  // Старт записи
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+    const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    const chunks = [];
+    let sec = 0;
+    const timer = setInterval(() => { sec++; if (timerEl) timerEl.textContent = `● запись ${sec}с`; }, 1000);
+    recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    recorder.onstop = async () => {
+      clearInterval(timer);
+      stream.getTracks().forEach(t => t.stop());
+      if (_foodRec?.cancelled) { _foodRec = null; return; }   // отменили — не распознаём
+      const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+      if (hint) hint.textContent = '⏳ Распознаю…';
+      if (btn) btn.textContent = '⏳';
+      try {
+        const res = await fetch('/api/transcribe', { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
+        if (!res.ok) throw new Error('Whisper не ответил');
+        const { text } = await res.json();
+        document.getElementById('food-voice-modal')?.remove();
+        if (text && text.trim()) _analyzeFoodText(text);
+        else window.showToast?.('Не расслышал — попробуй ещё раз', 'error');
+      } catch (err) {
+        if (hint) hint.textContent = `❌ ${err.message}`;
+        if (btn) btn.textContent = '🎙️';
+      }
+    };
+    recorder.start();
+    _foodRec = { recorder, stream };
+    if (btn) { btn.textContent = '⏹'; btn.style.background = 'linear-gradient(135deg,#FF4560,#FF6B6B)'; }
+    if (hint) hint.textContent = 'Говори… нажми ⏹ когда закончишь';
+    TG.hapticImpact('medium');
+  } catch (err) {
+    if (hint) hint.textContent = '❌ Нет доступа к микрофону';
+  }
+};
+
+window._foodVoiceCancel = function() {
+  try {
+    if (_foodRec?.recorder?.state === 'recording') { _foodRec.cancelled = true; _foodRec.recorder.stop(); }
+  } catch {}
+  try { _foodRec?.stream?.getTracks().forEach(t => t.stop()); } catch {}
+  document.getElementById('food-voice-modal')?.remove();
 };
 
 window._submitMeal = function() {
