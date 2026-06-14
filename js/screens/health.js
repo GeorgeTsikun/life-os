@@ -1,8 +1,8 @@
 // ── HEALTH SCREEN (Health / Sport / Nutrition sub-tabs) ───────────────────────
-import { DB } from '../db.js?v=47';
-import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=47';
-import { TG } from '../telegram.js?v=47';
-import { PLAN_GOAL, STAGES, DAY_KEYS, DAY_LABELS, stageForWeek, planState, PLAN_WEEKS } from '../data/trainingPlan.js?v=47';
+import { DB } from '../db.js?v=48';
+import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=48';
+import { TG } from '../telegram.js?v=48';
+import { PLAN_GOAL, STAGES, DAY_KEYS, DAY_LABELS, stageForWeek, planState, PLAN_WEEKS } from '../data/trainingPlan.js?v=48';
 
 let sleepChart, pulseChart, hrvChart, revenueChart;
 let healthTab = 'health';
@@ -397,6 +397,55 @@ function nutritionTabHTML() {
   const cG = n.caloriesGoal || 2200, pG = n.proteinGoal || 140, fG = n.fatGoal || 70, crbG = n.carbsGoal || 220;
   const filledGlasses = Math.min(10, Math.round((n.water || 0) / 0.25));
 
+  // ── HERO (Cal AI): осталось калорий + кольца макросов ─────────────────────
+  const calLeft = Math.max(0, cG - (n.calories || 0));
+  const calPct  = Math.min(100, Math.round(((n.calories || 0) / Math.max(cG, 1)) * 100));
+  const over    = (n.calories || 0) > cG;
+  const R = 54, C = 2 * Math.PI * R, OFF = C - (calPct / 100) * C;
+  const ringMacro = (val, goal, color, letter) => {
+    const left = Math.max(0, goal - val);
+    const pct  = Math.min(100, Math.round((val / Math.max(goal, 1)) * 100));
+    const r = 22, c = 2 * Math.PI * r, off = c - (pct / 100) * c;
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+      <div style="position:relative;width:58px;height:58px">
+        <svg width="58" height="58">
+          <circle cx="29" cy="29" r="${r}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="5"/>
+          <circle cx="29" cy="29" r="${r}" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round"
+            stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 29 29)"
+            style="filter:drop-shadow(0 0 4px ${color});transition:stroke-dashoffset .6s"/>
+        </svg>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:${color}">${letter}</div>
+      </div>
+      <span style="font-size:11px;font-weight:700;color:#E8EDF5">${left}<span style="font-size:9px;color:rgba(232,237,245,.4);font-weight:400">г</span></span>
+      <span style="font-size:8px;color:rgba(232,237,245,.35)">осталось</span>
+    </div>`;
+  };
+  const heroCard = `<div class="card" style="margin-bottom:12px">
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="sec-label" style="margin:0">🔥 СЕГОДНЯ</div>
+      <button onclick="window.openGoalsModal()" style="font-size:10px;color:#00D4FF;background:none;border:1px solid rgba(0,212,255,.25);border-radius:8px;padding:4px 9px;cursor:pointer">⚙️ Цели</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:18px">
+      <div style="position:relative;width:130px;height:130px;flex-shrink:0">
+        <svg width="130" height="130">
+          <circle cx="65" cy="65" r="${R}" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="10"/>
+          <circle cx="65" cy="65" r="${R}" fill="none" stroke="${over ? '#FF5C8A' : '#00E396'}" stroke-width="10" stroke-linecap="round"
+            stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${OFF.toFixed(1)}" transform="rotate(-90 65 65)"
+            style="filter:drop-shadow(0 0 8px ${over ? '#FF5C8A' : '#00E396'});transition:stroke-dashoffset .6s"/>
+        </svg>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+          <span class="num" style="font-size:30px;font-weight:900;color:${over ? '#FF5C8A' : '#fff'};line-height:1">${over ? '+' + ((n.calories||0)-cG) : calLeft}</span>
+          <span style="font-size:9px;color:rgba(232,237,245,.45);margin-top:2px">${over ? 'перебор ккал' : 'ккал осталось'}</span>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;justify-content:space-around">
+        ${ringMacro(n.protein||0, pG, '#FF9F43', 'Б')}
+        ${ringMacro(n.carbs||0, crbG, '#F5B942', 'У')}
+        ${ringMacro(n.fat||0, fG, '#7C3AED', 'Ж')}
+      </div>
+    </div>
+  </div>`;
+
   // ── 3 ВЕРХНИЕ КАРТЫ: ВОДА / КБЖУ / БАЛЛ ───────────────────────────────────
   const waterCard = `<div class="card">
     <div class="row" style="justify-content:space-between;align-items:baseline;margin-bottom:12px">
@@ -485,9 +534,10 @@ function nutritionTabHTML() {
   const feedCard = `<div class="card">
     <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
       <div class="sec-label" style="margin:0">🍱 ЛЕНТА ПИТАНИЯ · сегодня</div>
-      <div class="row" style="gap:8px">
+      <div class="row" style="gap:8px;flex-wrap:wrap">
         <button class="btn btn-ghost" style="font-size:11px;padding:7px 12px" onclick="window.openAddMealModal(false)">✏️ Вручную</button>
-        <button class="btn btn-teal" style="font-size:11px;padding:7px 14px" onclick="window.openFoodCamera()">+ Добавить еду</button>
+        <button class="btn btn-ghost" style="font-size:11px;padding:7px 12px" onclick="window.openFoodText()">🤖 Описать</button>
+        <button class="btn btn-teal" style="font-size:11px;padding:7px 14px" onclick="window.openFoodCamera()">📷 Сфоткать</button>
       </div>
     </div>
     <div class="meal-feed">${feedRows}</div>
@@ -555,6 +605,7 @@ function nutritionTabHTML() {
   </div>`;
 
   return `
+    ${heroCard}
     <div class="nut-top">${waterCard}${kbjuCard}${scoreCard}</div>
     ${feedCard}
     ${photoCTA}
@@ -855,7 +906,26 @@ window.openAddMealModal = function(prefilled = null) {
   const p = prefilled || {};
   window._mealPhoto = p.photo || null;       // превью-фото для сохранения
   window._mealType  = p.mealType || autoMealType();
-  const itemsText = Array.isArray(p.items) ? p.items.join('\n') : (p.items || p.name || '');
+  window._mealHealth = p.health_score || null;
+  // Базовые КБЖУ (для пересчёта порции) + множитель порции
+  window._mealBase = { calories: p.calories||0, protein: p.protein||0, fat: p.fat||0, carbs: p.carbs||0 };
+  window._mealQty  = 1;
+  const itemsText = Array.isArray(p.items)
+    ? p.items.map(it => typeof it === 'string' ? it : it.name).join('\n')
+    : (p.items || p.name || '');
+  const hs = p.health_score;
+  const hsColor = hs >= 7 ? '#00E396' : hs >= 4 ? '#F5B942' : '#FF5C8A';
+  const healthBadge = hs ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 12px;background:${hsColor}14;border:1px solid ${hsColor}33;border-radius:10px">
+    <span style="font-size:16px">❤️</span>
+    <span style="font-size:12px;color:rgba(232,237,245,.7)">Польза блюда</span>
+    <span style="margin-left:auto;font-size:14px;font-weight:800;color:${hsColor}">${hs}/10</span>
+  </div>` : '';
+  const portionStepper = (p.calories) ? `<div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">ПОРЦИЯ</div>
+    <div class="row" style="gap:10px;align-items:center;margin-bottom:12px">
+      <button class="btn btn-ghost" style="width:42px;font-size:18px;padding:6px" onclick="window._mealPortion(-0.5)">−</button>
+      <span id="meal-qty" style="flex:1;text-align:center;font-size:15px;font-weight:700;color:#00F5D4">1 порция</span>
+      <button class="btn btn-ghost" style="width:42px;font-size:18px;padding:6px" onclick="window._mealPortion(0.5)">+</button>
+    </div>` : '';
 
   div.innerHTML = `<div class="modal-sheet">
     <div class="modal-handle"></div>
@@ -869,6 +939,8 @@ window.openAddMealModal = function(prefilled = null) {
       ${p._confidence ? `<div style="font-size:10px;color:rgba(0,245,212,.7);margin-bottom:10px">🤖 ИИ распознал — проверь и скорректируй</div>` : ''}
 
       ${p.photo ? `<div style="border-radius:14px;overflow:hidden;margin-bottom:12px;max-height:160px"><img src="${p.photo}" style="width:100%;object-fit:cover;display:block"></div>` : ''}
+      ${healthBadge}
+      ${portionStepper}
 
       <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:6px">ПРИЁМ ПИЩИ</div>
       <div class="cat-pills" id="meal-type-pills" style="margin-bottom:12px">
@@ -912,6 +984,38 @@ window._pickMealType = function(k) {
   TG.hapticSelection();
 };
 
+// Пересчёт КБЖУ по множителю порции (Cal AI: − 1 +)
+window._mealPortion = function(delta) {
+  const q = Math.max(0.5, Math.round((window._mealQty + delta) * 2) / 2);
+  window._mealQty = q;
+  const b = window._mealBase || {};
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = Math.round((v||0) * q); };
+  set('meal-cal', b.calories); set('meal-pro', b.protein); set('meal-fat', b.fat); set('meal-crb', b.carbs);
+  const lbl = document.getElementById('meal-qty');
+  if (lbl) lbl.textContent = (q === 1 ? '1 порция' : q + (q < 1 ? ' порции' : ' порции'));
+  TG.hapticSelection();
+};
+
+// Описать еду текстом → ИИ оценивает КБЖУ (без фото)
+window.openFoodText = function() {
+  const txt = prompt('Опиши что съел — ИИ посчитает КБЖУ:\nНапр. «тарелка борща со сметаной и 2 куска хлеба»');
+  if (!txt || !txt.trim()) return;
+  window.openAddMealModal({ _loading: true });
+  fetch('/api/analyze-food', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: txt.trim() }),
+  }).then(r => r.json()).then(data => {
+    if (data.error) throw new Error(data.error);
+    window.openAddMealModal({
+      mealType: autoMealType(),
+      items: Array.isArray(data.items) && data.items.length ? data.items.map(i => i.name) : (data.name ? [data.name] : [txt.trim()]),
+      calories: data.calories, protein: data.protein, carbs: data.carbs, fat: data.fat,
+      health_score: data.health_score, note: data.note || '', _confidence: data.confidence,
+    });
+    TG.hapticImpact('medium');
+  }).catch(err => window.openAddMealModal({ _error: err.message }));
+};
+
 window._submitMeal = function() {
   const itemsRaw = document.getElementById('meal-items')?.value?.trim() || '';
   const items    = itemsRaw.split('\n').map(s => s.trim()).filter(Boolean);
@@ -926,9 +1030,11 @@ window._submitMeal = function() {
     mealType: window._mealType || 'snack',
     name: items[0],
     items, calories, protein, carbs, fat, note,
+    health_score: window._mealHealth || null,
     photo: window._mealPhoto || null,
   });
   window._mealPhoto = null;
+  window._mealHealth = null;
   document.getElementById('meal-modal')?.remove();
   renderHealth('nutrition');
   TG.hapticSuccess();
@@ -944,6 +1050,64 @@ window.setNutPeriod = function(days) {
   window._nutPeriod = days;
   renderHealth('nutrition');
   TG.hapticSelection();
+};
+
+// ── ЦЕЛИ КБЖУ (TDEE мини-онбординг, как Cal AI) ────────────────────────────
+window.openGoalsModal = function() {
+  const n = DB.getNutrition();
+  const m = n.goalsMeta || {};
+  const div = document.createElement('div');
+  div.className = 'modal-overlay';
+  div.id = 'goals-modal';
+  const act = m.activity || 1.375, goal = m.goal || 'maintain', sex = m.sex || 'male';
+  const actOpt = (v,l) => `<option value="${v}" ${act==v?'selected':''}>${l}</option>`;
+  div.innerHTML = `<div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🎯 Цели по КБЖУ</div>
+    <div style="font-size:11px;color:rgba(232,237,245,.45);margin-bottom:14px">Посчитаем дневную норму калорий и макросов (формула Mifflin-St Jeor).</div>
+    <div class="grid2" style="gap:8px;margin-bottom:10px">
+      <div><div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Вес, кг</div><input id="g-weight" class="input" type="number" value="${m.weight||''}" placeholder="80"></div>
+      <div><div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Рост, см</div><input id="g-height" class="input" type="number" value="${m.height||''}" placeholder="180"></div>
+      <div><div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Возраст</div><input id="g-age" class="input" type="number" value="${m.age||''}" placeholder="32"></div>
+      <div><div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Пол</div>
+        <select id="g-sex" class="input"><option value="male" ${sex==='male'?'selected':''}>Мужской</option><option value="female" ${sex==='female'?'selected':''}>Женский</option></select></div>
+    </div>
+    <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Активность</div>
+    <select id="g-activity" class="input" style="margin-bottom:10px">
+      ${actOpt(1.2,'Сидячий образ')}${actOpt(1.375,'Лёгкая (1-3 трен/нед)')}${actOpt(1.55,'Средняя (3-5)')}${actOpt(1.725,'Высокая (6-7)')}
+    </select>
+    <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:6px">ЦЕЛЬ</div>
+    <div class="cat-pills" id="goal-pills" style="margin-bottom:16px">
+      ${[['lose','📉 Похудеть'],['maintain','⚖️ Держать'],['gain','📈 Набрать']].map(([k,l])=>`<button class="cat-pill${goal===k?' active':''}" data-goal="${k}" onclick="window._pickGoal('${k}')">${l}</button>`).join('')}
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('goals-modal').remove()">Отмена</button>
+      <button class="btn btn-teal" style="flex:2" onclick="window._saveGoals()">Рассчитать ✓</button>
+    </div>
+  </div>`;
+  div.addEventListener('click', e => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
+  window._goalPick = goal;
+};
+window._pickGoal = function(k) {
+  window._goalPick = k;
+  document.querySelectorAll('#goal-pills .cat-pill').forEach(b => b.classList.toggle('active', b.dataset.goal === k));
+  TG.hapticSelection();
+};
+window._saveGoals = function() {
+  const params = {
+    weight: +document.getElementById('g-weight')?.value,
+    height: +document.getElementById('g-height')?.value,
+    age:    +document.getElementById('g-age')?.value,
+    sex:    document.getElementById('g-sex')?.value,
+    activity: +document.getElementById('g-activity')?.value,
+    goal:   window._goalPick || 'maintain',
+  };
+  const goals = DB.saveNutritionGoals(params);
+  document.getElementById('goals-modal')?.remove();
+  renderHealth('nutrition');
+  window.showToast?.(`🎯 Цель: ${goals.caloriesGoal} ккал · Б${goals.proteinGoal}/Ж${goals.fatGoal}/У${goals.carbsGoal}`, 'success');
+  TG.hapticSuccess();
 };
 
 window.showNutritionScoreInfo = function() {
@@ -978,8 +1142,9 @@ window.openFoodCamera = function() {
 
       window.openAddMealModal({
         mealType: autoMealType(),
-        items:    data.name ? [data.name] : [],
+        items:    Array.isArray(data.items) && data.items.length ? data.items.map(i => i.name) : (data.name ? [data.name] : []),
         calories: data.calories, protein: data.protein, carbs: data.carbs, fat: data.fat,
+        health_score: data.health_score,
         note:     data.note || '',
         photo:    thumb,
         _confidence: data.confidence,

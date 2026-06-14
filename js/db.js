@@ -498,6 +498,27 @@ export const DB = {
   getNutrition()  { return this.get('nutrition'); },
   saveNutrition(n){ this.set('nutrition', n); },
 
+  // ── Цели КБЖУ из антропометрии (Mifflin-St Jeor TDEE) ────────────────────
+  computeNutritionGoals({ weight, height, age, sex = 'male', activity = 1.375, goal = 'maintain' }) {
+    const w = +weight || 75, h = +height || 178, a = +age || 30;
+    const s = sex === 'female' ? -161 : 5;
+    const bmr  = 10 * w + 6.25 * h - 5 * a + s;
+    let tdee = bmr * (+activity || 1.375);
+    if (goal === 'lose') tdee -= 500;
+    if (goal === 'gain') tdee += 400;
+    const calories = Math.round(tdee / 10) * 10;
+    const protein  = Math.round(w * 2);                       // 2 г/кг
+    const fat      = Math.round((calories * 0.25) / 9);       // 25% калорий
+    const carbs    = Math.round((calories - protein * 4 - fat * 9) / 4);
+    return { caloriesGoal: calories, proteinGoal: protein, fatGoal: fat, carbsGoal: Math.max(0, carbs) };
+  },
+  saveNutritionGoals(params) {
+    const goals = this.computeNutritionGoals(params);
+    const n = { ...this.getNutrition(), ...goals, goalsMeta: params };
+    this.saveNutrition(n);
+    return goals;
+  },
+
   // ── КБЖУ: список блюд за сегодня ─────────────────────────────────────────
   _mealsKey() {
     const d = new Date();
@@ -508,17 +529,25 @@ export const DB = {
   },
   addMeal(meal) {
     const meals = this.getMeals();
-    const newMeal = { id: crypto?.randomUUID?.() || ('m'+Date.now()), time: new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}), ...meal };
+    const d = new Date();
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const newMeal = {
+      id: crypto?.randomUUID?.() || ('m'+Date.now()),
+      time: new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),
+      date: dateStr,
+      ...meal,
+    };
     meals.push(newMeal);
     localStorage.setItem(this._mealsKey(), JSON.stringify(meals));
-    // Пересчитать суммарные КБЖУ в nutrition
     this._recalcNutritionFromMeals(meals);
+    window._дбHook?.('meal', newMeal);
     return newMeal;
   },
   deleteMeal(id) {
     const meals = this.getMeals().filter(m => m.id !== id);
     localStorage.setItem(this._mealsKey(), JSON.stringify(meals));
     this._recalcNutritionFromMeals(meals);
+    window._дбHook?.('meal_delete', { id });
   },
   _recalcNutritionFromMeals(meals) {
     const n = this.getNutrition();

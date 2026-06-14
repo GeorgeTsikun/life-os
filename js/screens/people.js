@@ -1,6 +1,6 @@
 // ── PEOPLE / CRM SCREEN ───────────────────────────────────────────────────────
-import { DB } from '../db.js?v=47';
-import { TG } from '../telegram.js?v=47';
+import { DB } from '../db.js?v=48';
+import { TG } from '../telegram.js?v=48';
 
 const CHECKUPS = [
   {l:'Чекап здоровья — терапевт',d:'июль 2026',i:'🏥'},

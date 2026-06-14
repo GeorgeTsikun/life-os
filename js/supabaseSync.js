@@ -175,6 +175,32 @@ export async function загрузитьВсё() {
       localStorage.setItem('lifeos_content', JSON.stringify(contentItems.map(маппингКонтента)));
     }
 
+    // Приёмы пищи за сегодня (фото еды от бота появляются в приложении)
+    try {
+      const mealsData = await запросSelect('meals', `date=eq.${сегодня}&order=time_label.asc`).catch(() => []);
+      if (Array.isArray(mealsData)) {
+        const mealsKey = 'lifeos_meals_' + сегодня;
+        const локальные = JSON.parse(localStorage.getItem(mealsKey) || '[]');
+        const serverIds = new Set(mealsData.map(m => m.id));
+        const merged = mealsData.map(m => ({
+          id: m.id, date: m.date, time: m.time_label, mealType: m.meal_type,
+          name: m.name, items: m.items || [], calories: m.calories, protein: m.protein,
+          fat: m.fat, carbs: m.carbs, weight_g: m.weight_g, health_score: m.health_score,
+          photo: m.photo, note: m.note,
+        }));
+        // локальные, которых ещё нет в облаке — оставляем (зальются хуком)
+        for (const local of локальные) if (!serverIds.has(local.id)) merged.push(local);
+        localStorage.setItem(mealsKey, JSON.stringify(merged));
+        // пересчёт суммарных КБЖУ
+        const n = JSON.parse(localStorage.getItem('lifeos_nutrition') || '{}');
+        n.calories = merged.reduce((s,m)=>s+(m.calories||0),0);
+        n.protein  = merged.reduce((s,m)=>s+(m.protein||0),0);
+        n.fat      = merged.reduce((s,m)=>s+(m.fat||0),0);
+        n.carbs    = merged.reduce((s,m)=>s+(m.carbs||0),0);
+        localStorage.setItem('lifeos_nutrition', JSON.stringify(n));
+      }
+    } catch (e) { console.warn('[Supabase meals pull]', e.message); }
+
     // Инбокс — последние 50 записей (голосовые из бота)
     try {
       const inboxData = await запросSelect('inbox', 'order=created_at.desc&limit=50');
@@ -267,6 +293,36 @@ export async function pushAllLocal() {
     if (uuidValid(t.id)) { await сохранитьЗадачу(t); залито++; }
   }
   console.log(`[Supabase] pushAllLocal: залито задач=${залито}`);
+}
+
+// ── ПРИЁМЫ ПИЩИ (Cal AI) ─────────────────────────────────────────────────────
+export async function сохранитьПриёмПищи(meal) {
+  if (!активен()) return;
+  if (!uuidValid(meal.id)) return;
+  await запросUpsert('meals', {
+    id:       meal.id,
+    owner:    владелец,
+    date:     meal.date || new Date().toISOString().split('T')[0],
+    time_label: meal.time || null,
+    meal_type: meal.mealType || null,
+    name:     meal.name || (Array.isArray(meal.items) ? meal.items.join(', ') : null),
+    items:    meal.items || [],
+    calories: meal.calories || 0,
+    protein:  meal.protein  || 0,
+    fat:      meal.fat      || 0,
+    carbs:    meal.carbs    || 0,
+    weight_g: meal.weight_g || null,
+    health_score: meal.health_score || null,
+    photo:    meal.photo || null,
+    note:     meal.note  || null,
+  });
+}
+
+export async function удалитьПриёмПищи(id) {
+  if (!активен() || !uuidValid(id)) return;
+  try {
+    await fetch(`${базаURL}/meals?id=eq.${id}`, { method: 'DELETE', headers: заголовки() });
+  } catch (err) { console.warn('[Supabase delete meal]', err); }
 }
 
 export async function сохранитьПроект(проект) {

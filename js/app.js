@@ -1,18 +1,18 @@
 // ── LIFE OS — ГЛАВНЫЙ МОДУЛЬ ──────────────────────────────────────────────────
-import { DB } from './db.js?v=47';
-import { injectUI, checkAchievements, onQuestCompleted, applyDebuffMode } from './gamification.js?v=47';
-import { TG } from './telegram.js?v=47';
-import { renderDash }         from './screens/dash.js?v=47';
-import { renderTasks }        from './screens/tasks.js?v=47';
-import { renderHealth }       from './screens/health.js?v=47';
-import { renderProjects }     from './screens/projects.js?v=47';
-import { renderPeople }       from './screens/people.js?v=47';
-import { renderContent }      from './screens/content.js?v=47';
-import { renderAchievements } from './screens/achievements.js?v=47';
-import { renderOnboarding }   from './screens/onboarding.js?v=47';
-import { renderAnalytics }    from './screens/analytics.js?v=47';
-import * as Sync              from './supabaseSync.js?v=47';
-import { openVoiceCapture }  from './voiceCapture.js?v=47';
+import { DB } from './db.js?v=48';
+import { injectUI, checkAchievements, onQuestCompleted, applyDebuffMode } from './gamification.js?v=48';
+import { TG } from './telegram.js?v=48';
+import { renderDash }         from './screens/dash.js?v=48';
+import { renderTasks }        from './screens/tasks.js?v=48';
+import { renderHealth }       from './screens/health.js?v=48';
+import { renderProjects }     from './screens/projects.js?v=48';
+import { renderPeople }       from './screens/people.js?v=48';
+import { renderContent }      from './screens/content.js?v=48';
+import { renderAchievements } from './screens/achievements.js?v=48';
+import { renderOnboarding }   from './screens/onboarding.js?v=48';
+import { renderAnalytics }    from './screens/analytics.js?v=48';
+import * as Sync              from './supabaseSync.js?v=48';
+import { openVoiceCapture }  from './voiceCapture.js?v=48';
 
 // ── ИНИЦИАЛИЗАЦИЯ ─────────────────────────────────────────────────────────────
 const ОНБОРДИНГ_ПРОЙДЕН = localStorage.getItem('lifeos_onboarded') === 'true'
@@ -98,6 +98,8 @@ window._дбHook = function(тип, объект) {
       break;
     case 'idea':         Sync.сохранитьИдею(объект);                break;
     case 'idea_delete':  Sync.удалитьИдею(объект.id);               break;
+    case 'meal':         Sync.сохранитьПриёмПищи(объект);           break;
+    case 'meal_delete':  Sync.удалитьПриёмПищи(объект.id);          break;
   }
 };
 

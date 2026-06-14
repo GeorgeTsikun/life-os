@@ -409,6 +409,80 @@ bot.on('message:audio', async (ctx) => {
   }
 });
 
+// ── ФОТО ЕДЫ → GPT-4o Vision → КБЖУ → Supabase meals ──────────────────────────
+const FOOD_VISION_PROMPT = `Ты нутрициолог. Оцени блюдо на фото. Верни ТОЛЬКО JSON без markdown:
+{"name":"...","calories":000,"protein":00,"fat":00,"carbs":00,"weight_g":000,"items":[{"name":"...","calories":00}],"health_score":0,"confidence":"high|medium|low","note":"1 строка"}
+calories в ккал, остальное в граммах; health_score 1-10; если еды нет — {"error":"Еда не найдена"}.`;
+
+bot.on('message:photo', async (ctx) => {
+  await ctx.replyWithChatAction('typing');
+  try {
+    // Берём самое большое изображение
+    const photos = ctx.message.photo;
+    const big = photos[photos.length - 1];
+    const файл = await ctx.api.getFile(big.file_id);
+    const url = `https://api.telegram.org/file/bot${TOKEN}/${файл.file_path}`;
+    const resp = await fetch(url);
+    const b64 = Buffer.from(await resp.arrayBuffer()).toString('base64');
+
+    const completion = await openai.chat.completions.create({
+      model: process.env.FOOD_MODEL || 'gpt-4o',
+      max_tokens: 500,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}`, detail: 'low' } },
+          { type: 'text', text: FOOD_VISION_PROMPT },
+        ],
+      }],
+    });
+    const raw = completion.choices[0].message.content || '';
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('не распознал ответ');
+    const data = JSON.parse(m[0]);
+    if (data.error) return ctx.reply(`🤷 ${data.error}`);
+
+    // Сохраняем в Supabase → появится в Mini App
+    let сохранено = false;
+    if (supa) {
+      const сегодня = new Date(Date.now() + 3*3600*1000).toISOString().split('T')[0];
+      const время = new Date(Date.now() + 3*3600*1000).toISOString().slice(11,16);
+      const { error } = await supa.from('meals').insert({
+        owner: 'george', date: сегодня, time_label: время,
+        meal_type: автоТипПриёма(),
+        name: data.name || 'Блюдо', items: data.items || [],
+        calories: data.calories||0, protein: data.protein||0, fat: data.fat||0, carbs: data.carbs||0,
+        weight_g: data.weight_g||null, health_score: data.health_score||null, note: data.note||null,
+      });
+      сохранено = !error;
+      if (error) console.error('[meal insert]', error.message);
+    }
+
+    const ингр = Array.isArray(data.items) && data.items.length
+      ? '\n' + data.items.map(i => `• ${i.name}${i.calories?` — ${i.calories} ккал`:''}`).join('\n') : '';
+    const hs = data.health_score ? `\n❤️ Польза: *${data.health_score}/10*` : '';
+    await ctx.reply(
+      `🍽️ *${data.name || 'Блюдо'}*\n\n` +
+      `🔥 *${data.calories||0} ккал* · Б ${data.protein||0} · Ж ${data.fat||0} · У ${data.carbs||0}${hs}${ингр}\n\n` +
+      (data.note ? `_${data.note}_\n\n` : '') +
+      (сохранено ? '_✓ записано · видно в Mini App_' : '_⚠️ не сохранено в облако_'),
+      { parse_mode: 'Markdown', reply_markup: new InlineKeyboard().webApp('🥗 Открыть питание', безКэша('?tab=health')) }
+    );
+    await ctx.replyWithChatAction('typing').catch(()=>{});
+  } catch (err) {
+    console.error('food photo:', err);
+    await ctx.reply(`❌ Ошибка анализа фото: ${err.message}`);
+  }
+});
+
+function автоТипПриёма() {
+  const h = new Date(Date.now() + 3*3600*1000).getUTCHours();
+  if (h < 11) return 'breakfast';
+  if (h < 16) return 'lunch';
+  if (h < 21) return 'dinner';
+  return 'snack';
+}
+
 // ── ТЕКСТОВЫЕ СООБЩЕНИЯ ───────────────────────────────────────────────────────
 bot.on('message:text', async (ctx) => {
   const сообщ = ctx.message.text;
