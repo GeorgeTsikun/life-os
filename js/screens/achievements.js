@@ -1,7 +1,7 @@
 // ── ACHIEVEMENTS SCREEN ───────────────────────────────────────────────────────
-import { DB } from '../db.js?v=57';
-import { levelFromXp, xpProgress, xpForLevel, totalXpForLevel, RPG_STATS } from '../gamification.js?v=57';
-import { TG } from '../telegram.js?v=57';
+import { DB } from '../db.js?v=58';
+import { levelFromXp, xpProgress, xpForLevel, totalXpForLevel, RPG_STATS } from '../gamification.js?v=58';
+import { TG } from '../telegram.js?v=58';
 
 export function renderAchievements() {
   const profile = DB.getProfile();

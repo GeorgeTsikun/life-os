@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=57';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=57';
-import { TG } from '../telegram.js?v=57';
+import { DB } from '../db.js?v=58';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=58';
+import { TG } from '../telegram.js?v=58';
 
 let radarChart, energyChart;
 let _currentQuests = []; // для синхронизации taskId при completeQuest
@@ -33,9 +33,10 @@ export function renderDash() {
   const liveQuests = динамичныеКвесты.filter(q => !q.done);
   const doneQuests = динамичныеКвесты.filter(q => q.done);
 
-  // Дофамин-баланс (механика GAMECHANGER)
-  const earned     = DB.getEarned();
-  const spent      = DB.getSpent();
+  // Дофамин-баланс — ДНЕВНОЙ бюджет (старт 100/день + заработал − потратил сегодня)
+  const _today     = DB.getTodayStats();
+  const earned     = _today.earned;
+  const spent      = _today.spent;
   const balance    = DB.getBalance();
   const ratio      = DB.getPleasureRatio();
   const todayStats = DB.getTodayStats();

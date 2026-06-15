@@ -1,5 +1,5 @@
 // ── СЛОЙ ДАННЫХ ───────────────────────────────────────────────────────────────
-import { KNOWLEDGE_SEED } from './data/knowledge.js?v=57';
+import { KNOWLEDGE_SEED } from './data/knowledge.js?v=58';
 // Приоритет: localStorage (работает без интернета).
 // Если заданы VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY — синхронизируется с Supabase.
 // Переменные окружения читаются из window.__ENV__ (injected Vercel) или import.meta.env
@@ -13,8 +13,8 @@ const supabaseАктивен = () => !!(SUPABASE_URL && SUPABASE_KEY);
 // ── НАЧАЛЬНЫЕ ДАННЫЕ ──────────────────────────────────────────────────────────
 const ДАННЫЕ = {
   profile: {
-    name: 'ДЖОРДЖ',
-    tagline: 'ВИЗИОНЕР · СОЗДАТЕЛЬ · ЛИДЕР',
+    name: 'Джордж',
+    tagline: 'ВИЗИОНЕР · СОЗДАТЕЛЬ · ЛИДЕР · AI',
     avatar: '👑',
     photo: 'assets/avatar.jpg',  // путь к фото (fallback на эмоджи)
     level: 1,
@@ -437,16 +437,20 @@ export const DB = {
     return this.getPleasureLog().reduce((s, p) => s + (p.cost || 0), 0);
   },
 
-  // Итоговый баланс (может быть < 0 — это сигнал стоп)
+  // Дневной дофамин-бюджет: старт 100 утром + заработал сегодня − потратил сегодня.
+  // Сам решаешь, на что тратишь дофамин: на работу (бесплатно копит) или на развлечения.
+  DOPAMINE_BASE: 100,
   getBalance() {
-    return this.getEarned() - this.getSpent();
+    const t = this.getTodayStats();
+    return this.DOPAMINE_BASE + t.earned - t.spent;
   },
 
-  // Доля удовольствий (0..1) — если > 0.7 уже зона риска
+  // Доля удовольствий за сегодня (0..1) — если > 0.5 уже зона риска
   getPleasureRatio() {
-    const earned = this.getEarned();
-    if (!earned) return 0;
-    return Math.min(1, this.getSpent() / earned);
+    const t = this.getTodayStats();
+    const base = this.DOPAMINE_BASE + t.earned;
+    if (!base) return 0;
+    return Math.min(1, t.spent / base);
   },
 
   // Статистика за сегодня
