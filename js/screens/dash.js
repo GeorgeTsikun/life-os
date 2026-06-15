@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=58';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=58';
-import { TG } from '../telegram.js?v=58';
+import { DB } from '../db.js?v=59';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=59';
+import { TG } from '../telegram.js?v=59';
 
 let radarChart, energyChart;
 let _currentQuests = []; // для синхронизации taskId при completeQuest
@@ -115,6 +115,9 @@ export function renderDash() {
 
   <!-- ── DAILY CHECK-IN ────────────────────────────────────────────────────────── -->
   ${renderCheckinBlock(daily)}
+
+  <!-- ── ⏱ КУДА УШЛО ВРЕМЯ ─────────────────────────────────────────────────────── -->
+  ${renderTimeWasteBlock()}
 
   <!-- ── Q1 ЛИМИТ ──────────────────────────────────────────────────────────────── -->
   ${renderQ1Alert(tasks)}
@@ -319,6 +322,7 @@ function десктопныйДашборд(p) {
       </div>
       <div class="dd-col">
         ${renderCheckinBlock(daily)}
+        ${renderTimeWasteBlock()}
         ${renderTimelineBlock(tasks)}
         ${renderFocusBlock(tasks, health, profile)}
       </div>
@@ -330,6 +334,28 @@ function десктопныйДашборд(p) {
     </div>
 
     <div style="height:8px"></div>
+  </div>`;
+}
+
+// ── ⏱ КУДА УШЛО ВРЕМЯ СЕГОДНЯ (честный отчёт) ────────────────────────────────
+function renderTimeWasteBlock() {
+  const tw = DB.getTimeWasteToday();
+  if (!tw.count) return '';
+  const цвет = tw.totalMin >= 240 ? '#FF4560' : tw.totalMin >= 120 ? '#FF9F43' : '#FFD700';
+  const честно = tw.totalMin >= 240
+    ? 'Жёстко слил. Завтра поймай себя раньше.'
+    : tw.totalMin >= 120 ? 'Многовато на ерунду. Держи в узде.'
+    : 'Под контролем. Норм.';
+  return `<div class="card" style="margin-bottom:12px;border-left:3px solid ${цвет}">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <div class="sec-label" style="margin:0">⏱ КУДА УШЛО ВРЕМЯ</div>
+      <span class="num" style="font-size:16px;color:${цвет}">${tw.hours} ч</span>
+    </div>
+    ${tw.items.map(i => `<div class="row" style="justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+      <div style="font-size:12px;color:#E8EDF5">${i.icon} ${i.name}${i.count>1?` ×${i.count}`:''}</div>
+      <div style="font-size:11px;color:rgba(232,237,245,.5)">${i.min} мин</div>
+    </div>`).join('')}
+    <div style="font-size:11px;color:${цвет};margin-top:8px">🪞 ${честно}</div>
   </div>`;
 }
 

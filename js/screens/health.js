@@ -1,8 +1,8 @@
 // ── HEALTH SCREEN (Health / Sport / Nutrition sub-tabs) ───────────────────────
-import { DB } from '../db.js?v=58';
-import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=58';
-import { TG } from '../telegram.js?v=58';
-import { PLAN_GOAL, STAGES, DAY_KEYS, DAY_LABELS, stageForWeek, planState, PLAN_WEEKS } from '../data/trainingPlan.js?v=58';
+import { DB } from '../db.js?v=59';
+import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=59';
+import { TG } from '../telegram.js?v=59';
+import { PLAN_GOAL, STAGES, DAY_KEYS, DAY_LABELS, stageForWeek, planState, PLAN_WEEKS } from '../data/trainingPlan.js?v=59';
 
 let sleepChart, pulseChart, hrvChart, revenueChart;
 let healthTab = 'health';
@@ -461,6 +461,7 @@ function nutritionTabHTML() {
       <button class="btn btn-teal" style="flex:2;font-size:11px" onclick="window.addWater(0.25)">+ стакан 250мл</button>
       <button class="btn btn-ghost" style="flex:1;font-size:11px" onclick="window.addWater(0.5)">+ 500мл</button>
     </div>
+    <div style="font-size:10px;color:rgba(232,237,245,.35);margin-top:8px;text-align:center">💧 Бот напомнит 5× за день (10:00 · 12:30 · 15:00 · 17:30 · 20:00) — размазываем 2.5л</div>
   </div>`;
 
   const macroBar = (val, goal, color, label) => {

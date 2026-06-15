@@ -1,8 +1,8 @@
 // ── VOICE CAPTURE — глобальный голосовой захват с любого экрана ───────────────
 // Открывается по FAB с любой вкладки. После транскрипции → задача / инбокс / заметка.
 
-import { DB } from './db.js?v=58';
-import { TG } from './telegram.js?v=58';
+import { DB } from './db.js?v=59';
+import { TG } from './telegram.js?v=59';
 
 let _vcRecording = null; // { recorder, timer, chunks }
 

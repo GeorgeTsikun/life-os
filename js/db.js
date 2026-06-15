@@ -1,5 +1,5 @@
 // ── СЛОЙ ДАННЫХ ───────────────────────────────────────────────────────────────
-import { KNOWLEDGE_SEED } from './data/knowledge.js?v=58';
+import { KNOWLEDGE_SEED } from './data/knowledge.js?v=59';
 // Приоритет: localStorage (работает без интернета).
 // Если заданы VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY — синхронизируется с Supabase.
 // Переменные окружения читаются из window.__ENV__ (injected Vercel) или import.meta.env
@@ -74,21 +74,23 @@ const ДАННЫЕ = {
 
   // ── КАТАЛОГ УДОВОЛЬСТВИЙ (из твоей таблицы GAMECHANGER) ──────────────────
   pleasureCatalog: [
-    { id:'pl1',  icon:'📱', name:'Соцсети / скроллинг',     cost:15,  category:'быстрый_дофамин' },
-    { id:'pl2',  icon:'🎬', name:'Фильм / сериал',           cost:20,  category:'развлечение' },
-    { id:'pl3',  icon:'🛋️', name:'Просто релакс',            cost:20,  category:'отдых' },
-    { id:'pl4',  icon:'🎥', name:'Кино / выход',              cost:30,  category:'развлечение' },
-    { id:'pl5',  icon:'💨', name:'Кальян',                   cost:25,  category:'быстрый_дофамин' },
-    { id:'pl6',  icon:'🍽️', name:'Ресторан / доставка',      cost:20,  category:'удовольствие' },
-    { id:'pl7',  icon:'💆', name:'Массаж',                   cost:15,  category:'отдых' },
-    { id:'pl8',  icon:'🧖', name:'Сауна / баня',              cost:5,   category:'здоровье' },
-    { id:'pl9',  icon:'🛁', name:'Ванна',                    cost:10,  category:'отдых' },
-    { id:'pl10', icon:'📚', name:'Читать книгу',              cost:5,   category:'развитие' },
-    { id:'pl11', icon:'🧠', name:'Обучающий YouTube',         cost:10,  category:'развитие' },
-    { id:'pl12', icon:'📊', name:'Бизнес-новости',            cost:5,   category:'развитие' },
-    { id:'pl13', icon:'📰', name:'Политические новости',      cost:15,  category:'быстрый_дофамин' },
-    { id:'pl14', icon:'🎮', name:'Игры',                      cost:25,  category:'быстрый_дофамин' },
-    { id:'pl15', icon:'🏖️', name:'Поездка / отпуск',          cost:100, category:'большой_приз' },
+    { id:'pl1',  icon:'📱', name:'Соцсети / скроллинг',     cost:15,  min:30,  category:'быстрый_дофамин' },
+    { id:'pl2',  icon:'🎬', name:'Фильм / сериал',           cost:20,  min:90,  category:'развлечение' },
+    { id:'pl3',  icon:'🛋️', name:'Просто релакс',            cost:20,  min:30,  category:'отдых' },
+    { id:'pl4',  icon:'🎥', name:'Кино / выход',              cost:30,  min:150, category:'развлечение' },
+    { id:'pl5',  icon:'💨', name:'Кальян',                   cost:25,  min:60,  category:'быстрый_дофамин' },
+    { id:'pl6',  icon:'🍽️', name:'Ресторан / доставка',      cost:20,  min:60,  category:'удовольствие' },
+    { id:'pl7',  icon:'💆', name:'Массаж',                   cost:15,  min:60,  category:'отдых' },
+    { id:'pl8',  icon:'🧖', name:'Сауна / баня',              cost:5,   min:90,  category:'здоровье' },
+    { id:'pl9',  icon:'🛁', name:'Ванна',                    cost:10,  min:30,  category:'отдых' },
+    { id:'pl10', icon:'📚', name:'Читать книгу',              cost:5,   min:30,  category:'развитие' },
+    { id:'pl11', icon:'🧠', name:'Обучающий YouTube',         cost:10,  min:30,  category:'развитие' },
+    { id:'pl12', icon:'📊', name:'Бизнес-новости',            cost:5,   min:15,  category:'развитие' },
+    { id:'pl13', icon:'📰', name:'Политические новости',      cost:15,  min:30,  category:'быстрый_дофамин' },
+    { id:'pl14', icon:'🎮', name:'Игры',                      cost:25,  min:60,  category:'быстрый_дофамин' },
+    { id:'pl16', icon:'😂', name:'Мемы / Пикабу',             cost:15,  min:30,  category:'быстрый_дофамин' },
+    { id:'pl17', icon:'📺', name:'Тупое шоу / ютуб',          cost:20,  min:120, category:'быстрый_дофамин' },
+    { id:'pl15', icon:'🏖️', name:'Поездка / отпуск',          cost:100, min:0,   category:'большой_приз' },
   ],
 
   // ── ИСТОРИЯ ТРАТ УДОВОЛЬСТВИЙ ─────────────────────────────────────────────
@@ -484,11 +486,31 @@ export const DB = {
       icon: элемент.icon,
       name: элемент.name,
       cost: элемент.cost,
+      min: элемент.min || 0,                 // сколько минут съело
+      category: элемент.category || null,
       at: new Date().toISOString(),
     });
     this.set('pleasureLog', журнал.slice(0, 500));
 
     return { ok: true, balance: баланс - элемент.cost, item: элемент };
+  },
+
+  // ── ЧЕСТНЫЙ ОТЧЁТ: куда ушло время сегодня (быстрый дофамин / развлечения) ───
+  getTimeWasteToday() {
+    const сегодня = new Date().toDateString();
+    const junkCats = new Set(['быстрый_дофамин', 'развлечение']);
+    const today = this.getPleasureLog().filter(p => new Date(p.at).toDateString() === сегодня);
+    const junk = today.filter(p => junkCats.has(p.category));
+    const totalMin = junk.reduce((s, p) => s + (p.min || 0), 0);
+    // Группируем по названию
+    const byName = {};
+    junk.forEach(p => {
+      if (!byName[p.name]) byName[p.name] = { name: p.name, icon: p.icon, min: 0, count: 0 };
+      byName[p.name].min += (p.min || 0);
+      byName[p.name].count++;
+    });
+    const items = Object.values(byName).sort((a, b) => b.min - a.min);
+    return { totalMin, hours: +(totalMin / 60).toFixed(1), items, count: junk.length };
   },
 
   deleteTask(id) {
