@@ -215,8 +215,23 @@ export async function загрузитьВсё() {
     // Универсальный KV: вода/цели, тренировки, база знаний, дофамин-журнал, rpg…
     try {
       const kvRows = await запросSelect('kv').catch(() => []);
+      const сегодняStr = new Date().toDateString();
       for (const row of (kvRows || [])) {
-        if (row.key && row.data != null) localStorage.setItem('lifeos_' + row.key, JSON.stringify(row.data));
+        if (!row.key || row.data == null) continue;
+        // nutrition — НЕ затираем воду слепо: вода это счётчик, берём максимум за сегодня
+        if (row.key === 'nutrition') {
+          let local = {};
+          try { local = JSON.parse(localStorage.getItem('lifeos_nutrition') || '{}'); } catch {}
+          const cloud = row.data || {};
+          const out = { ...local, ...cloud };           // цели/последние — из облака
+          const lw = local.date === сегодняStr ? (local.water || 0) : 0;
+          const cw = cloud.date === сегодняStr ? (cloud.water || 0) : 0;
+          out.water = Math.max(lw, cw);                  // не теряем отмеченное ни на одном устройстве
+          out.date  = сегодняStr;
+          localStorage.setItem('lifeos_nutrition', JSON.stringify(out));
+          continue;
+        }
+        localStorage.setItem('lifeos_' + row.key, JSON.stringify(row.data));
       }
     } catch (e) { console.warn('[Supabase kv pull]', e.message); }
 
