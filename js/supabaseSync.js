@@ -212,6 +212,27 @@ export async function загрузитьВсё() {
       }
     } catch (e) { console.warn('[Supabase finance pull]', e.message); }
 
+    // Универсальный KV: вода/цели, тренировки, база знаний, дофамин-журнал, rpg…
+    try {
+      const kvRows = await запросSelect('kv').catch(() => []);
+      for (const row of (kvRows || [])) {
+        if (row.key && row.data != null) localStorage.setItem('lifeos_' + row.key, JSON.stringify(row.data));
+      }
+    } catch (e) { console.warn('[Supabase kv pull]', e.message); }
+
+    // Здоровье — последний снимок health_metrics → локальный объект health
+    try {
+      const hm = await запросSelect('health_metrics', 'order=date.desc&limit=1').catch(() => []);
+      if (hm?.[0]) {
+        const h = JSON.parse(localStorage.getItem('lifeos_health') || '{}');
+        if (hm[0].hrv_ms != null)     h.hrv = hm[0].hrv_ms;
+        if (hm[0].resting_hr != null) h.restingHr = hm[0].resting_hr;
+        if (hm[0].steps != null)      h.steps = hm[0].steps;
+        if (hm[0].sleep_h != null)    h.sleep = { ...(h.sleep || {}), hours: hm[0].sleep_h };
+        localStorage.setItem('lifeos_health', JSON.stringify(h));
+      }
+    } catch (e) { console.warn('[Supabase health pull]', e.message); }
+
     // Инбокс — последние 50 записей (голосовые из бота)
     try {
       const inboxData = await запросSelect('inbox', 'order=created_at.desc&limit=50');
@@ -336,6 +357,27 @@ export async function удалитьПриёмПищи(id) {
   try {
     await fetch(`${базаURL}/meals?id=eq.${id}`, { method: 'DELETE', headers: заголовки() });
   } catch (err) { console.warn('[Supabase delete meal]', err); }
+}
+
+// ── УНИВЕРСАЛЬНЫЙ KV (вода/цели, тренировки, база знаний, дофамин, rpg…) ──────
+export async function сохранитьKV(key, data) {
+  if (!активен()) return;
+  await запросUpsert('kv', { owner: владелец, key, data, updated_at: new Date().toISOString() }, 'owner,key');
+}
+
+// ── ЛЮДИ (CRM) — push всего списка ───────────────────────────────────────────
+export async function сохранитьЛюдей(люди) {
+  if (!активен() || !Array.isArray(люди)) return;
+  for (const p of люди) {
+    if (!uuidValid(p.id)) continue; // без UUID не пушим (как и задачи)
+    await запросUpsert('people', {
+      id: p.id, owner: владелец,
+      name: p.name, rel: p.rel, commitment: p.commitment,
+      mine: p.mine ?? true, due_label: p.due || null, urgency: p.urgency || 'later',
+      border: p.border || null, avatar: p.avatar || '👤',
+      last_contact: p.last || 'сегодня', notes: p.notes || null, log: p.log || [],
+    });
+  }
 }
 
 // ── ФОТО ТЕЛА (До / Цель) → profile.body_before / body_target ────────────────

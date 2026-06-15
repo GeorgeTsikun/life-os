@@ -1,19 +1,19 @@
 // ── LIFE OS — ГЛАВНЫЙ МОДУЛЬ ──────────────────────────────────────────────────
-import { DB } from './db.js?v=60';
-import { injectUI, checkAchievements, onQuestCompleted, applyDebuffMode } from './gamification.js?v=60';
-import { TG } from './telegram.js?v=60';
-import { renderDash }         from './screens/dash.js?v=60';
-import { renderTasks }        from './screens/tasks.js?v=60';
-import { renderHealth }       from './screens/health.js?v=60';
-import { renderProjects }     from './screens/projects.js?v=60';
-import { renderPeople }       from './screens/people.js?v=60';
-import { renderFinance }      from './screens/finance.js?v=60';
-import { renderContent }      from './screens/content.js?v=60';
-import { renderAchievements } from './screens/achievements.js?v=60';
-import { renderOnboarding }   from './screens/onboarding.js?v=60';
-import { renderAnalytics }    from './screens/analytics.js?v=60';
-import * as Sync              from './supabaseSync.js?v=60';
-import { openVoiceCapture }  from './voiceCapture.js?v=60';
+import { DB } from './db.js?v=61';
+import { injectUI, checkAchievements, onQuestCompleted, applyDebuffMode } from './gamification.js?v=61';
+import { TG } from './telegram.js?v=61';
+import { renderDash }         from './screens/dash.js?v=61';
+import { renderTasks }        from './screens/tasks.js?v=61';
+import { renderHealth }       from './screens/health.js?v=61';
+import { renderProjects }     from './screens/projects.js?v=61';
+import { renderPeople }       from './screens/people.js?v=61';
+import { renderFinance }      from './screens/finance.js?v=61';
+import { renderContent }      from './screens/content.js?v=61';
+import { renderAchievements } from './screens/achievements.js?v=61';
+import { renderOnboarding }   from './screens/onboarding.js?v=61';
+import { renderAnalytics }    from './screens/analytics.js?v=61';
+import * as Sync              from './supabaseSync.js?v=61';
+import { openVoiceCapture }  from './voiceCapture.js?v=61';
 
 // ── ИНИЦИАЛИЗАЦИЯ ─────────────────────────────────────────────────────────────
 const ОНБОРДИНГ_ПРОЙДЕН = localStorage.getItem('lifeos_onboarded') === 'true'
@@ -31,6 +31,9 @@ Sync.инициализироватьSupabase().then(async (ок) => {
   if (ок) {
     // Подтягиваем актуальные данные из облака
     await Sync.загрузитьВсё();
+    // После pull повторяем дневные сбросы (воду/квесты), чтобы из облака не
+    // подтянулись вчерашние значения на новый день
+    try { DB.resetDailyNutrition?.(); DB.resetDailyQuests?.(); } catch {}
     // Заливаем все локальные задачи обратно в облако (чтобы бот видел то же самое)
     await Sync.pushAllLocal();
     // Перерисовываем активный таб ТОЛЬКО если онбординг уже пройден
@@ -103,6 +106,8 @@ window._дбHook = function(тип, объект) {
     case 'meal_delete':  Sync.удалитьПриёмПищи(объект.id);          break;
     case 'finance':      Sync.сохранитьФинансы(объект);             break;
     case 'bodyPhoto':    Sync.сохранитьФотоТела(объект.field, объект.dataUrl); break;
+    case 'kv':           Sync.сохранитьKV(объект.key, объект.data); break;
+    case 'people':       Sync.сохранитьЛюдей(объект);               break;
   }
 };
 

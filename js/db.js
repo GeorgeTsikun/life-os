@@ -1,5 +1,5 @@
 // ── СЛОЙ ДАННЫХ ───────────────────────────────────────────────────────────────
-import { KNOWLEDGE_SEED } from './data/knowledge.js?v=60';
+import { KNOWLEDGE_SEED } from './data/knowledge.js?v=61';
 // Приоритет: localStorage (работает без интернета).
 // Если заданы VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY — синхронизируется с Supabase.
 // Переменные окружения читаются из window.__ENV__ (injected Vercel) или import.meta.env
@@ -277,7 +277,12 @@ export const DB = {
   },
 
   get(ключ)       { return хранилищеПолучить(ключ) ?? ДАННЫЕ[ключ]; },
-  set(ключ, знач) { хранилищеСохранить(ключ, знач); },
+  // Блобы без собственной таблицы — синкаем через универсальный kv
+  _KV_SYNC: new Set(['nutrition','workouts','gymDays','pleasureLog','rpgStats','weeklyChallenge','knowledge']),
+  set(ключ, знач) {
+    хранилищеСохранить(ключ, знач);
+    if (this._KV_SYNC.has(ключ)) window._дбHook?.('kv', { key: ключ, data: знач });
+  },
 
   // Задачи
   getTasks()      { return this.get('tasks'); },
@@ -353,7 +358,7 @@ export const DB = {
     localStorage.setItem('lifeos_knowledge', JSON.stringify(KNOWLEDGE_SEED));
     return KNOWLEDGE_SEED;
   },
-  saveKnowledge(arr) { localStorage.setItem('lifeos_knowledge', JSON.stringify(arr)); },
+  saveKnowledge(arr) { this.set('knowledge', arr); },
   addKnowledge(item) {
     const arr = this.getKnowledge();
     arr.unshift({ id: 'kn_' + Date.now(), fav: false, cat: 'Заметки', ...item });
@@ -533,7 +538,7 @@ export const DB = {
 
   // Люди
   getPeople()     { return this.get('people'); },
-  savePeople(p)   { this.set('people', p); },
+  savePeople(p)   { this.set('people', p); window._дбHook?.('people', p); },
 
   addPerson(человек) {
     const люди = this.getPeople();

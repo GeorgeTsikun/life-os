@@ -1,8 +1,8 @@
 // ── HEALTH SCREEN (Health / Sport / Nutrition sub-tabs) ───────────────────────
-import { DB } from '../db.js?v=60';
-import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=60';
-import { TG } from '../telegram.js?v=60';
-import { PLAN_GOAL, STAGES, DAY_KEYS, DAY_LABELS, stageForWeek, planState, PLAN_WEEKS } from '../data/trainingPlan.js?v=60';
+import { DB } from '../db.js?v=61';
+import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=61';
+import { TG } from '../telegram.js?v=61';
+import { PLAN_GOAL, STAGES, DAY_KEYS, DAY_LABELS, stageForWeek, planState, PLAN_WEEKS } from '../data/trainingPlan.js?v=61';
 
 let sleepChart, pulseChart, hrvChart, revenueChart;
 let healthTab = 'health';
