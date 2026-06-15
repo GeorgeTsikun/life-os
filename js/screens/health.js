@@ -1,8 +1,8 @@
 // ── HEALTH SCREEN (Health / Sport / Nutrition sub-tabs) ───────────────────────
-import { DB } from '../db.js?v=59';
-import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=59';
-import { TG } from '../telegram.js?v=59';
-import { PLAN_GOAL, STAGES, DAY_KEYS, DAY_LABELS, stageForWeek, planState, PLAN_WEEKS } from '../data/trainingPlan.js?v=59';
+import { DB } from '../db.js?v=60';
+import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=60';
+import { TG } from '../telegram.js?v=60';
+import { PLAN_GOAL, STAGES, DAY_KEYS, DAY_LABELS, stageForWeek, planState, PLAN_WEEKS } from '../data/trainingPlan.js?v=60';
 
 let sleepChart, pulseChart, hrvChart, revenueChart;
 let healthTab = 'health';
@@ -757,6 +757,7 @@ window.uploadBodyPhoto = function(key) {
     const thumb = await downscaleImage(file, 600);
     try {
       localStorage.setItem(key === 'before' ? 'lifeos_body_before' : 'lifeos_body_target', thumb || '');
+      window._дбHook?.('bodyPhoto', { field: key, dataUrl: thumb || '' }); // синк во все устройства
       window.showToast?.(key === 'before' ? '📷 Фото «До» сохранено' : '🎯 Фото цели сохранено', 'success');
     } catch { window.showToast?.('Не удалось сохранить фото', 'error'); }
     renderHealth('sport');

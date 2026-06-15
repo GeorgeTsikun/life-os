@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=59';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=59';
-import { TG } from '../telegram.js?v=59';
+import { DB } from '../db.js?v=60';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=60';
+import { TG } from '../telegram.js?v=60';
 
 let radarChart, energyChart;
 let _currentQuests = []; // для синхронизации taskId при completeQuest
@@ -382,7 +382,7 @@ function renderBalanceBlock(balance, earned, spent, ratio, today) {
       </div>
       <button onclick="window.openPleasureSpend()" ${balance <= 0 ? 'disabled' : ''}
         style="margin-left:auto;background:${balance > 0 ? 'rgba(0,245,212,.12)' : 'rgba(255,255,255,.04)'};border:1px solid ${balance > 0 ? 'rgba(0,245,212,.35)' : 'rgba(255,255,255,.08)'};border-radius:10px;padding:9px 16px;cursor:${balance > 0 ? 'pointer' : 'not-allowed'};font-size:12px;font-weight:700;color:${balance > 0 ? '#00F5D4' : 'rgba(232,237,245,.2)'}">
-        Потратить 🎁
+        ${balance > 0 ? 'Потратить 🎁' : '🔒 Заблокировано'}
       </button>
     </div>
 

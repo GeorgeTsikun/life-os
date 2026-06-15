@@ -150,6 +150,9 @@ export async function загрузитьВсё() {
       if (профиль.rpg_stats) {
         localStorage.setItem('lifeos_rpgStats', JSON.stringify(профиль.rpg_stats));
       }
+      // Фото трансформации тела — чтобы были на всех устройствах
+      if (профиль.body_before) localStorage.setItem('lifeos_body_before', профиль.body_before);
+      if (профиль.body_target) localStorage.setItem('lifeos_body_target', профиль.body_target);
     }
     const dailyЗап = dailyАрр?.[0];
     if (dailyЗап) {
@@ -333,6 +336,13 @@ export async function удалитьПриёмПищи(id) {
   try {
     await fetch(`${базаURL}/meals?id=eq.${id}`, { method: 'DELETE', headers: заголовки() });
   } catch (err) { console.warn('[Supabase delete meal]', err); }
+}
+
+// ── ФОТО ТЕЛА (До / Цель) → profile.body_before / body_target ────────────────
+export async function сохранитьФотоТела(field, dataUrl) {
+  if (!активен()) return;
+  const col = field === 'before' ? 'body_before' : 'body_target';
+  await запросUpsert('profile', { owner: владелец, [col]: dataUrl || null }, 'owner');
 }
 
 // ── ФИНАНСЫ (один JSON-документ) ─────────────────────────────────────────────
