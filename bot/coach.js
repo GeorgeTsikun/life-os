@@ -101,55 +101,105 @@ export async function отправитьПлан({ bot, supa, openai, ownerTgId,
   ).catch(e => console.warn('[coach send]', e.message));
 }
 
-// ── Вечер: разбор свободного текста → закрыть/перенести задачи + план на завтра ─
+// ── Вечер: УНИВЕРСАЛЬНЫЙ разбор свободного рассказа о дне ──────────────────────
+// Один рассказ (текст/голос) → коуч сам раскидывает по всему дашборду:
+// закрывает/переносит задачи, фиксирует сделанное вне списка, еду+КБЖУ, воду,
+// идеи; сохраняет исторический снимок дня (day_log) и собирает план на завтра.
 export async function вечернийРазбор({ bot, supa, openai, ownerTgId, безКэша }, текст) {
   await bot.api.sendChatAction(ownerTgId, 'typing').catch(()=>{});
   const сегодня = сегодняМСК();
-  // Открытые задачи на сегодня (которые могли быть сделаны/перенесены)
   const { data: задачи = [] } = await supa.from('tasks')
-    .select('id,text').eq('owner','george').eq('done',false).eq('cancelled',false)
+    .select('id,text,defer_count').eq('owner','george').eq('done',false).eq('cancelled',false)
     .or(`due_date.eq.${сегодня},quadrant.eq.do`).limit(40)
     .then(r=>r,()=>({data:[]}));
 
-  let разбор = { done: [], moved: [], note: '' };
-  if (задачи.length) {
-    const список = задачи.map(з=>`${з.id}\t${з.text}`).join('\n');
-    const prompt = `Вечерний отчёт Джорджа о дне (свободный текст). Сопоставь со списком открытых задач (id<TAB>текст) и реши, какие он СДЕЛАЛ, а какие явно переносятся/не сделаны. Не выдумывай: если про задачу ничего не сказано — не трогай её.
+  const список = задачи.map(з=>`${з.id}\t${з.text}`).join('\n') || '(нет открытых задач)';
+  const prompt = `Ты — AI Chief of Staff Джорджа. Он рассказывает свободным текстом, как прошёл день: что делал, что ел/пил, что придумал. Разложи рассказ по полочкам. Не выдумывай — фиксируй только то, что реально сказано.
 
-ОТЧЁТ: "${текст}"
+ОТКРЫТЫЕ ЗАДАЧИ (id<TAB>текст):\n${список}
 
-ЗАДАЧИ:\n${список}
+РАССКАЗ ДЖОРДЖА: "${текст}"
 
-Верни ТОЛЬКО JSON: {"done":["id"],"moved":["id"],"note":"1 фраза-итог дня от коуча"}`;
-    try {
-      const r = await openai.chat.completions.create({
-        model: getActiveModel(),
-        response_format: { type: 'json_object' },
-        messages: [{ role: 'user', content: prompt }],
-        max_completion_tokens: 400,
-      });
-      const p = JSON.parse(r.choices[0].message.content);
-      разбор.done  = Array.isArray(p.done)  ? p.done  : [];
-      разбор.moved = Array.isArray(p.moved) ? p.moved : [];
-      разбор.note  = p.note || '';
-    } catch (e) { console.warn('[вечерний разбор]', e.message); }
-  }
+Верни ТОЛЬКО JSON:
+{
+  "done": ["id задач из списка, которые он СДЕЛАЛ"],
+  "moved": ["id задач из списка, которые НЕ сделал/переносит"],
+  "new_done": ["короткий текст дела, которое он сделал, но его НЕ было в списке задач"],
+  "meals": [{"name":"что съел/выпил","meal_type":"breakfast|lunch|dinner|snack","calories":0,"protein":0,"fat":0,"carbs":0}],
+  "water_ml": 0,
+  "ideas": ["идея/мысль на будущее, если озвучил"],
+  "note": "итог дня одной живой фразой от коуча (оценка + что подтянуть завтра)"
+}
+КБЖУ для meals оцени как нутрициолог по описанию. water_ml — только чистая вода/чай в мл (стакан≈250). Пустые массивы если ничего нет.`;
+
+  let p = { done:[], moved:[], new_done:[], meals:[], water_ml:0, ideas:[], note:'' };
+  try {
+    const r = await openai.chat.completions.create({
+      model: getActiveModel(), response_format: { type: 'json_object' },
+      messages: [{ role: 'user', content: prompt }], max_completion_tokens: 700,
+    });
+    const j = JSON.parse(r.choices[0].message.content);
+    for (const k of ['done','moved','new_done','meals','ideas']) p[k] = Array.isArray(j[k]) ? j[k] : [];
+    p.water_ml = Number(j.water_ml) || 0;
+    p.note = j.note || '';
+  } catch (e) { console.warn('[вечерний разбор]', e.message); }
 
   const завтра = завтраМСК();
-  if (разбор.done.length)
-    await supa.from('tasks').update({ done: true, completed_at: new Date().toISOString() })
-      .in('id', разбор.done).then(r=>r,()=>{});
-  for (const id of разбор.moved) {
+  const сейчасISO = new Date().toISOString();
+  const времяМСК = new Date(Date.now()+MSK).toISOString().slice(11,16);
+
+  // 1. Закрыть существующие задачи
+  if (p.done.length)
+    await supa.from('tasks').update({ done:true, completed_at:сейчасISO }).in('id', p.done).then(r=>r,()=>{});
+  // 2. Перенести несделанные на завтра
+  for (const id of p.moved) {
     const з = задачи.find(t=>String(t.id)===String(id));
-    await supa.from('tasks').update({ due_date: завтра, defer_count: (з?.defer_count||0)+1 })
-      .eq('id', id).then(r=>r,()=>{});
+    await supa.from('tasks').update({ due_date:завтра, defer_count:(з?.defer_count||0)+1 }).eq('id', id).then(r=>r,()=>{});
   }
+  // 3. Сделанное вне списка → сразу как выполненные задачи (попадут в статистику/XP)
+  if (p.new_done.length)
+    await supa.from('tasks').insert(p.new_done.map(t=>({
+      owner:'george', text:t, quadrant:'do', cat:'Работа', done:true,
+      completed_at:сейчасISO, due_date:сегодня, xp_value:50,
+    }))).then(r=>r,()=>{});
+  // 4. Еда → meals (рингам КБЖУ на дашборде)
+  if (p.meals.length)
+    await supa.from('meals').insert(p.meals.map(m=>({
+      owner:'george', date:сегодня, time_label:времяМСК, meal_type:m.meal_type||'snack',
+      name:m.name||'Еда', items:[], calories:m.calories||0, protein:m.protein||0,
+      fat:m.fat||0, carbs:m.carbs||0, note:'из вечернего рассказа',
+    }))).then(r=>r,()=>{});
+  // 5. Вода → KV nutrition (read-modify-write, newest-wins подхватит на клиентах)
+  if (p.water_ml > 0) {
+    const { data: kv } = await supa.from('kv').select('data').eq('owner','george').eq('key','nutrition').maybeSingle().then(r=>r,()=>({data:null}));
+    const n = kv?.data || { water:0, waterGoal:2.5, date:сегодня };
+    n.water = Math.round(((n.date===сегодня ? n.water||0 : 0) + p.water_ml/1000) * 100) / 100;
+    n.date = сегодня;
+    await supa.from('kv').upsert({ owner:'george', key:'nutrition', data:n, updated_at:сейчасISO }, { onConflict:'owner,key' }).then(r=>r,()=>{});
+  }
+  // 6. Идеи → банк идей
+  if (p.ideas.length)
+    await supa.from('idea_bank').insert(p.ideas.map(t=>({ owner:'george', text:t, cat:'из дня' }))).then(r=>r,()=>{});
+  // 7. Исторический снимок дня
+  await supa.from('day_log').upsert({
+    owner:'george', date:сегодня, report:текст, summary:p.note,
+    done_count:p.done.length, moved_count:p.moved.length, new_count:p.new_done.length,
+    meals_count:p.meals.length, water_added_ml:p.water_ml, ideas_count:p.ideas.length,
+  }, { onConflict:'owner,date' }).then(r=>r,()=>{});
 
-  const ит = `🌙 *Разбор дня*\n✅ Закрыл: ${разбор.done.length} · ⏭ Перенёс на завтра: ${разбор.moved.length}` +
-    (разбор.note ? `\n\n_${разбор.note}_` : '');
-  await bot.api.sendMessage(ownerTgId, ит, { parse_mode: 'Markdown' }).catch(()=>{});
+  const строки = [
+    `🌙 *Разбор дня*`,
+    `✅ Закрыл: ${p.done.length}` + (p.new_done.length ? ` (+${p.new_done.length} вне списка)` : ''),
+    p.moved.length ? `⏭ Перенёс на завтра: ${p.moved.length}` : '',
+    p.meals.length ? `🍽 Приёмов еды: ${p.meals.length}` : '',
+    p.water_ml ? `💧 Вода: +${p.water_ml} мл` : '',
+    p.ideas.length ? `💡 Идей в банк: ${p.ideas.length}` : '',
+    p.note ? `\n_${p.note}_` : '',
+  ].filter(Boolean).join('\n');
+  const клав = new InlineKeyboard().webApp('📊 Открыть дашборд', безКэша());
+  await bot.api.sendMessage(ownerTgId, строки, { parse_mode:'Markdown', reply_markup:клав }).catch(()=>{});
 
-  // Сразу собираем план на завтра (контекст уже учтёт обновлённые задачи)
+  // Сразу собираем план на завтра (контекст учтёт обновлённые задачи)
   await отправитьПлан({ bot, supa, openai, ownerTgId, безКэша }, текст,
     { дата: завтра, заголовок: 'План на завтра' });
 }
