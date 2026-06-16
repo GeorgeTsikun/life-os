@@ -3,6 +3,7 @@
 // генерит ПЛОТНЫЙ распорядок по часам → создаёт задачи с временем → шлёт в чат.
 import { InlineKeyboard } from 'grammy';
 import { getActiveModel } from './model.js';
+import { читатьЦели } from './goals.js';
 
 const MSK = 3 * 3600 * 1000;
 const сегодняМСК = () => new Date(Date.now() + MSK).toISOString().split('T')[0];
@@ -32,7 +33,12 @@ export async function собратьКонтекст(supa) {
     деньги = `цель ${f.incomeGoal||'?'}/мес; горящие платежи: ${горящие.join(', ')||'—'}; написать лидам: ${лиды.slice(0,5).join(', ')||'—'}`;
   }
   const здоровье = hm.data ? `HRV ${hm.data.hrv_ms||'?'}мс, сон ${hm.data.sleep_h||'?'}ч` : 'нет данных';
+  const целиМассив = await читатьЦели(supa).catch(()=>[]);
+  const цели = целиМассив.length
+    ? целиМассив.map(ц=>`• ${ц.title}: ${ц.current}/${ц.target}${ц.unit?' '+ц.unit:''}${ц.deadline?` (до ${ц.deadline})`:''}`).join('\n')
+    : 'не заданы';
   return `Сегодня ${сегодня} (Москва).
+ЦЕЛИ:\n${цели}
 ПРОЕКТЫ:\n${проекты}
 ОТКРЫТЫЕ ЗАДАЧИ:\n${задачи}
 ЖДУ ОТ ДРУГИХ:\n${ожидания}
