@@ -7,6 +7,7 @@ import cron from 'node-cron';
 import { InlineKeyboard } from 'grammy';
 import { sendRichWithFallback, briefingBlocks, checkinBlocks, T, B } from './rich.js';
 import { отправитьПланДня, отправитьОтчётЗаДень } from './reports.js';
+import { утреннийКоуч } from './coach.js';
 
 // Московское смещение в мс (+3ч)
 const MOSCOW_OFFSET = 3 * 60 * 60 * 1000;
@@ -24,7 +25,7 @@ function вчераМосква() {
 }
 
 // ── Главная функция: инициализация cron-задач ─────────────────────────────────
-export function запуститьРасписание({ bot, supa, openai, ownerTgId, безКэша, ДИРЕКТОР_ПРОМТ, ожидаемОтвет }) {
+export function запуститьРасписание({ bot, supa, openai, ownerTgId, безКэша, ДИРЕКТОР_ПРОМТ, ожидаемОтвет, ждёмПлан }) {
   if (!ownerTgId) {
     console.warn('[cron] OWNER_TELEGRAM_ID не задан — расписание не запущено');
     return;
@@ -36,10 +37,10 @@ export function запуститьРасписание({ bot, supa, openai, owne
       .catch(err => console.error('[cron 8:00]', err.message));
   }, { timezone: 'Europe/Moscow' });
 
-  // 08:05 по Москве — план дня (расписание + фокус), сразу после брифинга
-  cron.schedule('5 8 * * *', () => {
-    отправитьПланДня({ supa, chatId: ownerTgId, безКэша })
-      .catch(err => console.error('[cron 8:05 план]', err.message));
+  // 08:10 по Москве — AI-коуч спрашивает план дня → потом генерит распорядок
+  cron.schedule('10 8 * * *', () => {
+    утреннийКоуч({ bot, ownerTgId, безКэша, ждёмПлан })
+      .catch(err => console.error('[cron 8:10 коуч]', err.message));
   }, { timezone: 'Europe/Moscow' });
 
   // 21:00 по Москве
@@ -72,7 +73,7 @@ export function запуститьРасписание({ bot, supa, openai, owne
     }, { timezone: 'Europe/Moscow' });
   });
 
-  console.log('[cron] ✅ Расписание: брифинг 08:00 · план 08:05 · чекин+итог 21:00 · напоминания /5мин · вода 5×/день · проактив Вт/Пт 12:00');
+  console.log('[cron] ✅ Расписание: брифинг 08:00 · AI-коуч 08:10 · чекин+итог 21:00 · напоминания /5мин · вода 5×/день · проактив Вт/Пт 12:00');
 }
 
 // ── 💧 НАПОМИНАНИЕ ВОДЫ ───────────────────────────────────────────────────────
