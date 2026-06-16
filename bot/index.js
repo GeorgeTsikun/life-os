@@ -33,6 +33,7 @@ const openai = new OpenAI({ apiKey: OPENAI_KEY });
 const supa   = (SUPABASE_URL && SUPABASE_KEY) ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
 const ПАМЯТЬ_ЧАТА = new Map(); // userId → массив последних сообщений (для контекста)
+const ОЖИДАЕМ_ОТВЕТ = new Map(); // userId → текст вопроса бота (ждём ответ → в диалог, не в классификатор)
 
 // ── СИСТЕМНЫЙ ПРОМТ AI-ДИРЕКТОРА ──────────────────────────────────────────────
 const ДИРЕКТОР_ПРОМТ = `Ты — персональный AI-директор Джорджа в Telegram.
@@ -375,6 +376,14 @@ bot.on('message:voice', async (ctx) => {
     });
 
     await ctx.reply(`🎙️ _Расшифровано:_\n${рез.text}`, { parse_mode: 'Markdown' });
+    if (ОЖИДАЕМ_ОТВЕТ.has(ctx.from.id)) {
+      const вопрос = ОЖИДАЕМ_ОТВЕТ.get(ctx.from.id);
+      ОЖИДАЕМ_ОТВЕТ.delete(ctx.from.id);
+      ПАМЯТЬ_ЧАТА.set(ctx.from.id, [{ role: 'assistant', content: вопрос }]);
+      await разговор(ctx, рез.text);
+      ПАМЯТЬ_ЧАТА.delete(ctx.from.id);
+      return;
+    }
     if (ждётПравку(ctx.from.id) && await перехватитьПравку(ctx, рез.text, { openai, supa })) return;
     if (ПОСЛЕДНЕЕ_БЛЮДО.has(ctx.from.id) && await уточнитьБлюдо(ctx, рез.text)) return;
     await обработатьВход(ctx, рез.text);
@@ -560,6 +569,17 @@ bot.on('message:text', async (ctx) => {
   const сообщ = ctx.message.text;
   if (сообщ.startsWith('/')) return; // команды обрабатываются выше
 
+  // Бот недавно задал вопрос (проактив/коуч) → этот ответ идёт в ДИАЛОГ с
+  // контекстом, а не в классификатор задач. One-shot: после ответа выходим.
+  if (ОЖИДАЕМ_ОТВЕТ.has(ctx.from.id)) {
+    const вопрос = ОЖИДАЕМ_ОТВЕТ.get(ctx.from.id);
+    ОЖИДАЕМ_ОТВЕТ.delete(ctx.from.id);
+    ПАМЯТЬ_ЧАТА.set(ctx.from.id, [{ role: 'assistant', content: вопрос }]);
+    await разговор(ctx, сообщ);
+    ПАМЯТЬ_ЧАТА.delete(ctx.from.id);
+    return;
+  }
+
   // Если ждём правку декомпозиции — перенаправляем туда
   if (ждётПравку(ctx.from.id)) {
     if (await перехватитьПравку(ctx, сообщ, { openai, supa })) return;
@@ -594,7 +614,7 @@ async function обработатьВход(ctx, текст, opts = {}) {
     }
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: process.env.LIFE_MODEL || 'gpt-5.5',
       response_format: { type: 'json_object' },
       messages: сообщения,
       temperature: 0.3,
@@ -724,7 +744,7 @@ async function разговор(ctx, текст) {
   if (память.length > 12) память.shift(); // храним последние 12 реплик
 
   const ответ = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: process.env.LIFE_MODEL || 'gpt-5.5',
     messages: [
       { role: 'system', content: ДИРЕКТОР_ПРОМТ },
       { role: 'system', content: `Контекст пользователя:\n${JSON.stringify(контекст, null, 2)}` },
@@ -992,6 +1012,7 @@ async function запустить() {
     ownerTgId: OWNER_TG_ID,
     безКэша,
     ДИРЕКТОР_ПРОМТ,
+    ожидаемОтвет: ОЖИДАЕМ_ОТВЕТ,
   });
 
   await bot.start({

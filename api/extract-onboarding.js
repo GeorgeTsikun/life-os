@@ -46,7 +46,7 @@ export default async function handler(req, res) {
 
     const openai = new OpenAI({ apiKey });
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: process.env.LIFE_MODEL || 'gpt-5.5',
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: СИСТЕМНЫЙ_ПРОМТ },

@@ -35,7 +35,7 @@ export default async function handler(req, res) {
 
     const openai = new OpenAI({ apiKey });
     const ответ = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: process.env.LIFE_MODEL || 'gpt-5.5',
       messages: сообщения,
       temperature: 0.7,
       max_tokens: 500,

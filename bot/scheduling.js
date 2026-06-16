@@ -23,7 +23,7 @@ function вчераМосква() {
 }
 
 // ── Главная функция: инициализация cron-задач ─────────────────────────────────
-export function запуститьРасписание({ bot, supa, openai, ownerTgId, безКэша, ДИРЕКТОР_ПРОМТ }) {
+export function запуститьРасписание({ bot, supa, openai, ownerTgId, безКэша, ДИРЕКТОР_ПРОМТ, ожидаемОтвет }) {
   if (!ownerTgId) {
     console.warn('[cron] OWNER_TELEGRAM_ID не задан — расписание не запущено');
     return;
@@ -58,7 +58,7 @@ export function запуститьРасписание({ bot, supa, openai, owne
 
   // 🤖 ПРОАКТИВНЫЕ ВОПРОСЫ — Вт и Пт в 12:00: бот сам спрашивает про застрявшее
   cron.schedule('0 12 * * 2,5', () => {
-    проактивныйВопрос({ bot, supa, openai, ownerTgId, безКэша, ДИРЕКТОР_ПРОМТ })
+    проактивныйВопрос({ bot, supa, openai, ownerTgId, безКэша, ДИРЕКТОР_ПРОМТ, ожидаемОтвет })
       .catch(err => console.error('[cron proactive]', err.message));
   }, { timezone: 'Europe/Moscow' });
 
@@ -145,7 +145,7 @@ async function сканироватьНапоминания({ bot, supa, ownerTg
 // ── 🤖 ПРОАКТИВНЫЙ ВОПРОС ─────────────────────────────────────────────────────
 // Бот сам инициирует разговор: смотрит застрявшие проекты, давно не тронутые
 // задачи, горящие ожидания — и задаёт ОДИН точный вопрос голосом директора.
-async function проактивныйВопрос({ bot, supa, openai, ownerTgId, безКэша, ДИРЕКТОР_ПРОМТ }) {
+async function проактивныйВопрос({ bot, supa, openai, ownerTgId, безКэша, ДИРЕКТОР_ПРОМТ, ожидаемОтвет }) {
   if (!supa) return;
 
   const сегодня = сегодняМосква();
@@ -190,7 +190,7 @@ async function проактивныйВопрос({ bot, supa, openai, ownerTgId
   if (openai) {
     try {
       const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: process.env.LIFE_MODEL || 'gpt-5.5',
         messages: [
           { role: 'system', content: ДИРЕКТОР_ПРОМТ },
           { role: 'system', content:
@@ -228,6 +228,8 @@ async function проактивныйВопрос({ bot, supa, openai, ownerTgId
   await bot.api.sendMessage(ownerTgId, `🤖 ${вопрос}`,
     { parse_mode: 'Markdown', reply_markup: клав }
   ).catch(e => console.warn('[proactive send]', e.message));
+  // Ждём ответ → следующий текст/голос пойдёт в диалог с контекстом, не в классификатор
+  ожидаемОтвет?.set(ownerTgId, вопрос);
   console.log('[proactive] ✓ вопрос отправлен');
 }
 
@@ -338,7 +340,7 @@ export async function утреннийАвтоБрифинг({ bot, supa, openai
         ? `\nДанные здоровья: HRV ${здоровье.hrv}мс, сон ${здоровье.sleep_hours}ч, пульс ${здоровье.resting_hr || '—'}.`
         : '';
       const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: process.env.LIFE_MODEL || 'gpt-5.5',
         messages: [
           { role: 'system', content: ДИРЕКТОР_ПРОМТ },
           { role: 'system', content:

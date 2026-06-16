@@ -35,7 +35,7 @@ export default async function handler(req, res) {
   try {
     const openai = new OpenAI({ apiKey });
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: process.env.LIFE_MODEL || 'gpt-5.5',
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: prompt },

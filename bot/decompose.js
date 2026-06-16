@@ -32,7 +32,7 @@ async function сгенерировать(openai, цель, правки = '') {
   if (правки) messages.push({ role: 'user', content: `Учти правки: ${правки}` });
 
   const r = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: process.env.LIFE_MODEL || 'gpt-5.5',
     response_format: { type: 'json_object' },
     messages,
     temperature: 0.4,

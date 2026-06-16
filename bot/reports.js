@@ -406,7 +406,7 @@ export async function отправитьОтчётЗаДень({ supa, openai, c
     const debuff = (health?.hrv || 99) < 30;
     try {
       const r = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: process.env.LIFE_MODEL || 'gpt-5.5',
         messages: [
           { role: 'system', content: ДИРЕКТОР_ПРОМТ },
           { role: 'system', content:
