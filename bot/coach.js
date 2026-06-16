@@ -6,6 +6,7 @@ import { getActiveModel } from './model.js';
 
 const MSK = 3 * 3600 * 1000;
 const сегодняМСК = () => new Date(Date.now() + MSK).toISOString().split('T')[0];
+const завтраМСК = () => new Date(Date.now() + 86400000 + MSK).toISOString().split('T')[0];
 
 // ── Сбор контекста жизни для мозга ───────────────────────────────────────────
 export async function собратьКонтекст(supa) {
@@ -64,14 +65,14 @@ export async function сгенерироватьПлан(openai, supa, доп = 
 }
 
 // ── Создание задач из блоков + отправка плана ────────────────────────────────
-export async function отправитьПлан({ bot, supa, openai, ownerTgId, безКэша }, доп = '') {
+export async function отправитьПлан({ bot, supa, openai, ownerTgId, безКэша }, доп = '', { дата, заголовок } = {}) {
   await bot.api.sendChatAction(ownerTgId, 'typing').catch(()=>{});
   let план;
   try { план = await сгенерироватьПлан(openai, supa, доп); }
   catch (e) { return bot.api.sendMessage(ownerTgId, `⚠️ Не смог составить план: ${e.message}`); }
   if (!план.blocks.length) return bot.api.sendMessage(ownerTgId, '🤷 Не получилось составить план. Скажи пару задач — и я соберу.');
 
-  const сегодня = сегодняМСК();
+  const сегодня = дата || сегодняМСК();
   // Создаём задачи с временем (попадут в расписание Mini App + напоминания бота)
   if (supa) {
     const строки = план.blocks.map(b => ({
@@ -95,9 +96,62 @@ export async function отправитьПлан({ bot, supa, openai, ownerTgId,
     .text('🔁 Перегенерировать', 'coach:gen').row()
     .webApp('🗓 Открыть план', безКэша('?tab=tasks'));
   await bot.api.sendMessage(ownerTgId,
-    `🗓 *Твой план на сегодня* (${план.blocks.length} блоков)\n\n${строкиТекст}\n\n_${план.note || 'Погнали. Деньги — топ-1.'}_\n\n✅ Блоки добавлены в задачи — напомню по времени.`,
+    `🗓 *${заголовок || 'Твой план на сегодня'}* (${план.blocks.length} блоков)\n\n${строкиТекст}\n\n_${план.note || 'Погнали. Деньги — топ-1.'}_\n\n✅ Блоки добавлены в задачи — напомню по времени.`,
     { parse_mode: 'Markdown', reply_markup: клав }
   ).catch(e => console.warn('[coach send]', e.message));
+}
+
+// ── Вечер: разбор свободного текста → закрыть/перенести задачи + план на завтра ─
+export async function вечернийРазбор({ bot, supa, openai, ownerTgId, безКэша }, текст) {
+  await bot.api.sendChatAction(ownerTgId, 'typing').catch(()=>{});
+  const сегодня = сегодняМСК();
+  // Открытые задачи на сегодня (которые могли быть сделаны/перенесены)
+  const { data: задачи = [] } = await supa.from('tasks')
+    .select('id,text').eq('owner','george').eq('done',false).eq('cancelled',false)
+    .or(`due_date.eq.${сегодня},quadrant.eq.do`).limit(40)
+    .then(r=>r,()=>({data:[]}));
+
+  let разбор = { done: [], moved: [], note: '' };
+  if (задачи.length) {
+    const список = задачи.map(з=>`${з.id}\t${з.text}`).join('\n');
+    const prompt = `Вечерний отчёт Джорджа о дне (свободный текст). Сопоставь со списком открытых задач (id<TAB>текст) и реши, какие он СДЕЛАЛ, а какие явно переносятся/не сделаны. Не выдумывай: если про задачу ничего не сказано — не трогай её.
+
+ОТЧЁТ: "${текст}"
+
+ЗАДАЧИ:\n${список}
+
+Верни ТОЛЬКО JSON: {"done":["id"],"moved":["id"],"note":"1 фраза-итог дня от коуча"}`;
+    try {
+      const r = await openai.chat.completions.create({
+        model: getActiveModel(),
+        response_format: { type: 'json_object' },
+        messages: [{ role: 'user', content: prompt }],
+        max_completion_tokens: 400,
+      });
+      const p = JSON.parse(r.choices[0].message.content);
+      разбор.done  = Array.isArray(p.done)  ? p.done  : [];
+      разбор.moved = Array.isArray(p.moved) ? p.moved : [];
+      разбор.note  = p.note || '';
+    } catch (e) { console.warn('[вечерний разбор]', e.message); }
+  }
+
+  const завтра = завтраМСК();
+  if (разбор.done.length)
+    await supa.from('tasks').update({ done: true, completed_at: new Date().toISOString() })
+      .in('id', разбор.done).then(r=>r,()=>{});
+  for (const id of разбор.moved) {
+    const з = задачи.find(t=>String(t.id)===String(id));
+    await supa.from('tasks').update({ due_date: завтра, defer_count: (з?.defer_count||0)+1 })
+      .eq('id', id).then(r=>r,()=>{});
+  }
+
+  const ит = `🌙 *Разбор дня*\n✅ Закрыл: ${разбор.done.length} · ⏭ Перенёс на завтра: ${разбор.moved.length}` +
+    (разбор.note ? `\n\n_${разбор.note}_` : '');
+  await bot.api.sendMessage(ownerTgId, ит, { parse_mode: 'Markdown' }).catch(()=>{});
+
+  // Сразу собираем план на завтра (контекст уже учтёт обновлённые задачи)
+  await отправитьПлан({ bot, supa, openai, ownerTgId, безКэша }, текст,
+    { дата: завтра, заголовок: 'План на завтра' });
 }
 
 // ── Утро: спросить план (ответ/кнопка → генерация) ───────────────────────────
