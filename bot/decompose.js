@@ -36,7 +36,6 @@ async function сгенерировать(openai, цель, правки = '') {
     model: getActiveModel(),
     response_format: { type: 'json_object' },
     messages,
-    temperature: 0.4,
   });
   const parsed = JSON.parse(r.choices[0].message.content);
   const subtasks = (Array.isArray(parsed.subtasks) ? parsed.subtasks : [])

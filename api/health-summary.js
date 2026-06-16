@@ -42,7 +42,6 @@ export default async function handler(req, res) {
         { role: 'system', content: prompt },
         { role: 'user', content: 'Проанализируй и дай вывод.' },
       ],
-      temperature: 0.5,
     });
     const result = JSON.parse(completion.choices[0].message.content);
     res.status(200).json(result);

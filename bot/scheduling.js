@@ -206,8 +206,7 @@ async function проактивныйВопрос({ bot, supa, openai, ownerTgId
           },
           { role: 'user', content: 'Что спросить?' },
         ],
-        temperature: 0.8,
-        max_tokens: 160,
+        max_completion_tokens: 160,
       });
       вопрос = completion.choices[0].message.content;
     } catch (err) {
@@ -355,8 +354,7 @@ export async function утреннийАвтоБрифинг({ bot, supa, openai
           },
           { role: 'user', content: 'Что сегодня?' },
         ],
-        temperature: 0.7,
-        max_tokens: 220,
+        max_completion_tokens: 220,
       });
       брифингТекст = completion.choices[0].message.content;
     } catch (err) {

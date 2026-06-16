@@ -49,7 +49,7 @@ export default async function handler(req, res) {
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 500,
+        max_completion_tokens: 500,
         messages: [{ role: 'user', content }],
       }),
     });

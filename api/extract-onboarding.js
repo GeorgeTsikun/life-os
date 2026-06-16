@@ -53,7 +53,6 @@ export default async function handler(req, res) {
         { role: 'system', content: СИСТЕМНЫЙ_ПРОМТ },
         { role: 'user',   content: пользователь },
       ],
-      temperature: 0.7,
     });
 
     const структура = JSON.parse(completion.choices[0].message.content);

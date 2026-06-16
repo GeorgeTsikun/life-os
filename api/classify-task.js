@@ -69,7 +69,6 @@ export default async function handler(req, res) {
         { role: 'system', content: ПРОМТ() },
         { role: 'user',   content: текст },
       ],
-      temperature: 0.3,
     });
 
     const разбор = JSON.parse(completion.choices[0].message.content);

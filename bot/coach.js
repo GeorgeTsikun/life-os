@@ -56,8 +56,7 @@ export async function сгенерироватьПлан(openai, supa, доп = 
     model: getActiveModel(),
     response_format: { type: 'json_object' },
     messages: [{ role: 'user', content: prompt }],
-    temperature: 0.6,
-    max_tokens: 900,
+    max_completion_tokens: 900,
   });
   const data = JSON.parse(r.choices[0].message.content);
   data.blocks = Array.isArray(data.blocks) ? data.blocks : [];

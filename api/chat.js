@@ -38,8 +38,7 @@ export default async function handler(req, res) {
     const ответ = await openai.chat.completions.create({
       model: await getActiveModel(),
       messages: сообщения,
-      temperature: 0.7,
-      max_tokens: 500,
+      max_completion_tokens: 500,
     });
 
     res.status(200).json({ ответ: ответ.choices[0].message.content });

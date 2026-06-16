@@ -502,7 +502,7 @@ async function уточнитьБлюдо(ctx, текст) {
     const prev = ctxБлюдо.prev || {};
     const completion = await openai.chat.completions.create({
       model: process.env.FOOD_MODEL || 'gpt-4o',
-      max_tokens: 500,
+      max_completion_tokens: 500,
       messages: [{ role: 'user', content:
         `${FOOD_VISION_PROMPT}\n\nИИ ранее распознал блюдо как: "${prev.name || '?'}" (${prev.calories || 0} ккал). ` +
         `Пользователь уточняет, что на самом деле это: "${текст}". Пересчитай КБЖУ по уточнению.` }],
@@ -548,7 +548,7 @@ bot.on('message:photo', async (ctx) => {
 
     const completion = await openai.chat.completions.create({
       model: process.env.FOOD_MODEL || 'gpt-4o',
-      max_tokens: 500,
+      max_completion_tokens: 500,
       messages: [{
         role: 'user',
         content: [
@@ -674,7 +674,6 @@ async function обработатьВход(ctx, текст, opts = {}) {
       model: getActiveModel(),
       response_format: { type: 'json_object' },
       messages: сообщения,
-      temperature: 0.3,
     });
 
     const полныйРазбор = JSON.parse(completion.choices[0].message.content);
@@ -807,8 +806,7 @@ async function разговор(ctx, текст) {
       { role: 'system', content: `Контекст пользователя:\n${JSON.stringify(контекст, null, 2)}` },
       ...память,
     ],
-    temperature: 0.7,
-    max_tokens: 500,
+    max_completion_tokens: 500,
   });
 
   const текстОтвета = ответ.choices[0].message.content;

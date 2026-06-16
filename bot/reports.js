@@ -417,8 +417,7 @@ export async function отправитьОтчётЗаДень({ supa, openai, c
             ' Напиши 1-2 предложения резюме дня директорским тоном.' },
           { role: 'user', content: 'Резюмируй день.' },
         ],
-        temperature: 0.7,
-        max_tokens: 120,
+        max_completion_tokens: 120,
       });
       summary = r.choices[0].message.content;
     } catch (err) { console.warn('[report] GPT:', err.message); }
