@@ -1,0 +1,27 @@
+# LIFE OS — Handoff (для нового окна)
+
+**Проект:** Telegram Mini App (Vercel) + бот (Railway, grammy) + Supabase REST. Ваниль ES-модули, без сборки. Single-user `owner='george'`. Кэш-бастинг `?v=NN` (сейчас **v63**). Репо: `GeorgeTsikun/life-os`.
+
+## Где что
+- Фронт: `index.html`, `js/` (db.js, supabaseSync.js, screens/*), `css/`. Бот: `bot/`. Serverless: `api/`. Миграции: `supabase/migrations/` (применять вручную в SQL Editor).
+- Роадмап + аудит по большому ТЗ: `~/.claude/plans/snazzy-roaming-balloon.md`.
+- Память (профиль/финансы/проекты/sync-модель): `~/.claude/.../memory/MEMORY.md`.
+
+## Сделано недавно
+- Синк Фаза 0: newest-wins по меткам (`lifeos_sync_meta`) для KV (вода/дофамин/спорт/знания/цели/rpg). `supabaseSync.js`.
+- Модель ИИ — рантайм-конфиг: таблица `config.life_model`, `getActiveModel()` (bot/model.js, api/_lib/model.js). Команды `/getmodel /models /setmodel`. Дефолт `gpt-5.5`. Фикс: `max_completion_tokens`, убран `temperature`.
+- AI-коуч дня (Фаза 1, первый заход): `bot/coach.js` — контекст→план по часам→создаёт задачи. Команда `/coach`, утро 08:10.
+- Финансы (вкладка Деньги), еда (фото/текст/голос), CRM, база знаний, дофамин-бюджет, фото тела синк.
+
+## Надо применить в Supabase (если ещё нет)
+Миграции 007–014 (meals, finance, task_links, body_photos, kv, config). Raw: `raw.githubusercontent.com/GeorgeTsikun/life-os/main/supabase/migrations/<файл>`.
+
+## Следующие шаги (по роадмапу, порядок на «живость»)
+1. Вечерний разбор коуча: свободный текст вечером → авто закрыть/перенести задачи + план на завтра. (`bot/scheduling.js` вечерний чекин + coach).
+2. **Цели** как сущность (год/квартал/месяц) + авто-разбивка на задачи.
+3. Созвон→решения/обязательства/риски (структурный разбор `meeting_notes`).
+4. Второй мозг — поиск по истории (inbox/решения/идеи).
+5. Тайм-трекинг задач, еда edit/база блюд, контакты в 1 тап, повторяющиеся задачи, дедуп видов, Apple Health, Notion, ИИ-агенты.
+
+## Метод
+Код → `node --check` → бамп `?v=NN` → commit/push (Co-Authored-By: Claude Opus 4.8) → миграция если есть → проверка на устройстве. Модель меняется командой `/setmodel`, не env. Ponytail-режим включён (минимальный код).
