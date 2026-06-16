@@ -1,6 +1,6 @@
 // ── ДЕТАЛЬ ЗАДАЧИ — модалка редактирования ───────────────────────────────────
-import { DB } from '../db.js?v=62';
-import { TG } from '../telegram.js?v=62';
+import { DB } from '../db.js?v=63';
+import { TG } from '../telegram.js?v=63';
 import { парсДату, форматДата, вISO, вДатуISO, вЛокальнуюФорму } from '../utils/date.js';
 
 const CAT_LIST = [

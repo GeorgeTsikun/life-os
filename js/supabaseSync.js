@@ -44,6 +44,19 @@ export async function инициализироватьSupabase() {
 
 export function активен() { return готов; }
 
+// ── МЕТКИ ВРЕМЕНИ ДЛЯ СИНКА (newest-wins) ─────────────────────────────────────
+// lifeos_sync_meta = { '<ключ>': ts_ms } — когда локально последний раз меняли.
+// Облако применяется только если его updated_at новее локальной метки.
+function _getMeta() {
+  try { return JSON.parse(localStorage.getItem('lifeos_sync_meta') || '{}'); } catch { return {}; }
+}
+function _setMeta(key, ts) {
+  const m = _getMeta(); m[key] = ts;
+  try { localStorage.setItem('lifeos_sync_meta', JSON.stringify(m)); } catch {}
+}
+export function отметитьИзменение(key) { _setMeta(key, Date.now()); }
+const _ms = (iso) => { const t = Date.parse(iso); return isNaN(t) ? 0 : t; };
+
 // ── REST-ХЕЛПЕРЫ ──────────────────────────────────────────────────────────────
 async function запросSelect(таблица, params = '') {
   const url = `${базаURL}/${таблица}?owner=eq.${владелец}&select=*${params ? '&' + params : ''}`;
@@ -216,21 +229,29 @@ export async function загрузитьВсё() {
     try {
       const kvRows = await запросSelect('kv').catch(() => []);
       const сегодняStr = new Date().toDateString();
+      const meta = _getMeta();
       for (const row of (kvRows || [])) {
         if (!row.key || row.data == null) continue;
-        // nutrition — НЕ затираем воду слепо: вода это счётчик, берём максимум за сегодня
+        // newest-wins: если локальное изменение свежее облака — НЕ затираем
+        const cloudTs = _ms(row.updated_at);
+        const localTs = meta['kv:' + row.key] || 0;
+        const локальноСвежее = localTs > cloudTs;
+        // nutrition — вода это счётчик: всегда берём максимум за сегодня,
+        // остальное (цели/КБЖУ) обновляем из облака только если оно свежее
         if (row.key === 'nutrition') {
           let local = {};
           try { local = JSON.parse(localStorage.getItem('lifeos_nutrition') || '{}'); } catch {}
           const cloud = row.data || {};
-          const out = { ...local, ...cloud };           // цели/последние — из облака
+          const base = локальноСвежее ? local : { ...local, ...cloud };
           const lw = local.date === сегодняStr ? (local.water || 0) : 0;
           const cw = cloud.date === сегодняStr ? (cloud.water || 0) : 0;
-          out.water = Math.max(lw, cw);                  // не теряем отмеченное ни на одном устройстве
-          out.date  = сегодняStr;
-          localStorage.setItem('lifeos_nutrition', JSON.stringify(out));
+          base.water = Math.max(lw, cw);
+          base.date  = сегодняStr;
+          localStorage.setItem('lifeos_nutrition', JSON.stringify(base));
           continue;
         }
+        // остальные блобы — применяем облако только если оно новее локального
+        if (локальноСвежее) continue;
         localStorage.setItem('lifeos_' + row.key, JSON.stringify(row.data));
       }
     } catch (e) { console.warn('[Supabase kv pull]', e.message); }
@@ -376,6 +397,7 @@ export async function удалитьПриёмПищи(id) {
 
 // ── УНИВЕРСАЛЬНЫЙ KV (вода/цели, тренировки, база знаний, дофамин, rpg…) ──────
 export async function сохранитьKV(key, data) {
+  _setMeta('kv:' + key, Date.now());   // помечаем локальное изменение (даже офлайн)
   if (!активен()) return;
   await запросUpsert('kv', { owner: владелец, key, data, updated_at: new Date().toISOString() }, 'owner,key');
 }
