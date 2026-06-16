@@ -1,4 +1,5 @@
 // ── /api/classify-task — AI-разбор задачи для Mini App ─────────────────────
+import { getActiveModel } from './_lib/model.js';
 // Принимает {текст}, возвращает классификацию: квадрант, категорию, дату.
 
 import OpenAI from 'openai';
@@ -62,7 +63,7 @@ export default async function handler(req, res) {
 
     const openai = new OpenAI({ apiKey });
     const completion = await openai.chat.completions.create({
-      model: process.env.LIFE_MODEL || 'gpt-5.5',
+      model: await getActiveModel(),
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: ПРОМТ() },

@@ -1,4 +1,5 @@
 // ── /api/extract-onboarding — превращаем голос в структуру LIFE OS ───────────
+import { getActiveModel } from './_lib/model.js';
 // Принимает { ответы: {...} }, возвращает полную структуру данных для приложения
 
 import OpenAI from 'openai';
@@ -46,7 +47,7 @@ export default async function handler(req, res) {
 
     const openai = new OpenAI({ apiKey });
     const completion = await openai.chat.completions.create({
-      model: process.env.LIFE_MODEL || 'gpt-5.5',
+      model: await getActiveModel(),
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: СИСТЕМНЫЙ_ПРОМТ },

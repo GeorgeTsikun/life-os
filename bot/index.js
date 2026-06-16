@@ -11,6 +11,7 @@ import * as GCal from './google.js';
 import { запуститьРасписание, зарегистрироватьОбработчики, утреннийАвтоБрифинг, отправитьКарточкуПереноса } from './scheduling.js';
 import { отправитьОтчёт, отправитьДашборд, отправитьКанбан, отправитьПланДня, отправитьОтчётЗаДень, отправитьДеньги } from './reports.js';
 import { начатьДекомпозицию, зарегистрироватьДекомпозицию, перехватитьПравку, ждётПравку } from './decompose.js';
+import { initModel, getActiveModel, setActiveModel, listOpenAIModels } from './model.js';
 
 // ── КОНФИГ ────────────────────────────────────────────────────────────────────
 const TOKEN           = process.env.TELEGRAM_BOT_TOKEN;
@@ -266,6 +267,32 @@ bot.callbackQuery(/^rep:(dashboard|kanban|plan|report|money)$/, async (ctx) => {
 // ── /decompose — разбить задачу на подзадачи ──────────────────────────────────
 bot.command('decompose', async (ctx) => {
   await начатьДекомпозицию(ctx, { openai, supa }, ctx.match?.trim());
+});
+
+// ── МОДЕЛЬ ИИ (рантайм-конфиг, без деплоя) ────────────────────────────────────
+const _isAdmin = (ctx) => !OWNER_TG_ID || String(ctx.from?.id) === String(OWNER_TG_ID);
+
+bot.command('getmodel', async (ctx) => {
+  await ctx.reply(`🤖 Текущая модель: *${getActiveModel()}*`, { parse_mode: 'Markdown' });
+});
+
+bot.command('setmodel', async (ctx) => {
+  if (!_isAdmin(ctx)) return ctx.reply('⛔ Только владелец может менять модель.');
+  const id = ctx.match?.trim();
+  if (!id) return ctx.reply('Использование: `/setmodel gpt-5.5`', { parse_mode: 'Markdown' });
+  const ok = await setActiveModel(supa, id);
+  await ctx.reply(ok ? `✅ Модель переключена на *${id}* (без деплоя)` : `⚠️ Не удалось сохранить (Supabase?). Локально применил: *${id}*`, { parse_mode: 'Markdown' });
+});
+
+bot.command('models', async (ctx) => {
+  await ctx.replyWithChatAction('typing');
+  const list = await listOpenAIModels();
+  if (!list.length) return ctx.reply('⚠️ Не получил список моделей от OpenAI.');
+  const активная = getActiveModel();
+  const текст = list.map(id => (id === активная ? `• *${id}* ← активна` : `• ${id}`)).join('\n');
+  // Телеграм лимит ~4096 символов — режем при необходимости
+  const out = `🤖 *Доступные модели* (${list.length}):\n\n${текст}\n\nСменить: \`/setmodel <id>\``;
+  await ctx.reply(out.length > 3900 ? out.slice(0, 3900) + '\n…' : out, { parse_mode: 'Markdown' });
 });
 
 // ── /summary — вечерний чек-ин ────────────────────────────────────────────────
@@ -614,7 +641,7 @@ async function обработатьВход(ctx, текст, opts = {}) {
     }
 
     const completion = await openai.chat.completions.create({
-      model: process.env.LIFE_MODEL || 'gpt-5.5',
+      model: getActiveModel(),
       response_format: { type: 'json_object' },
       messages: сообщения,
       temperature: 0.3,
@@ -744,7 +771,7 @@ async function разговор(ctx, текст) {
   if (память.length > 12) память.shift(); // храним последние 12 реплик
 
   const ответ = await openai.chat.completions.create({
-    model: process.env.LIFE_MODEL || 'gpt-5.5',
+    model: getActiveModel(),
     messages: [
       { role: 'system', content: ДИРЕКТОР_ПРОМТ },
       { role: 'system', content: `Контекст пользователя:\n${JSON.stringify(контекст, null, 2)}` },
@@ -981,6 +1008,9 @@ async function запустить() {
       { command: 'decompose', description: '🧩 Разбить задачу на шаги' },
       { command: 'summary',   description: '🌙 Вечерний чек-ин' },
       { command: 'chat',      description: '💬 Режим разговора' },
+      { command: 'getmodel',  description: '🤖 Текущая модель ИИ' },
+      { command: 'models',    description: '🤖 Список моделей' },
+      { command: 'setmodel',  description: '🤖 Сменить модель: /setmodel <id>' },
     ]);
   } catch (err) { console.warn('setMyCommands:', err.message); }
 
@@ -1005,6 +1035,9 @@ async function запустить() {
 
   // Регистрируем callback-кнопки декомпозиции (dec:save/edit/cancel)
   зарегистрироватьДекомпозицию({ bot, supa, openai });
+
+  // Инициализируем рантайм-выбор модели (тянем config.life_model из Supabase)
+  initModel(supa);
 
   // Запускаем cron-расписание (8:00 брифинг + 21:00 чекин)
   запуститьРасписание({

@@ -1,4 +1,5 @@
 // ── LIFE OS — Автоматическое расписание бота ─────────────────────────────────
+import { getActiveModel } from './model.js';
 // Запускается при старте бота, работает в фоне через node-cron.
 // Брифинг 08:00 + Чек-ин 21:00 Europe/Moscow
 
@@ -190,7 +191,7 @@ async function проактивныйВопрос({ bot, supa, openai, ownerTgId
   if (openai) {
     try {
       const completion = await openai.chat.completions.create({
-        model: process.env.LIFE_MODEL || 'gpt-5.5',
+        model: getActiveModel(),
         messages: [
           { role: 'system', content: ДИРЕКТОР_ПРОМТ },
           { role: 'system', content:
@@ -340,7 +341,7 @@ export async function утреннийАвтоБрифинг({ bot, supa, openai
         ? `\nДанные здоровья: HRV ${здоровье.hrv}мс, сон ${здоровье.sleep_hours}ч, пульс ${здоровье.resting_hr || '—'}.`
         : '';
       const completion = await openai.chat.completions.create({
-        model: process.env.LIFE_MODEL || 'gpt-5.5',
+        model: getActiveModel(),
         messages: [
           { role: 'system', content: ДИРЕКТОР_ПРОМТ },
           { role: 'system', content:

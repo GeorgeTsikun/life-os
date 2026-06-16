@@ -1,4 +1,5 @@
 // ── LIFE OS — Декомпозиция задач через GPT ───────────────────────────────────
+import { getActiveModel } from './model.js';
 // «Разбей задачу X» → GPT предлагает 3-7 шагов → кнопки ✅/✏️/❌ →
 // при подтверждении пишем в tasks.subtasks (jsonb), видно в Mini App.
 //
@@ -32,7 +33,7 @@ async function сгенерировать(openai, цель, правки = '') {
   if (правки) messages.push({ role: 'user', content: `Учти правки: ${правки}` });
 
   const r = await openai.chat.completions.create({
-    model: process.env.LIFE_MODEL || 'gpt-5.5',
+    model: getActiveModel(),
     response_format: { type: 'json_object' },
     messages,
     temperature: 0.4,

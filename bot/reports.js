@@ -1,4 +1,5 @@
 // ── LIFE OS — Богатые отчёты для Telegram-бота ───────────────────────────────
+import { getActiveModel } from './model.js';
 // Дашборд · Канбан · План дня · Итог дня.
 // Строит блоки Rich Message (Bot API 10.1) + Markdown-фоллбэк, тянет данные из
 // Supabase (owner='george', single-user) и шлёт через sendRichWithFallback.
@@ -406,7 +407,7 @@ export async function отправитьОтчётЗаДень({ supa, openai, c
     const debuff = (health?.hrv || 99) < 30;
     try {
       const r = await openai.chat.completions.create({
-        model: process.env.LIFE_MODEL || 'gpt-5.5',
+        model: getActiveModel(),
         messages: [
           { role: 'system', content: ДИРЕКТОР_ПРОМТ },
           { role: 'system', content:

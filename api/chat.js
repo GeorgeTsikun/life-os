@@ -1,4 +1,5 @@
 // ── /api/chat — ежедневный AI-директор ───────────────────────────────────────
+import { getActiveModel } from './_lib/model.js';
 // Принимает { сообщение, контекст }, возвращает ответ Джорджу
 
 import OpenAI from 'openai';
@@ -35,7 +36,7 @@ export default async function handler(req, res) {
 
     const openai = new OpenAI({ apiKey });
     const ответ = await openai.chat.completions.create({
-      model: process.env.LIFE_MODEL || 'gpt-5.5',
+      model: await getActiveModel(),
       messages: сообщения,
       temperature: 0.7,
       max_tokens: 500,
