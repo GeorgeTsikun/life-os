@@ -175,12 +175,14 @@ export async function вечернийРазбор({ bot, supa, openai, ownerTgI
       name:m.name||'Еда', items:[], calories:m.calories||0, protein:m.protein||0,
       fat:m.fat||0, carbs:m.carbs||0, note:'из вечернего рассказа',
     }))).then(r=>r,()=>{});
-  // 5. Вода → KV nutrition (read-modify-write, newest-wins подхватит на клиентах)
+  // 5. Вода → KV nutrition (read-modify-write, newest-wins подхватит на клиентах).
+  // Дата в формате toDateString() — как на фронте (иначе max-merge воды не засчитает день).
   if (p.water_ml > 0) {
+    const деньStr = new Date(Date.now()+MSK).toDateString();
     const { data: kv } = await supa.from('kv').select('data').eq('owner','george').eq('key','nutrition').maybeSingle().then(r=>r,()=>({data:null}));
-    const n = kv?.data || { water:0, waterGoal:2.5, date:сегодня };
-    n.water = Math.round(((n.date===сегодня ? n.water||0 : 0) + p.water_ml/1000) * 100) / 100;
-    n.date = сегодня;
+    const n = kv?.data || { water:0, waterGoal:2.5, date:деньStr };
+    n.water = Math.round(((n.date===деньStr ? n.water||0 : 0) + p.water_ml/1000) * 100) / 100;
+    n.date = деньStr;
     await supa.from('kv').upsert({ owner:'george', key:'nutrition', data:n, updated_at:сейчасISO }, { onConflict:'owner,key' }).then(r=>r,()=>{});
   }
   // 6. Идеи → банк идей
