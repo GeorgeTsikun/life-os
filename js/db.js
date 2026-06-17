@@ -1,5 +1,5 @@
 // ── СЛОЙ ДАННЫХ ───────────────────────────────────────────────────────────────
-import { KNOWLEDGE_SEED } from './data/knowledge.js?v=65';
+import { KNOWLEDGE_SEED } from './data/knowledge.js?v=67';
 // Приоритет: localStorage (работает без интернета).
 // Если заданы VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY — синхронизируется с Supabase.
 // Переменные окружения читаются из window.__ENV__ (injected Vercel) или import.meta.env
@@ -516,16 +516,32 @@ export const DB = {
     return Math.min(1, t.spent / base);
   },
 
-  // Статистика за сегодня
+  // Дофамин тратится на ИНИЦИАЦИЮ действия. Старт задачи стоит дофамина
+  // (масштаб по сложности), завершение — сверх-возвращает (xpValue > старта).
+  TASK_START_COST: (t) => (t?.difficulty || 2) * 4,
+
+  // Статистика за сегодня (дофамин = нейромедиатор фокуса/действия)
   getTodayStats() {
     const сегодня = new Date().toDateString();
-    const earned = this.getTasks()
+    const задачи = this.getTasks();
+    // Прирост — на завершении осмысленных задач сегодня
+    const earned = задачи
       .filter(t => t.done && new Date(t.completedAt || t.createdAt).toDateString() === сегодня)
       .reduce((s, t) => s + (t.xpValue || 10), 0);
-    const spent = this.getPleasureLog()
+    // Трата на удовольствия (старт просмотра/скролла — петля без возврата)
+    const spentPleasure = this.getPleasureLog()
       .filter(p => new Date(p.at).toDateString() === сегодня)
       .reduce((s, p) => s + (p.cost || 0), 0);
-    return { earned, spent, balance: earned - spent };
+    // Трата на СТАРТ задач: по одному списанию на задачу, начатую сегодня
+    const начатыеСегодня = new Set(
+      this.getFocusLog().filter(f => new Date(f.at).toDateString() === сегодня).map(f => f.taskId)
+    );
+    const активный = this.getActiveTimer();
+    if (активный && new Date(активный.startedAt).toDateString() === сегодня) начатыеСегодня.add(активный.taskId);
+    let startCost = 0;
+    начатыеСегодня.forEach(id => { startCost += this.TASK_START_COST(задачи.find(x => x.id === id)); });
+    const spent = spentPleasure + startCost;
+    return { earned, spent, spentPleasure, startCost, balance: earned - spent };
   },
 
   // Потратить удовольствие

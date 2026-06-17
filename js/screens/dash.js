@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=65';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=65';
-import { TG } from '../telegram.js?v=65';
+import { DB } from '../db.js?v=67';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=67';
+import { TG } from '../telegram.js?v=67';
 
 let radarChart, energyChart;
 let _currentQuests = []; // для синхронизации taskId при completeQuest
@@ -452,7 +452,7 @@ function renderBalanceBlock(balance, earned, spent, ratio, today) {
         <div style="font-size:8px;color:rgba(232,237,245,.4);margin-top:1px;letter-spacing:.04em">ПОТРАЧЕНО</div>
       </div>
       <div style="flex:1;background:rgba(123,97,255,.07);border-radius:8px;padding:7px 8px;text-align:center">
-        <div class="num" style="font-size:16px;color:#7B61FF">${today.earned > 0 ? '+' + today.earned : (today.spent > 0 ? '−' + today.spent : '0')}</div>
+        <div class="num" style="font-size:16px;color:#7B61FF">${(() => { const n = today.earned - today.spent; return (n > 0 ? '+' : '') + n; })()}</div>
         <div style="font-size:8px;color:rgba(232,237,245,.4);margin-top:1px;letter-spacing:.04em">СЕГОДНЯ</div>
       </div>
     </div>
