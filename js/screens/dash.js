@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=63';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=63';
-import { TG } from '../telegram.js?v=63';
+import { DB } from '../db.js?v=64';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=64';
+import { TG } from '../telegram.js?v=64';
 
 let radarChart, energyChart;
 let _currentQuests = []; // для синхронизации taskId при completeQuest
@@ -112,6 +112,9 @@ export function renderDash() {
 
   <!-- ── REAL CAPACITY ────────────────────────────────────────────────────────── -->
   ${renderRcBlock(health, profile)}
+
+  <!-- ── 🎯 ЦЕЛИ ───────────────────────────────────────────────────────────────── -->
+  ${renderGoalsBlock()}
 
   <!-- ── DAILY CHECK-IN ────────────────────────────────────────────────────────── -->
   ${renderCheckinBlock(daily)}
@@ -317,6 +320,7 @@ function десктопныйДашборд(p) {
     <!-- 3 КОЛОНКИ ВИДЖЕТОВ -->
     <div class="dd-grid">
       <div class="dd-col">
+        ${renderGoalsBlock()}
         ${renderRcBlock(health, profile)}
         ${heroState}
       </div>
@@ -356,6 +360,51 @@ function renderTimeWasteBlock() {
       <div style="font-size:11px;color:rgba(232,237,245,.5)">${i.min} мин</div>
     </div>`).join('')}
     <div style="font-size:11px;color:${цвет};margin-top:8px">🪞 ${честно}</div>
+  </div>`;
+}
+
+// ── БЛОК ЦЕЛЕЙ (план/факт/цель) ──────────────────────────────────────────────
+// Цели в KV (lifegoals), управляются из бота: /goal /goalp. Тут — витрина.
+function renderGoalsBlock() {
+  let goals = [];
+  try { goals = DB.get('lifegoals') || []; } catch {}
+  if (!Array.isArray(goals) || !goals.length) return '';
+  const метрики = (g) => {
+    const pctЦель = g.target ? Math.min(g.current / g.target, 1) : 0;
+    let pctВремя = null, вероятн = null;
+    if (g.deadline && g.start) {
+      const всего = new Date(g.deadline) - new Date(g.start);
+      const прошло = Date.now() - new Date(g.start);
+      pctВремя = всего > 0 ? Math.min(Math.max(прошло / всего, 0), 1) : 1;
+      вероятн = pctВремя > 0.01 ? Math.min(pctЦель / pctВремя, 1) : 1;
+    }
+    return { pctЦель, pctВремя, вероятн };
+  };
+  const строки = goals.map(g => {
+    const m = метрики(g);
+    const цвет = m.вероятн == null ? '#00F5D4' : m.вероятн >= 0.95 ? '#00E396' : m.вероятн >= 0.6 ? '#FFD700' : '#FF4560';
+    const статус = m.вероятн == null ? '' : m.вероятн >= 0.95 ? '🟢 в графике' : m.вероятн >= 0.6 ? '🟡 отстаём' : '🔴 риск';
+    return `<div style="padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+      <div class="row" style="justify-content:space-between;margin-bottom:5px">
+        <div style="font-size:12px;font-weight:600;color:#E8EDF5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.title}</div>
+        <div class="num" style="font-size:11px;color:${цвет}">${Math.round(m.pctЦель*100)}%</div>
+      </div>
+      <div style="position:relative;height:6px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden">
+        <div style="position:absolute;inset:0;width:${(m.pctЦель*100).toFixed(1)}%;background:${цвет}"></div>
+        ${m.pctВремя!=null?`<div style="position:absolute;top:-2px;bottom:-2px;left:${(m.pctВремя*100).toFixed(1)}%;width:2px;background:#fff;opacity:.5" title="время"></div>`:''}
+      </div>
+      <div class="row" style="justify-content:space-between;margin-top:4px">
+        <span style="font-size:9px;color:rgba(232,237,245,.45)">${g.current}/${g.target}${g.unit?' '+g.unit:''}${g.deadline?` · до ${g.deadline}`:''}</span>
+        <span style="font-size:9px;color:${цвет}">${статус}</span>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="card" style="margin-bottom:12px">
+    <div class="row" style="justify-content:space-between;margin-bottom:6px">
+      <div class="sec-label" style="margin:0">🎯 ЦЕЛИ</div>
+      <span style="font-size:9px;color:rgba(232,237,245,.4)">${goals.length} · план/факт/цель</span>
+    </div>
+    ${строки}
   </div>`;
 }
 
