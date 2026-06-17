@@ -1,7 +1,7 @@
 // ── TASKS SCREEN ──────────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=71';
-import { onTaskToggled } from '../gamification.js?v=71';
-import { TG } from '../telegram.js?v=71';
+import { DB } from '../db.js?v=72';
+import { onTaskToggled } from '../gamification.js?v=72';
+import { TG } from '../telegram.js?v=72';
 import { парсДату, бакет, форматДата, БАКЕТЫ_UI, ПОРЯДОК_БАКЕТОВ, вISO } from '../utils/date.js';
 import { openTaskDetail } from './_taskDetail.js';
 
@@ -208,6 +208,8 @@ function настроитьDragDrop() {
 
 // ── ГРУППИРОВКА ПО ДАТАМ ─────────────────────────────────────────────────────
 function renderByDates(tasks) {
+  // Ловушки (Q4) — не actionable: живут только в матрице + банке идей, не в списке дел
+  tasks = tasks.filter(t => t.quadrant !== 'eliminate');
   if (tasks.length === 0) {
     return `<div style="text-align:center;padding:40px 20px;color:rgba(232,237,245,.4)">
       <div style="font-size:48px;margin-bottom:12px">✨</div>
@@ -419,8 +421,9 @@ const KB_COLS = [
 const QUAD_COLOR = { do:'#FF4560', schedule:'#00F5D4', delegate:'#7B61FF', eliminate:'rgba(232,237,245,.3)' };
 
 function renderKanban() {
-  // Применяем фильтр категорий (Все / Работа / Личное / cat:X) — как в виде по датам
-  const все   = applyCatFilter(DB.getTasks());
+  // Применяем фильтр категорий (Все / Работа / Личное / cat:X) — как в виде по датам.
+  // Ловушки (Q4) исключаем — канбан только для actionable (как и список по датам).
+  const все   = applyCatFilter(DB.getTasks()).filter(t => t.quadrant !== 'eliminate');
   const сегодня = new Date().toDateString();
 
   // Распределяем активные по колонкам
