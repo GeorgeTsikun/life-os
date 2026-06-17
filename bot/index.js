@@ -15,6 +15,8 @@ import { initModel, getActiveModel, setActiveModel, listOpenAIModels } from './m
 import { отправитьПлан, утреннийКоуч, вечернийРазбор } from './coach.js';
 import { добавитьЦель, обновитьФакт, отправитьЦели, подбивка } from './goals.js';
 import { разобратьСозвон } from './meeting.js';
+import { вспомнить } from './brain.js';
+import { экспортВMarkdown } from './export.js';
 
 // ── КОНФИГ ────────────────────────────────────────────────────────────────────
 const TOKEN           = process.env.TELEGRAM_BOT_TOKEN;
@@ -292,6 +294,10 @@ bot.command('meeting', async (ctx) => {
   if (!т) return ctx.reply('📝 Вставь текст созвона после команды, или просто пришли аудиофайл — разберу на решения/обязательства/риски.');
   await разобратьСозвон(coachDeps(ctx.chat.id), т);
 });
+// ── ВТОРОЙ МОЗГ ───────────────────────────────────────────────────────────────
+bot.command('recall', async (ctx) => { await вспомнить(coachDeps(ctx.chat.id), ctx.match?.trim() || ''); });
+bot.command('export', async (ctx) => { await экспортВMarkdown({ bot, supa, ownerTgId: ctx.chat.id }); });
+
 bot.command('goals',    async (ctx) => { await отправитьЦели({ bot, supa, ownerTgId: ctx.chat.id }); });
 bot.command('progress', async (ctx) => { await подбивка(coachDeps(ctx.chat.id)); });
 
@@ -1071,6 +1077,8 @@ async function запустить() {
       { command: 'plan',      description: '🗓 План на сегодня' },
       { command: 'coach',     description: '🧠 AI-коуч: распорядок дня' },
       { command: 'razbor',    description: '🌙 Вечерний разбор + план завтра' },
+      { command: 'recall',    description: '🧠 Вспомнить из истории' },
+      { command: 'export',    description: '🗂 Экспорт в Markdown' },
       { command: 'meeting',   description: '📝 Разбор созвона' },
       { command: 'goals',     description: '🎯 Цели' },
       { command: 'progress',  description: '📈 Подбивка: план/факт/цель' },
