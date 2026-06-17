@@ -1,6 +1,6 @@
 // ── PEOPLE / CRM SCREEN ───────────────────────────────────────────────────────
-import { DB } from '../db.js?v=68';
-import { TG } from '../telegram.js?v=68';
+import { DB } from '../db.js?v=69';
+import { TG } from '../telegram.js?v=69';
 
 const CHECKUPS = [
   {l:'Чекап здоровья — терапевт',d:'июль 2026',i:'🏥'},
@@ -221,6 +221,22 @@ window.openPersonDetail = function(id) {
       <div class="cat-pills">${urgencyOpts}</div>
     </div>
 
+    <!-- Контакты -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-label">📇 КОНТАКТ</div>
+      <div class="grid2" style="gap:8px;margin-bottom:8px">
+        <div><div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Телефон</div>
+          <input id="p-phone" class="input" type="tel" placeholder="+7…" value="${p.phone||''}"></div>
+        <div><div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Telegram</div>
+          <input id="p-tg" class="input" placeholder="@username" value="${p.tgUsername||''}"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        ${p.phone ? `<a class="btn btn-ghost" style="flex:1;text-decoration:none;text-align:center;color:#00E396" href="tel:${p.phone.replace(/[^+\d]/g,'')}">📞 Позвонить</a>` : ''}
+        ${p.tgUsername ? `<a class="btn btn-ghost" style="flex:1;text-decoration:none;text-align:center;color:#00C9FF" href="https://t.me/${p.tgUsername.replace(/^@/,'')}" target="_blank">💬 Написать</a>` : ''}
+        ${!p.phone && !p.tgUsername ? `<div style="font-size:10px;color:rgba(232,237,245,.3)">Добавь телефон/Telegram и сохрани — появятся кнопки.</div>` : ''}
+      </div>
+    </div>
+
     <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:6px">Заметки</div>
     <textarea id="p-notes" class="input" rows="2" placeholder="Контекст, детали..." style="resize:none;margin-bottom:12px">${p.notes||''}</textarea>
 
@@ -280,6 +296,8 @@ window.savePerson = function(id) {
     p.mine       = document.getElementById('p-mine')?.checked ?? p.mine;
     p.notes      = document.getElementById('p-notes')?.value?.trim() || '';
     p.urgency    = window._pUrgency || p.urgency;
+    p.phone      = document.getElementById('p-phone')?.value?.trim() || '';
+    p.tgUsername = document.getElementById('p-tg')?.value?.trim().replace(/^@/,'') || '';
     DB.savePeople(people);
   }
   document.querySelector('.detail-overlay')?.remove();

@@ -413,6 +413,7 @@ export async function сохранитьЛюдей(люди) {
       mine: p.mine ?? true, due_label: p.due || null, urgency: p.urgency || 'later',
       border: p.border || null, avatar: p.avatar || '👤',
       last_contact: p.last || 'сегодня', notes: p.notes || null, log: p.log || [],
+      phone: p.phone || null, tg_username: p.tgUsername || null,
     });
   }
 }
@@ -631,6 +632,7 @@ function маппингЧеловека(p) {
     commitment: p.commitment, mine: p.mine, due: p.due_label,
     urgency: p.urgency, border: p.border, avatar: p.avatar,
     last: p.last_contact, notes: p.notes, log: p.log,
+    phone: p.phone, tgUsername: p.tg_username,
   };
 }
 
