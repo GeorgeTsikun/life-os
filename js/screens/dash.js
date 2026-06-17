@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=69';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=69';
-import { TG } from '../telegram.js?v=69';
+import { DB } from '../db.js?v=70';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=70';
+import { TG } from '../telegram.js?v=70';
 
 let radarChart, energyChart;
 let _currentQuests = []; // для синхронизации taskId при completeQuest

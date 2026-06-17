@@ -1,7 +1,7 @@
 // ── TASKS SCREEN ──────────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=69';
-import { onTaskToggled } from '../gamification.js?v=69';
-import { TG } from '../telegram.js?v=69';
+import { DB } from '../db.js?v=70';
+import { onTaskToggled } from '../gamification.js?v=70';
+import { TG } from '../telegram.js?v=70';
 import { парсДату, бакет, форматДата, БАКЕТЫ_UI, ПОРЯДОК_БАКЕТОВ, вISO } from '../utils/date.js';
 import { openTaskDetail } from './_taskDetail.js';
 
@@ -65,7 +65,10 @@ export function renderTasks() {
       <div class="num" style="font-size:16px">ЗАДАЧИ</div>
       <div style="font-size:10px;color:rgba(232,237,245,.4);margin-top:2px">${активные.length} активных · ${готовые.length} готовых</div>
     </div>
-    <button class="btn btn-teal" onclick="window.openAddTask()">+ Добавить</button>
+    <div class="row" style="gap:6px">
+      <button class="btn btn-ghost" style="font-size:11px;padding:8px 11px" onclick="window.openRecurring()" title="Повторяющиеся">🔁</button>
+      <button class="btn btn-teal" onclick="window.openAddTask()">+ Добавить</button>
+    </div>
   </div>
 
   <div class="toggle-row" style="margin-bottom:10px">
@@ -745,6 +748,80 @@ window.toggleTaskCatMenu = function() {
 };
 
 window.openAddTask = openAddTask;
+
+// ── ПОВТОРЯЮЩИЕСЯ ЗАДАЧИ ──────────────────────────────────────────────────────
+const _freqLabel = (r) => r.freq === 'daily' ? (r.perDay > 1 ? `каждый день ×${r.perDay}` : 'каждый день')
+  : r.freq === 'weekly' ? `еженедельно (${['вс','пн','вт','ср','чт','пт','сб'][r.weekday||0]})`
+  : `ежемесячно (${r.dayOfMonth||1}-е)`;
+
+window.openRecurring = function() {
+  document.getElementById('recurring-modal')?.remove();
+  const list = DB.getRecurring();
+  const rows = list.length ? list.map(r => `<div class="row" style="justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+      <div style="min-width:0"><div style="font-size:13px;color:#E8EDF5">${r.text}</div>
+        <div style="font-size:10px;color:rgba(232,237,245,.4)">🔁 ${_freqLabel(r)} · ${r.cat}</div></div>
+      <button onclick="window.delRecurring('${r.id}')" style="background:none;border:none;color:#FF6B6B;font-size:14px;cursor:pointer;flex-shrink:0">🗑</button>
+    </div>`).join('') : `<div style="text-align:center;padding:18px;font-size:12px;color:rgba(232,237,245,.4)">Пока нет шаблонов</div>`;
+
+  const div = document.createElement('div');
+  div.id = 'recurring-modal';
+  div.className = 'modal-overlay';
+  div.innerHTML = `<div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🔁 Повторяющиеся задачи</div>
+    <div style="margin-bottom:14px">${rows}</div>
+    <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:6px">НОВЫЙ ШАБЛОН</div>
+    <input id="rec-text" class="input" placeholder="Напр. Выгулять Лёху" style="margin-bottom:8px">
+    <div class="grid2" style="gap:8px;margin-bottom:8px">
+      <select id="rec-freq" class="input" onchange="window._recFreqChange()">
+        <option value="daily">Каждый день</option>
+        <option value="weekly">Раз в неделю</option>
+        <option value="monthly">Раз в месяц</option>
+      </select>
+      <input id="rec-cat" class="input" placeholder="Категория" value="Быт">
+    </div>
+    <div id="rec-extra" style="margin-bottom:12px">
+      <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Сколько раз в день</div>
+      <input id="rec-perday" class="input" type="number" min="1" value="1">
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('recurring-modal').remove()">Закрыть</button>
+      <button class="btn btn-teal" style="flex:2" onclick="window.submitRecurring()">Добавить шаблон ✓</button>
+    </div>
+  </div>`;
+  div.addEventListener('click', e => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
+};
+
+window._recFreqChange = function() {
+  const f = document.getElementById('rec-freq').value;
+  const box = document.getElementById('rec-extra');
+  if (f === 'daily') box.innerHTML = `<div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Сколько раз в день</div><input id="rec-perday" class="input" type="number" min="1" value="1">`;
+  else if (f === 'weekly') box.innerHTML = `<div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">День недели</div><select id="rec-weekday" class="input">${['Вс','Пн','Вт','Ср','Чт','Пт','Сб'].map((d,i)=>`<option value="${i}">${d}</option>`).join('')}</select>`;
+  else box.innerHTML = `<div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Число месяца</div><input id="rec-dom" class="input" type="number" min="1" max="31" value="1">`;
+};
+
+window.submitRecurring = function() {
+  const text = document.getElementById('rec-text')?.value?.trim();
+  if (!text) { TG.hapticError?.(); return; }
+  const freq = document.getElementById('rec-freq').value;
+  const cat = document.getElementById('rec-cat')?.value?.trim() || 'Быт';
+  const tpl = { text, cat, freq };
+  if (freq === 'daily') tpl.perDay = parseInt(document.getElementById('rec-perday')?.value) || 1;
+  else if (freq === 'weekly') tpl.weekday = parseInt(document.getElementById('rec-weekday')?.value) || 0;
+  else tpl.dayOfMonth = parseInt(document.getElementById('rec-dom')?.value) || 1;
+  DB.addRecurring(tpl);
+  document.getElementById('recurring-modal')?.remove();
+  window.showToast?.('🔁 Шаблон добавлен', 'success');
+  renderTasks();
+  TG.hapticSuccess?.();
+};
+
+window.delRecurring = function(id) {
+  DB.deleteRecurring(id);
+  window.openRecurring();
+  TG.hapticImpact?.('light');
+};
 
 window.closeAddTask = function() {
   document.getElementById('add-task-modal')?.remove();

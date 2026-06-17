@@ -1,5 +1,5 @@
 // ── СЛОЙ ДАННЫХ ───────────────────────────────────────────────────────────────
-import { KNOWLEDGE_SEED } from './data/knowledge.js?v=69';
+import { KNOWLEDGE_SEED } from './data/knowledge.js?v=70';
 // Приоритет: localStorage (работает без интернета).
 // Если заданы VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY — синхронизируется с Supabase.
 // Переменные окружения читаются из window.__ENV__ (injected Vercel) или import.meta.env
@@ -220,6 +220,57 @@ export const DB = {
     this.pruneOldNutritionData();
     const moved = this.sweepQ4toIdeaBank();
     if (moved > 0) window.showToast?.(`💡 ${moved} идей из Q4 → Банк идей`, 'info');
+    this.ensureRecurringTasks();
+  },
+
+  // ── ПОВТОРЯЮЩИЕСЯ ЗАДАЧИ (шаблоны → авто-создание по расписанию) ─────────────
+  getRecurring() { return this.get('recurringTasks') || []; },
+  addRecurring(tpl) {
+    const list = this.getRecurring();
+    list.push({
+      id: 'r' + Date.now(),
+      text: tpl.text, cat: tpl.cat || 'Быт', quadrant: tpl.quadrant || 'delegate',
+      difficulty: tpl.difficulty || 1,
+      freq: tpl.freq || 'daily',          // daily | weekly | monthly
+      perDay: Math.max(1, tpl.perDay || 1),
+      weekday: tpl.weekday ?? null,        // 0..6 (для weekly)
+      dayOfMonth: tpl.dayOfMonth ?? null,  // 1..31 (для monthly)
+      lastGen: null,
+    });
+    this.set('recurringTasks', list);     // _дбHook('kv') → синк
+    this.ensureRecurringTasks();
+    return list[list.length - 1];
+  },
+  deleteRecurring(id) {
+    this.set('recurringTasks', this.getRecurring().filter(r => r.id !== id));
+  },
+  // Создаёт сегодняшние экземпляры шаблонов, если ещё не созданы сегодня
+  ensureRecurringTasks() {
+    const d = new Date();
+    const todayStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const list = this.getRecurring();
+    let изменено = false;
+    for (const r of list) {
+      if (r.lastGen === todayStr) continue;            // уже создано сегодня
+      let due = false;
+      if (r.freq === 'daily') due = true;
+      else if (r.freq === 'weekly') due = (d.getDay() === r.weekday);
+      else if (r.freq === 'monthly') {
+        const lastDay = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+        due = (d.getDate() === Math.min(r.dayOfMonth || 1, lastDay));
+      }
+      if (!due) continue;
+      const копий = r.freq === 'daily' ? r.perDay : 1;
+      for (let i = 0; i < копий; i++) {
+        this.addTask({
+          text: r.text, cat: r.cat, quadrant: r.quadrant, difficulty: r.difficulty,
+          due_date: todayStr, recurringId: r.id, _forceQ1: true,
+        });
+      }
+      r.lastGen = todayStr;
+      изменено = true;
+    }
+    if (изменено) this.set('recurringTasks', list);
   },
 
   // ── МИГРАЦИЯ: не-UUID id → UUID ──────────────────────────────────────────────
@@ -288,7 +339,7 @@ export const DB = {
 
   get(ключ)       { return хранилищеПолучить(ключ) ?? ДАННЫЕ[ключ]; },
   // Блобы без собственной таблицы — синкаем через универсальный kv
-  _KV_SYNC: new Set(['nutrition','workouts','gymDays','pleasureLog','rpgStats','weeklyChallenge','knowledge','lifegoals','focusLog','savedMeals']),
+  _KV_SYNC: new Set(['nutrition','workouts','gymDays','pleasureLog','rpgStats','weeklyChallenge','knowledge','lifegoals','focusLog','savedMeals','recurringTasks']),
   set(ключ, знач) {
     хранилищеСохранить(ключ, знач);
     if (this._KV_SYNC.has(ключ)) window._дбHook?.('kv', { key: ключ, data: знач });
