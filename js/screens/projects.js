@@ -1,6 +1,6 @@
 // ── PROJECTS SCREEN ───────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=70';
-import { TG } from '../telegram.js?v=70';
+import { DB } from '../db.js?v=71';
+import { TG } from '../telegram.js?v=71';
 
 const MONTH_GOAL = 3000000; // цель по выручке за месяц
 
@@ -335,6 +335,8 @@ window.openProjectDetail = function(id) {
         </div>`).join('')}
       </div>`;
     })()}
+    <button class="btn" style="width:100%;margin-bottom:8px;background:rgba(123,97,255,.12);border:1px solid rgba(123,97,255,.35);color:#A78BFA"
+      onclick="window.decomposeProject('${p.id}')">🤖 Разбить на задачи (ИИ)</button>
     <div style="display:flex;gap:8px;margin-bottom:8px">
       <button class="btn" style="flex:1;background:rgba(0,245,212,.1);border:1px solid rgba(0,245,212,.3);color:#00F5D4"
         onclick="window.addTaskFromProject('${p.id}','${p.name.replace(/'/g,"\\'")}','${p.color}')">+ Задача</button>
@@ -359,6 +361,86 @@ window.deleteProject = function(id) {
   window._дбHook?.('projects', projects);
   document.querySelector('.detail-overlay')?.remove();
   renderProjects();
+  TG.hapticSuccess();
+};
+
+// ── ИИ-ДЕКОМПОЗИЦИЯ ПРОЕКТА ───────────────────────────────────────────────────
+window._decompProposed = [];
+window.decomposeProject = async function(id) {
+  const p = DB.getProjects().find(x => x.id === id);
+  if (!p) return;
+  const existing = DB.getTasks().filter(t => t.project_id === id && !t.done).map(t => t.text);
+
+  // модалка-лоадер
+  document.getElementById('decomp-modal')?.remove();
+  const div = document.createElement('div');
+  div.id = 'decomp-modal';
+  div.className = 'modal-overlay';
+  div.innerHTML = `<div class="modal-sheet"><div class="modal-handle"></div>
+    <div class="modal-title">🤖 Разбивка: ${p.name}</div>
+    <div id="decomp-body" style="text-align:center;padding:24px;color:#A78BFA;font-size:13px">
+      <div style="width:26px;height:26px;border-radius:50%;border:3px solid #A78BFA;border-top-color:transparent;animation:spin .8s linear infinite;margin:0 auto 12px"></div>
+      ИИ разбивает проект на шаги…
+    </div></div>`;
+  div.addEventListener('click', e => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
+
+  try {
+    const r = await fetch('/api/decompose-project', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: p.name, stage: p.stage, current: p.current, target: p.target, existing }),
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    window._decompProposed = (data.tasks || []).map((t, i) => ({ ...t, _i: i, _on: true }));
+    window._decompProjId = id;
+    renderDecompList();
+  } catch (err) {
+    const b = document.getElementById('decomp-body');
+    if (b) b.innerHTML = `<div style="color:#FF5C8A;font-size:12px">⚠️ ${err.message}</div>`;
+  }
+};
+
+function renderDecompList() {
+  const b = document.getElementById('decomp-body');
+  if (!b) return;
+  const list = window._decompProposed;
+  if (!list.length) { b.innerHTML = `<div style="font-size:12px;color:rgba(232,237,245,.5)">ИИ ничего не предложил.</div>`; return; }
+  const QL = { do:'Q1', schedule:'Q2' };
+  b.style.textAlign = 'left'; b.style.padding = '0';
+  b.innerHTML = `
+    <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:8px">Сними галочки с лишнего, потом добавь:</div>
+    ${list.map(t => `<div style="padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+      <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer">
+        <input type="checkbox" ${t._on?'checked':''} onchange="window._decompToggle(${t._i}, this.checked)" style="accent-color:#A78BFA;margin-top:2px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;color:#E8EDF5">${t.text} <span style="font-size:9px;color:#A78BFA">${QL[t.quadrant]||''} · ${t.cat||''}</span></div>
+          ${Array.isArray(t.subtasks)&&t.subtasks.length?`<ul style="margin:4px 0 0;padding-left:16px;font-size:11px;color:rgba(232,237,245,.5)">${t.subtasks.map(s=>`<li>${s}</li>`).join('')}</ul>`:''}
+        </div>
+      </label>
+    </div>`).join('')}
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('decomp-modal').remove()">Отмена</button>
+      <button class="btn btn-teal" style="flex:2" onclick="window._decompSave()">Добавить выбранные ✓</button>
+    </div>`;
+}
+
+window._decompToggle = function(i, on) {
+  const t = window._decompProposed.find(x => x._i === i);
+  if (t) t._on = on;
+};
+
+window._decompSave = function() {
+  const id = window._decompProjId;
+  const chosen = window._decompProposed.filter(t => t._on);
+  chosen.forEach(t => DB.addTask({
+    text: t.text, cat: t.cat || 'Работа', quadrant: t.quadrant || 'schedule',
+    difficulty: t.difficulty || 2, project_id: id, _forceQ1: true,
+    subtasks: (t.subtasks || []).map(s => ({ text: s, done: false })),
+  }));
+  document.getElementById('decomp-modal')?.remove();
+  window.showToast?.(`✅ Добавлено задач: ${chosen.length}`, 'success');
+  window.openProjectDetail?.(id);
   TG.hapticSuccess();
 };
 
