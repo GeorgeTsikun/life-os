@@ -2,8 +2,8 @@
 // Пайплайн: Идея → Сценарий → Съёмка → Монтаж → Запланировано → Опубликовано
 // Группировка по платформам, метрики после публикации.
 
-import { DB } from '../db.js?v=67';
-import { TG } from '../telegram.js?v=67';
+import { DB } from '../db.js?v=68';
+import { TG } from '../telegram.js?v=68';
 
 const ПЛАТФОРМЫ = [
   { id:'instagram', name:'Instagram', emoji:'📷', color:'#E1306C' },

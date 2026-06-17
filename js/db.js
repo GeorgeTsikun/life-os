@@ -1,5 +1,5 @@
 // ── СЛОЙ ДАННЫХ ───────────────────────────────────────────────────────────────
-import { KNOWLEDGE_SEED } from './data/knowledge.js?v=67';
+import { KNOWLEDGE_SEED } from './data/knowledge.js?v=68';
 // Приоритет: localStorage (работает без интернета).
 // Если заданы VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY — синхронизируется с Supabase.
 // Переменные окружения читаются из window.__ENV__ (injected Vercel) или import.meta.env
@@ -134,6 +134,16 @@ const ДАННЫЕ = {
     ENG: 52,  // FOC→ENG (Энергобаланс, динамический от HRV)
   },
 };
+
+// ── БАЗА ЧАСТЫХ БЛЮД ДЖОРДЖА (дефолт, выбор в один тап) ──────────────────────
+const SAVED_MEALS_SEED = [
+  { id:'sm1', name:'Яйца + гречка', items:['3 яйца','гречка 150г'], calories:430, protein:32, fat:18, carbs:38, mealType:'breakfast', health_score:8 },
+  { id:'sm2', name:'Овсянка с бананом', items:['овсянка 70г','банан','молоко'], calories:380, protein:14, fat:8, carbs:65, mealType:'breakfast', health_score:8 },
+  { id:'sm3', name:'Тост: творожный сыр + красная рыба + авокадо', items:['цельнозерновой тост','творожный сыр','слабосолёная сёмга','авокадо'], calories:340, protein:18, fat:20, carbs:22, mealType:'breakfast', health_score:9 },
+  { id:'sm4', name:'Зелёный чай', items:['зелёный чай'], calories:0, protein:0, fat:0, carbs:0, mealType:'snack', health_score:10 },
+  { id:'sm5', name:'Суп (обед)', items:['тарелка супа','хлеб'], calories:320, protein:14, fat:12, carbs:38, mealType:'lunch', health_score:7 },
+  { id:'sm6', name:'Курица + гарнир', items:['куриная грудка 200г','рис/овощи'], calories:520, protein:48, fat:14, carbs:52, mealType:'dinner', health_score:9 },
+];
 
 // ── ХРАНИЛИЩЕ (localStorage) ──────────────────────────────────────────────────
 function хранилищеПолучить(ключ) {
@@ -278,7 +288,7 @@ export const DB = {
 
   get(ключ)       { return хранилищеПолучить(ключ) ?? ДАННЫЕ[ключ]; },
   // Блобы без собственной таблицы — синкаем через универсальный kv
-  _KV_SYNC: new Set(['nutrition','workouts','gymDays','pleasureLog','rpgStats','weeklyChallenge','knowledge','lifegoals','focusLog']),
+  _KV_SYNC: new Set(['nutrition','workouts','gymDays','pleasureLog','rpgStats','weeklyChallenge','knowledge','lifegoals','focusLog','savedMeals']),
   set(ключ, знач) {
     хранилищеСохранить(ключ, знач);
     if (this._KV_SYNC.has(ключ)) window._дбHook?.('kv', { key: ключ, data: знач });
@@ -671,11 +681,52 @@ export const DB = {
     window._дбHook?.('meal', newMeal);
     return newMeal;
   },
+  editMeal(id, patch) {
+    const meals = this.getMeals();
+    const m = meals.find(x => x.id === id);
+    if (!m) return null;
+    Object.assign(m, patch);
+    localStorage.setItem(this._mealsKey(), JSON.stringify(meals));
+    this._recalcNutritionFromMeals(meals);
+    window._дбHook?.('meal', m);
+    return m;
+  },
+  // Добавить приём задним числом на произвольную дату (dateStr 'YYYY-MM-DD')
+  addMealForDate(dateStr, meal) {
+    const key = `lifeos_meals_${dateStr}`;
+    const meals = JSON.parse(localStorage.getItem(key) || '[]');
+    const newMeal = {
+      id: crypto?.randomUUID?.() || ('m'+Date.now()),
+      time: meal.time || new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),
+      date: dateStr, ...meal,
+    };
+    meals.push(newMeal);
+    localStorage.setItem(key, JSON.stringify(meals));
+    if (key === this._mealsKey()) this._recalcNutritionFromMeals(meals);
+    window._дбHook?.('meal', newMeal);
+    return newMeal;
+  },
   deleteMeal(id) {
     const meals = this.getMeals().filter(m => m.id !== id);
     localStorage.setItem(this._mealsKey(), JSON.stringify(meals));
     this._recalcNutritionFromMeals(meals);
     window._дбHook?.('meal_delete', { id });
+  },
+
+  // ── БАЗА ЧАСТЫХ БЛЮД (выбор в один тап без фото) ──────────────────────────
+  getSavedMeals() {
+    const v = this.get('savedMeals');
+    return Array.isArray(v) && v.length ? v : SAVED_MEALS_SEED;
+  },
+  saveSavedMeal(meal) {
+    const list = this.getSavedMeals().slice();
+    list.unshift({ id: 's'+Date.now(), name: meal.name, items: meal.items || [],
+      calories: meal.calories||0, protein: meal.protein||0, fat: meal.fat||0, carbs: meal.carbs||0,
+      mealType: meal.mealType || 'snack', health_score: meal.health_score||null });
+    this.set('savedMeals', list.slice(0, 60)); // _дбHook('kv') → синк
+  },
+  deleteSavedMeal(id) {
+    this.set('savedMeals', this.getSavedMeals().filter(m => m.id !== id));
   },
   _recalcNutritionFromMeals(meals) {
     const n = this.getNutrition();

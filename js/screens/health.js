@@ -1,8 +1,8 @@
 // ── HEALTH SCREEN (Health / Sport / Nutrition sub-tabs) ───────────────────────
-import { DB } from '../db.js?v=67';
-import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=67';
-import { TG } from '../telegram.js?v=67';
-import { PLAN_GOAL, STAGES, DAY_KEYS, DAY_LABELS, stageForWeek, planState, PLAN_WEEKS } from '../data/trainingPlan.js?v=67';
+import { DB } from '../db.js?v=68';
+import { onWorkoutLogged, onNutritionUpdated } from '../gamification.js?v=68';
+import { TG } from '../telegram.js?v=68';
+import { PLAN_GOAL, STAGES, DAY_KEYS, DAY_LABELS, stageForWeek, planState, PLAN_WEEKS } from '../data/trainingPlan.js?v=68';
 
 let sleepChart, pulseChart, hrvChart, revenueChart;
 let healthTab = 'health';
@@ -388,10 +388,29 @@ function sparkline(data, color, h = 38) {
   </svg>`;
 }
 
+// ── Журнал питания: выбранный день (0 = сегодня) ─────────────────────────────
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function selectedDate() {
+  const d = new Date(); d.setDate(d.getDate() - (window._nutDateOff || 0)); return d;
+}
+function strOf(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function currentDayMeals() { return DB.getMealsForDate(selectedDate()); }
+window.nutDateShift = function(delta) {
+  window._nutDateOff = Math.max(0, (window._nutDateOff || 0) + delta);
+  renderHealth('nutrition');
+  TG.hapticSelection();
+};
+
 // ── NUTRITION TAB ─────────────────────────────────────────────────────────────
 function nutritionTabHTML() {
   const n = DB.getNutrition();
-  const meals = DB.getMeals();
+  const sel = selectedDate();
+  const isToday = (window._nutDateOff || 0) === 0;
+  window._nutDateStr = strOf(sel);
+  const meals = currentDayMeals();
   const score = DB.nutritionScore();
 
   const cG = n.caloriesGoal || 2200, pG = n.proteinGoal || 140, fG = n.fatGoal || 70, crbG = n.carbsGoal || 220;
@@ -532,7 +551,11 @@ function nutritionTabHTML() {
           <span style="color:#7C3AED">Ж ${m.fat||0}</span>
           <span style="color:#F5B942">У ${m.carbs||0}</span>
         </div>
-        <button class="meal-edit" onclick="window.deleteMealEntry('${m.id}')">🗑 Удалить</button>
+        ${isToday ? `<div class="row" style="gap:6px;justify-content:flex-end">
+          <button class="meal-edit" onclick="window.editMealEntry('${m.id}')">✏️</button>
+          <button class="meal-edit" onclick="window.saveMealToBase('${m.id}')" title="В базу блюд">⭐</button>
+          <button class="meal-edit" onclick="window.deleteMealEntry('${m.id}')">🗑</button>
+        </div>` : ''}
       </div>
     </div>`;
   }).join('') : `<div style="text-align:center;padding:30px 16px;color:rgba(232,237,245,.4)">
@@ -541,15 +564,36 @@ function nutritionTabHTML() {
       <div style="font-size:11px;margin-top:6px">Сфотографируй блюдо или добавь вручную</div>
     </div>`;
 
+  // Журнал: метка выбранного дня
+  const offD = window._nutDateOff || 0;
+  const dayLabel = offD === 0 ? 'сегодня' : offD === 1 ? 'вчера'
+    : sel.toLocaleDateString('ru-RU', { day:'numeric', month:'short', weekday:'short' });
+
+  // База частых блюд — выбор в один тап
+  const saved = DB.getSavedMeals();
+  const baseCard = saved.length ? `<div class="card" style="margin-bottom:12px">
+    <div class="sec-label" style="margin-bottom:10px">⚡ БАЗА БЛЮД · в один тап</div>
+    <div class="cat-pills" style="gap:8px">
+      ${saved.map(m => `<button class="cat-pill" onclick="window.quickAddSavedMeal('${m.id}')" oncontextmenu="event.preventDefault();window.removeSavedMeal('${m.id}')" style="--cc:${(MEAL_TYPES[m.mealType]||{}).color||'#00E396'};text-align:left">
+        ${(MEAL_TYPES[m.mealType]||{}).icon||'🍽️'} ${m.name} <span style="color:rgba(232,237,245,.4)">· ${m.calories}к</span></button>`).join('')}
+    </div>
+    <div style="font-size:9px;color:rgba(232,237,245,.3);margin-top:8px">Тап — добавить${isToday?'':' на выбранный день'}. Удержание/правый клик — убрать из базы.</div>
+  </div>` : '';
+
   const feedCard = `<div class="card">
-    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-      <div class="sec-label" style="margin:0">🍱 ЛЕНТА ПИТАНИЯ · сегодня</div>
-      <div class="row" style="gap:8px;flex-wrap:wrap">
-        <button class="btn btn-ghost" style="font-size:11px;padding:7px 12px" onclick="window.openAddMealModal(false)">✏️ Вручную</button>
-        <button class="btn btn-ghost" style="font-size:11px;padding:7px 12px" onclick="window.openFoodText()">🤖 Описать</button>
-        <button class="btn btn-ghost" style="font-size:11px;padding:7px 12px" onclick="window.openFoodVoice()">🎙 Голос</button>
-        <button class="btn btn-teal" style="font-size:11px;padding:7px 14px" onclick="window.openFoodCamera()">📷 Фото</button>
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div class="sec-label" style="margin:0">🍱 ЛЕНТА ПИТАНИЯ</div>
+      <div class="row" style="gap:6px;align-items:center">
+        <button class="btn btn-ghost" style="font-size:13px;padding:5px 11px" onclick="window.nutDateShift(1)">‹</button>
+        <span style="font-size:11px;color:#00E396;min-width:64px;text-align:center">${dayLabel}</span>
+        <button class="btn btn-ghost" style="font-size:13px;padding:5px 11px;${offD===0?'opacity:.3;pointer-events:none':''}" onclick="window.nutDateShift(-1)">›</button>
       </div>
+    </div>
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <button class="btn btn-ghost" style="font-size:11px;padding:7px 12px" onclick="window.openAddMealModal(false)">✏️ Вручную</button>
+      <button class="btn btn-ghost" style="font-size:11px;padding:7px 12px" onclick="window.openFoodText()">🤖 Описать</button>
+      <button class="btn btn-ghost" style="font-size:11px;padding:7px 12px" onclick="window.openFoodVoice()">🎙 Голос</button>
+      <button class="btn btn-teal" style="font-size:11px;padding:7px 14px" onclick="window.openFoodCamera()">📷 Фото</button>
     </div>
     <div class="meal-feed">${feedRows}</div>
   </div>`;
@@ -618,6 +662,7 @@ function nutritionTabHTML() {
   return `
     ${heroCard}
     <div class="nut-top">${waterCard}${kbjuCard}${scoreCard}</div>
+    ${baseCard}
     ${feedCard}
     ${photoCTA}
     ${analyticsCard}
@@ -916,6 +961,7 @@ window.openAddMealModal = function(prefilled = null) {
   div.id = 'meal-modal';
   div.className = 'modal-overlay';
   const p = prefilled || {};
+  window._editMealId = p._editId || null;    // режим редактирования существующего приёма
   window._mealPhoto = p.photo || null;       // превью-фото для сохранения
   window._mealType  = p.mealType || autoMealType();
   window._mealHealth = p.health_score || null;
@@ -941,7 +987,7 @@ window.openAddMealModal = function(prefilled = null) {
 
   div.innerHTML = `<div class="modal-sheet">
     <div class="modal-handle"></div>
-    <div class="modal-title">🍽️ Добавить еду</div>
+    <div class="modal-title">${p._editId ? '✏️ Изменить еду' : '🍽️ Добавить еду'}</div>
     ${p._loading ? `<div style="text-align:center;padding:24px;color:#00F5D4;font-size:13px">
       <div style="width:26px;height:26px;border-radius:50%;border:3px solid #00F5D4;border-top-color:transparent;animation:spin .8s linear infinite;margin:0 auto 12px"></div>
       Анализирую фото через ИИ…
@@ -974,7 +1020,7 @@ window.openAddMealModal = function(prefilled = null) {
 
       <div style="display:flex;gap:8px">
         <button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('meal-modal').remove()">Отмена</button>
-        <button class="btn btn-teal" style="flex:2" onclick="window._submitMeal()">Добавить ✓</button>
+        <button class="btn btn-teal" style="flex:2" onclick="window._submitMeal()">${p._editId ? 'Сохранить ✓' : 'Добавить ✓'}</button>
       </div>
     </div>`}
   </div>`;
@@ -1120,18 +1166,59 @@ window._submitMeal = function() {
   const note     = document.getElementById('meal-note')?.value?.trim() || '';
   if (!items.length) { TG.hapticError(); return; }
 
-  DB.addMeal({
+  const данные = {
     mealType: window._mealType || 'snack',
     name: items[0],
     items, calories, protein, carbs, fat, note,
     health_score: window._mealHealth || null,
     photo: window._mealPhoto || null,
-  });
+  };
+  if (window._editMealId) {
+    DB.editMeal(window._editMealId, данные);
+  } else if (window._nutDateStr && window._nutDateStr !== todayStr()) {
+    DB.addMealForDate(window._nutDateStr, данные); // задним числом на выбранный день
+  } else {
+    DB.addMeal(данные);
+  }
   window._mealPhoto = null;
   window._mealHealth = null;
+  window._editMealId = null;
   document.getElementById('meal-modal')?.remove();
   renderHealth('nutrition');
   TG.hapticSuccess();
+};
+
+// Открыть приём на редактирование (только для приёмов выбранного дня)
+window.editMealEntry = function(id) {
+  const m = currentDayMeals().find(x => x.id === id);
+  if (!m) return;
+  window.openAddMealModal({ ...m, _editId: id });
+  TG.hapticImpact('light');
+};
+
+// Сохранить приём в базу частых блюд
+window.saveMealToBase = function(id) {
+  const m = currentDayMeals().find(x => x.id === id);
+  if (!m) return;
+  DB.saveSavedMeal(m);
+  showToast?.('⭐ Добавлено в базу блюд', 'ok');
+  TG.hapticSuccess();
+};
+
+// Быстрое добавление блюда из базы (один тап)
+window.quickAddSavedMeal = function(id) {
+  const sm = DB.getSavedMeals().find(m => m.id === id);
+  if (!sm) return;
+  const { id: _, ...meal } = sm;
+  if (window._nutDateStr && window._nutDateStr !== todayStr()) DB.addMealForDate(window._nutDateStr, meal);
+  else DB.addMeal(meal);
+  renderHealth('nutrition');
+  TG.hapticSuccess();
+};
+window.removeSavedMeal = function(id) {
+  DB.deleteSavedMeal(id);
+  renderHealth('nutrition');
+  TG.hapticImpact('light');
 };
 
 window.deleteMealEntry = function(id) {
