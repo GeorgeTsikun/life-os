@@ -12,9 +12,12 @@
 - Модель ИИ — рантайм-конфиг: таблица `config.life_model`, `getActiveModel()` (bot/model.js, api/_lib/model.js). Команды `/getmodel /models /setmodel`. Дефолт `gpt-5.5`. Фикс: `max_completion_tokens`, убран `temperature`.
 - AI-коуч дня (Фаза 1, первый заход): `bot/coach.js` — контекст→план по часам→создаёт задачи. Команда `/coach`, утро 08:10.
 - Финансы (вкладка Деньги), еда (фото/текст/голос), CRM, база знаний, дофамин-бюджет, фото тела синк.
+- Вечерний разбор → универсальный дамп: рассказ о дне → задачи/еда/вода/идеи + снимок `day_log`. `/razbor`, авто на ответ после 21:00.
+- Цели (KV `lifegoals`): `/goal /goalp /goals /progress` (% к цели, темп недели, вероятность, ИИ-рек). `bot/goals.js` + фронт-виджет 🎯 ЦЕЛИ. Кэш `?v=64`.
+- Созвон → решения/обязательства/риски: `bot/meeting.js`, `/meeting` + авто на аудио. Мои→задачи, чужие→ожидания, всё→`meeting_notes`.
 
 ## Надо применить в Supabase (если ещё нет)
-Миграции 007–014 (meals, finance, task_links, body_photos, kv, config). Raw: `raw.githubusercontent.com/GeorgeTsikun/life-os/main/supabase/migrations/<файл>`.
+Миграции 007–016 (meals, finance, task_links, body_photos, kv, config, **015 day_log**, **016 meeting_notes**). Raw: `raw.githubusercontent.com/GeorgeTsikun/life-os/main/supabase/migrations/<файл>`.
 
 ## Следующие шаги (по роадмапу, порядок на «живость»)
 1. Вечерний разбор коуча: свободный текст вечером → авто закрыть/перенести задачи + план на завтра. (`bot/scheduling.js` вечерний чекин + coach).
