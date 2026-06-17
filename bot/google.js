@@ -138,3 +138,29 @@ export async function создатьСобытие(задача) {
     return { error: err.message };
   }
 }
+
+// ── Чтение событий основного календаря (двусторонний синк) ───────────────────
+export async function событияНаДень(дата = new Date()) {
+  if (!googleАктивен()) return [];
+  try {
+    const token = await получитьТокен();
+    const start = new Date(дата.getFullYear(), дата.getMonth(), дата.getDate());
+    const end = new Date(start.getTime() + 86400000);
+    const params = new URLSearchParams({
+      timeMin: start.toISOString(), timeMax: end.toISOString(),
+      singleEvents: 'true', orderBy: 'startTime', maxResults: '30',
+    });
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
+      { headers: { Authorization: `Bearer ${token}` } });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    return (data.items || []).map(e => ({
+      summary: e.summary || '(без названия)',
+      start: e.start?.dateTime || e.start?.date,
+      allDay: !e.start?.dateTime,
+    }));
+  } catch (err) {
+    console.error('[gcal list] ошибка:', err.message);
+    return [];
+  }
+}

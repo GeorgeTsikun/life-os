@@ -4,6 +4,7 @@
 import { InlineKeyboard } from 'grammy';
 import { getActiveModel } from './model.js';
 import { читатьЦели } from './goals.js';
+import { событияНаДень } from './google.js';
 
 const MSK = 3 * 3600 * 1000;
 const сегодняМСК = () => new Date(Date.now() + MSK).toISOString().split('T')[0];
@@ -33,6 +34,10 @@ export async function собратьКонтекст(supa) {
     деньги = `цель ${f.incomeGoal||'?'}/мес; горящие платежи: ${горящие.join(', ')||'—'}; написать лидам: ${лиды.slice(0,5).join(', ')||'—'}`;
   }
   const здоровье = hm.data ? `HRV ${hm.data.hrv_ms||'?'}мс, сон ${hm.data.sleep_h||'?'}ч` : 'нет данных';
+  const события = await событияНаДень(new Date(Date.now()+MSK)).catch(()=>[]);
+  const календарь = события.length
+    ? события.map(e=>`• ${e.allDay?'весь день':new Date(e.start).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Moscow'})} ${e.summary}`).join('\n')
+    : 'нет событий';
   const целиМассив = await читатьЦели(supa).catch(()=>[]);
   const цели = целиМассив.length
     ? целиМассив.map(ц=>`• ${ц.title}: ${ц.current}/${ц.target}${ц.unit?' '+ц.unit:''}${ц.deadline?` (до ${ц.deadline})`:''}`).join('\n')
@@ -40,6 +45,7 @@ export async function собратьКонтекст(supa) {
   return `Сегодня ${сегодня} (Москва).
 ЦЕЛИ:\n${цели}
 ПРОЕКТЫ:\n${проекты}
+КАЛЕНДАРЬ НА СЕГОДНЯ (Google, не двигать эти слоты):\n${календарь}
 ОТКРЫТЫЕ ЗАДАЧИ:\n${задачи}
 ЖДУ ОТ ДРУГИХ:\n${ожидания}
 ДЕНЬГИ: ${деньги}

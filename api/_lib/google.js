@@ -123,6 +123,29 @@ export async function createEvent({ calendarId, summary, description, startISO, 
   return event;
 }
 
+// ── Чтение событий (двусторонний синк) ───────────────────────────────────────
+export async function listEvents({ calendarId = 'primary', timeMin, timeMax } = {}) {
+  const token = await getAccessToken();
+  const params = new URLSearchParams({
+    timeMin, timeMax, singleEvents: 'true', orderBy: 'startTime', maxResults: '50',
+  });
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const data = await res.json();
+  if (data.error) throw new Error(`List events: ${data.error.message}`);
+  return (data.items || []).map(e => ({
+    id: e.id,
+    summary: e.summary || '(без названия)',
+    start: e.start?.dateTime || e.start?.date,
+    end: e.end?.dateTime || e.end?.date,
+    allDay: !e.start?.dateTime,
+    location: e.location || null,
+    htmlLink: e.htmlLink,
+  }));
+}
+
 // ── Список календарей пользователя ───────────────────────────────────────────
 export async function listCalendars() {
   const token = await getAccessToken();

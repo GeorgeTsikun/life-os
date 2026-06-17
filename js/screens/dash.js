@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=72';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=72';
-import { TG } from '../telegram.js?v=72';
+import { DB } from '../db.js?v=73';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=73';
+import { TG } from '../telegram.js?v=73';
 
 let radarChart, energyChart;
 let _currentQuests = []; // для синхронизации taskId при completeQuest
@@ -116,6 +116,9 @@ export function renderDash() {
   <!-- ── 🎯 ЦЕЛИ ───────────────────────────────────────────────────────────────── -->
   ${renderGoalsBlock()}
 
+  <!-- ── 📅 КАЛЕНДАРЬ (Google) ─────────────────────────────────────────────────── -->
+  ${renderGCalBlock()}
+
   <!-- ── DAILY CHECK-IN ────────────────────────────────────────────────────────── -->
   ${renderCheckinBlock(daily)}
 
@@ -203,6 +206,7 @@ export function renderDash() {
     destroyCharts();
     mountRadar(rpg);
     mountEnergy(health.energyData || [65, 72, 88, 75, 91, 60, 55]);
+    window._loadGCal?.();
   });
 
   // Auto walk task при LOW RC (§5.2)
@@ -321,6 +325,7 @@ function десктопныйДашборд(p) {
     <div class="dd-grid">
       <div class="dd-col">
         ${renderGoalsBlock()}
+        ${renderGCalBlock()}
         ${renderRcBlock(health, profile)}
         ${heroState}
       </div>
@@ -369,6 +374,36 @@ function renderTimeWasteBlock() {
     <div style="font-size:11px;color:${цвет};margin-top:8px">🪞 ${честно}</div>
   </div>`;
 }
+
+// ── БЛОК GOOGLE-КАЛЕНДАРЯ (двусторонний: читаем реальные события) ────────────
+function renderGCalBlock() {
+  return `<div class="card" id="gcal-block" style="margin-bottom:12px">
+    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <div class="sec-label" style="margin:0">📅 КАЛЕНДАРЬ · сегодня</div>
+      <span style="font-size:9px;color:rgba(232,237,245,.3)">Google</span>
+    </div>
+    <div id="gcal-body" style="font-size:11px;color:rgba(232,237,245,.4)">Загружаю события…</div>
+  </div>`;
+}
+window._loadGCal = async function() {
+  const body = document.getElementById('gcal-body');
+  if (!body) return;
+  try {
+    const r = await fetch('/api/google/events?days=1');
+    const data = await r.json();
+    const ev = data.events || [];
+    if (!ev.length) { body.innerHTML = '<span style="color:rgba(232,237,245,.35)">Сегодня в календаре пусто</span>'; return; }
+    body.innerHTML = ev.map(e => {
+      const t = e.allDay ? 'весь день' : new Date(e.start).toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
+      return `<div class="row" style="justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+        <span style="font-size:12px;color:#E8EDF5">${e.summary}</span>
+        <span style="font-size:11px;color:#00C9FF;flex-shrink:0">${t}</span>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    body.innerHTML = '<span style="color:rgba(232,237,245,.3)">Календарь недоступен (нужен OAuth)</span>';
+  }
+};
 
 // ── БЛОК ЦЕЛЕЙ (план/факт/цель) ──────────────────────────────────────────────
 // Цели в KV (lifegoals), управляются из бота: /goal /goalp. Тут — витрина.
