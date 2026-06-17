@@ -5,7 +5,7 @@ RETURNS TABLE(source text, title text, snippet text, ts timestamptz)
 LANGUAGE sql STABLE AS $$
   WITH q AS (SELECT websearch_to_tsquery('russian', search_q) AS tsq)
   SELECT * FROM (
-    SELECT 'идея'::text, left(text,80), left(coalesce(text,'')||' '||coalesce(notes,''),300), created_at
+    SELECT 'идея'::text AS source, left(text,80) AS title, left(coalesce(text,'')||' '||coalesce(notes,''),300) AS snippet, created_at AS ts
       FROM idea_bank, q WHERE to_tsvector('russian', coalesce(text,'')||' '||coalesce(notes,'')) @@ tsq
     UNION ALL
     SELECT 'созвон', coalesce(title,'Созвон'), left(coalesce(summary,'')||' '||coalesce(transcript,''),300), created_at
