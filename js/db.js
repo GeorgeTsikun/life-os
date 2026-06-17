@@ -1,5 +1,5 @@
 // ── СЛОЙ ДАННЫХ ───────────────────────────────────────────────────────────────
-import { KNOWLEDGE_SEED } from './data/knowledge.js?v=64';
+import { KNOWLEDGE_SEED } from './data/knowledge.js?v=65';
 // Приоритет: localStorage (работает без интернета).
 // Если заданы VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY — синхронизируется с Supabase.
 // Переменные окружения читаются из window.__ENV__ (injected Vercel) или import.meta.env
@@ -278,7 +278,7 @@ export const DB = {
 
   get(ключ)       { return хранилищеПолучить(ключ) ?? ДАННЫЕ[ключ]; },
   // Блобы без собственной таблицы — синкаем через универсальный kv
-  _KV_SYNC: new Set(['nutrition','workouts','gymDays','pleasureLog','rpgStats','weeklyChallenge','knowledge','lifegoals']),
+  _KV_SYNC: new Set(['nutrition','workouts','gymDays','pleasureLog','rpgStats','weeklyChallenge','knowledge','lifegoals','focusLog']),
   set(ключ, знач) {
     хранилищеСохранить(ключ, знач);
     if (this._KV_SYNC.has(ключ)) window._дбHook?.('kv', { key: ключ, data: знач });
@@ -425,6 +425,62 @@ export const DB = {
       window._дбHook?.('task', т);
     }
     return т;
+  },
+
+  // ── ТАЙМ-ТРЕКИНГ ЗАДАЧ ──────────────────────────────────────────────────────
+  // Завершённые интервалы → focusLog (синкается KV). Живой таймер — локально
+  // (per-device, эфемерный). Время задачи и «полезное время дня» считаем из лога.
+  getFocusLog() { return this.get('focusLog') || []; },
+  getActiveTimer() { try { return JSON.parse(localStorage.getItem('lifeos_active_timer')); } catch { return null; } },
+  _setActiveTimer(v) { v ? localStorage.setItem('lifeos_active_timer', JSON.stringify(v)) : localStorage.removeItem('lifeos_active_timer'); },
+
+  startTimer(id) {
+    const a = this.getActiveTimer();
+    if (a) { if (a.taskId === id) return a; this.pauseTimer(); } // одна задача в фокусе
+    const t = { taskId: id, startedAt: Date.now() };
+    this._setActiveTimer(t);
+    return t;
+  },
+  pauseTimer() {
+    const a = this.getActiveTimer();
+    if (!a) return null;
+    const sec = Math.round((Date.now() - a.startedAt) / 1000);
+    if (sec >= 1) {
+      const log = this.getFocusLog();
+      log.unshift({ id: 'f' + Date.now(), taskId: a.taskId, sec, at: new Date().toISOString() });
+      this.set('focusLog', log.slice(0, 2000)); // _дбHook('kv') → синк
+    }
+    this._setActiveTimer(null);
+    return { taskId: a.taskId, sec };
+  },
+  stopComplete(id) {
+    const a = this.getActiveTimer();
+    if (a && a.taskId === id) this.pauseTimer();
+    return this.toggleTask(id);
+  },
+  getTaskTimeSec(id) {
+    const base = this.getFocusLog().filter(f => f.taskId === id).reduce((s, f) => s + (f.sec || 0), 0);
+    const a = this.getActiveTimer();
+    const live = a && a.taskId === id ? Math.round((Date.now() - a.startedAt) / 1000) : 0;
+    return base + live;
+  },
+  getFocusTodaySec() {
+    const d = new Date().toDateString();
+    return this.getFocusLog()
+      .filter(f => new Date(f.at).toDateString() === d)
+      .reduce((s, f) => s + (f.sec || 0), 0);
+  },
+  // Разбивка времени дня: полезное (фокус по задачам) vs слитое (быстрый дофамин)
+  getTimeBreakdownToday() {
+    const productiveMin = Math.round(this.getFocusTodaySec() / 60);
+    const junk = this.getTimeWasteToday();
+    const junkMin = junk.totalMin;
+    const total = productiveMin + junkMin;
+    return {
+      productiveMin, junkMin, total,
+      productivePct: total ? Math.round(productiveMin / total * 100) : 0,
+      junkItems: junk.items,
+    };
   },
 
   // ── ДОФАМИН-БАЛАНС (механика GAMECHANGER) ───────────────────────────────────

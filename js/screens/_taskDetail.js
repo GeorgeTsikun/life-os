@@ -1,6 +1,6 @@
 // ── ДЕТАЛЬ ЗАДАЧИ — модалка редактирования ───────────────────────────────────
-import { DB } from '../db.js?v=64';
-import { TG } from '../telegram.js?v=64';
+import { DB } from '../db.js?v=65';
+import { TG } from '../telegram.js?v=65';
 import { парсДату, форматДата, вISO, вДатуISO, вЛокальнуюФорму } from '../utils/date.js';
 
 const CAT_LIST = [
@@ -49,6 +49,9 @@ function разметка() {
     <!-- Текст -->
     <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">Что нужно сделать</div>
     <textarea id="td-text" class="input" rows="2" style="margin-bottom:14px;resize:vertical">${escapeHtml(t.text || '')}</textarea>
+
+    <!-- Тайм-трекинг -->
+    <div id="td-timer" style="margin-bottom:14px">${таймерБлок()}</div>
 
     <!-- Квадрант -->
     <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:6px">Срочность</div>
@@ -146,6 +149,30 @@ function разметка() {
   </div>`;
 }
 
+function fmtДлит(sec) {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return h ? `${h}ч ${m}м` : m ? `${m}м ${s}с` : `${s}с`;
+}
+
+function таймерБлок() {
+  const t = _текущая;
+  const активна = DB.getActiveTimer()?.taskId === t.id;
+  const всего = DB.getTaskTimeSec(t.id);
+  const цвет = активна ? '#00E396' : 'rgba(232,237,245,.4)';
+  return `<div class="card" style="padding:12px;border:1px solid ${активна?'rgba(0,227,150,.4)':'rgba(255,255,255,.08)'}">
+    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <span style="font-size:10px;color:rgba(232,237,245,.4);letter-spacing:.08em">⏱ ВРЕМЯ${активна?' · идёт':''}</span>
+      <span class="num" style="font-size:14px;color:${цвет}">${fmtДлит(всего)}</span>
+    </div>
+    <div style="display:flex;gap:6px">
+      ${активна
+        ? `<button class="btn btn-ghost" style="flex:1" onclick="window.tdТаймер('pause')">⏸ Пауза</button>`
+        : `<button class="btn btn-ghost" style="flex:1;color:#00E396" onclick="window.tdТаймер('start')">▶ Старт</button>`}
+      <button class="btn btn-teal" style="flex:1" onclick="window.tdТаймер('done')">✓ Готово</button>
+    </div>
+  </div>`;
+}
+
 function renderSubtasks(subtasks) {
   if (!subtasks.length) return '<div style="font-size:11px;color:rgba(232,237,245,.3);text-align:center;padding:8px 0">Подзадач нет</div>';
   return subtasks.map((s, i) => `
@@ -174,6 +201,21 @@ function перерисоватьПодзадачи() {
 }
 
 // ── ГЛОБАЛЬНЫЕ ХЕНДЛЕРЫ ──────────────────────────────────────────────────────
+window.tdТаймер = function(action) {
+  const id = _текущая.id;
+  if (action === 'start') DB.startTimer(id);
+  else if (action === 'pause') DB.pauseTimer();
+  else if (action === 'done') {
+    DB.stopComplete(id);
+    TG.hapticImpact('medium');
+    закрыть();
+    return;
+  }
+  const эл = document.getElementById('td-timer');
+  if (эл) эл.innerHTML = таймерБлок();
+  TG.hapticImpact('light');
+};
+
 window.tdЗакрыть = закрыть;
 
 window.tdВыбQuad = function(q) {

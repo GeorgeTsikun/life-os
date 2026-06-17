@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=64';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=64';
-import { TG } from '../telegram.js?v=64';
+import { DB } from '../db.js?v=65';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=65';
+import { TG } from '../telegram.js?v=65';
 
 let radarChart, energyChart;
 let _currentQuests = []; // для синхронизации taskId при completeQuest
@@ -343,17 +343,24 @@ function десктопныйДашборд(p) {
 
 // ── ⏱ КУДА УШЛО ВРЕМЯ СЕГОДНЯ (честный отчёт) ────────────────────────────────
 function renderTimeWasteBlock() {
-  const tw = DB.getTimeWasteToday();
-  if (!tw.count) return '';
-  const цвет = tw.totalMin >= 240 ? '#FF4560' : tw.totalMin >= 120 ? '#FF9F43' : '#FFD700';
-  const честно = tw.totalMin >= 240
+  const b = DB.getTimeBreakdownToday();
+  const tw = { items: b.junkItems, totalMin: b.junkMin };
+  if (!b.total) return '';
+  const цвет = b.junkMin >= 240 ? '#FF4560' : b.junkMin >= 120 ? '#FF9F43' : '#FFD700';
+  const честно = b.junkMin >= 240
     ? 'Жёстко слил. Завтра поймай себя раньше.'
-    : tw.totalMin >= 120 ? 'Многовато на ерунду. Держи в узде.'
-    : 'Под контролем. Норм.';
+    : b.junkMin >= 120 ? 'Многовато на ерунду. Держи в узде.'
+    : b.productiveMin >= b.junkMin ? 'Фокус сильнее слива. Так держать.' : 'Под контролем. Норм.';
+  const ч = (m) => +(m/60).toFixed(1);
   return `<div class="card" style="margin-bottom:12px;border-left:3px solid ${цвет}">
-    <div class="row" style="justify-content:space-between;margin-bottom:10px">
-      <div class="sec-label" style="margin:0">⏱ КУДА УШЛО ВРЕМЯ</div>
-      <span class="num" style="font-size:16px;color:${цвет}">${tw.hours} ч</span>
+    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <div class="sec-label" style="margin:0">⏱ ВРЕМЯ СЕГОДНЯ</div>
+      <span class="num" style="font-size:13px;color:#00E396">${ч(b.productiveMin)}ч фокус · <span style="color:${цвет}">${ч(b.junkMin)}ч слив</span></span>
+    </div>
+    <!-- полезное / слитое -->
+    <div style="display:flex;height:8px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.06);margin-bottom:10px">
+      <div style="width:${b.productivePct}%;background:#00E396"></div>
+      <div style="flex:1;background:${цвет}"></div>
     </div>
     ${tw.items.map(i => `<div class="row" style="justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)">
       <div style="font-size:12px;color:#E8EDF5">${i.icon} ${i.name}${i.count>1?` ×${i.count}`:''}</div>
