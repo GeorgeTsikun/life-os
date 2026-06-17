@@ -15,9 +15,10 @@
 - Вечерний разбор → универсальный дамп: рассказ о дне → задачи/еда/вода/идеи + снимок `day_log`. `/razbor`, авто на ответ после 21:00.
 - Цели (KV `lifegoals`): `/goal /goalp /goals /progress` (% к цели, темп недели, вероятность, ИИ-рек). `bot/goals.js` + фронт-виджет 🎯 ЦЕЛИ. Кэш `?v=64`.
 - Созвон → решения/обязательства/риски: `bot/meeting.js`, `/meeting` + авто на аудио. Мои→задачи, чужие→ожидания, всё→`meeting_notes`.
+- Второй мозг: `/recall` (RAG-lite, RPC `search_brain` full-text → ИИ по найденным фрагментам) + `/export` (снимок в Markdown для Obsidian). `bot/brain.js`, `bot/export.js`.
 
 ## Надо применить в Supabase (если ещё нет)
-Миграции 007–016 (meals, finance, task_links, body_photos, kv, config, **015 day_log**, **016 meeting_notes**). Raw: `raw.githubusercontent.com/GeorgeTsikun/life-os/main/supabase/migrations/<файл>`.
+Миграции 007–017 (meals, finance, task_links, body_photos, kv, config, **015 day_log**, **016 meeting_notes**, **017 search_brain** — RPC full-text). Raw: `raw.githubusercontent.com/GeorgeTsikun/life-os/main/supabase/migrations/<файл>`.
 
 ## Следующие шаги (по роадмапу, порядок на «живость»)
 1. Вечерний разбор коуча: свободный текст вечером → авто закрыть/перенести задачи + план на завтра. (`bot/scheduling.js` вечерний чекин + coach).
