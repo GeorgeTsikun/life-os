@@ -1,6 +1,6 @@
 // ── PROJECTS SCREEN ───────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=73';
-import { TG } from '../telegram.js?v=73';
+import { DB } from '../db.js?v=74';
+import { TG } from '../telegram.js?v=74';
 
 const MONTH_GOAL = 3000000; // цель по выручке за месяц
 

@@ -1,6 +1,6 @@
 // ── ДЕТАЛЬ ЗАДАЧИ — модалка редактирования ───────────────────────────────────
-import { DB } from '../db.js?v=73';
-import { TG } from '../telegram.js?v=73';
+import { DB } from '../db.js?v=74';
+import { TG } from '../telegram.js?v=74';
 import { парсДату, форматДата, вISO, вДатуISO, вЛокальнуюФорму } from '../utils/date.js';
 
 const CAT_LIST = [
@@ -138,6 +138,11 @@ function разметка() {
       ${renderSubtasks(t.subtasks || [])}
     </div>
 
+    <!-- ИИ-агент: черновик задачи -->
+    <button class="btn" style="width:100%;margin-bottom:10px;background:rgba(123,97,255,.12);border:1px solid rgba(123,97,255,.35);color:#A78BFA"
+      onclick="window.tdЧерновик()">🤖 ИИ-черновик задачи</button>
+    <div id="td-draft" style="margin-bottom:10px"></div>
+
     ${t.google_event_link ? `<a href="${t.google_event_link}" target="_blank" class="btn btn-ghost" style="display:block;width:100%;margin-bottom:10px;text-decoration:none;text-align:center">📅 Открыть событие в Google Calendar</a>` : ''}
 
     <!-- Кнопки -->
@@ -214,6 +219,64 @@ window.tdТаймер = function(action) {
   const эл = document.getElementById('td-timer');
   if (эл) эл.innerHTML = таймерБлок();
   TG.hapticImpact('light');
+};
+
+// ── ИИ-АГЕНТ: ЧЕРНОВИК ЗАДАЧИ ─────────────────────────────────────────────────
+window._tdDraft = null;
+window.tdЧерновик = async function() {
+  const box = document.getElementById('td-draft');
+  if (!box) return;
+  const t = _текущая;
+  box.innerHTML = `<div class="card" style="padding:12px;text-align:center;color:#A78BFA;font-size:12px">
+    <div style="width:22px;height:22px;border-radius:50%;border:3px solid #A78BFA;border-top-color:transparent;animation:spin .8s linear infinite;margin:0 auto 8px"></div>
+    ИИ делает черновик…</div>`;
+  try {
+    const proj = t.project_id ? (DB.getProjects().find(p => p.id === t.project_id)?.name || '') : '';
+    const r = await fetch('/api/task-draft', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: t.text, cat: t.cat, notes: t.notes, project: proj }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    window._tdDraft = d;
+    отрисоватьЧерновик(d);
+  } catch (e) {
+    box.innerHTML = `<div class="card" style="padding:12px;color:#FF5C8A;font-size:12px">⚠️ ${e.message}</div>`;
+  }
+};
+
+function отрисоватьЧерновик(d) {
+  const box = document.getElementById('td-draft');
+  if (!box) return;
+  const esc = (s) => escapeHtml(s || '');
+  box.innerHTML = `<div class="card" style="padding:12px;border:1px solid rgba(123,97,255,.3)">
+    ${d.draft ? `<div style="font-size:10px;color:#A78BFA;margin-bottom:4px">ЧЕРНОВИК</div>
+      <div style="font-size:12px;color:#E8EDF5;white-space:pre-wrap;background:rgba(255,255,255,.03);border-radius:8px;padding:10px;margin-bottom:8px;max-height:240px;overflow:auto">${esc(d.draft)}</div>
+      <button class="btn btn-ghost" style="width:100%;font-size:11px;margin-bottom:10px" onclick="window.tdЧерновикВЗаметки()">📋 Вставить в заметки</button>` : ''}
+    ${d.steps?.length ? `<div style="font-size:10px;color:#A78BFA;margin-bottom:4px">ШАГИ</div>
+      <ul style="margin:0 0 8px;padding-left:18px;font-size:12px;color:rgba(232,237,245,.8)">${d.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>
+      <button class="btn btn-ghost" style="width:100%;font-size:11px;margin-bottom:10px" onclick="window.tdШагиВПодзадачи()">➕ Шаги в подзадачи</button>` : ''}
+    ${d.questions?.length ? `<div style="font-size:10px;color:#FFD700;margin-bottom:4px">❓ УТОЧНИ</div>
+      <ul style="margin:0;padding-left:18px;font-size:12px;color:#FFD58A">${d.questions.map(q=>`<li>${esc(q)}</li>`).join('')}</ul>` : ''}
+  </div>`;
+}
+
+window.tdЧерновикВЗаметки = function() {
+  const ta = document.getElementById('td-notes');
+  if (ta && window._tdDraft?.draft) {
+    ta.value = (ta.value ? ta.value + '\n\n' : '') + window._tdDraft.draft;
+    TG.hapticSuccess();
+    window.showToast?.('📋 Черновик в заметках — не забудь Сохранить', 'success');
+  }
+};
+
+window.tdШагиВПодзадачи = function() {
+  const steps = window._tdDraft?.steps || [];
+  if (!steps.length) return;
+  _текущая.subtasks = [...(_текущая.subtasks || []), ...steps.map(s => ({ text: s, done: false }))];
+  перерисоватьПодзадачи();
+  TG.hapticSuccess();
+  window.showToast?.(`➕ Добавлено шагов: ${steps.length} — Сохрани задачу`, 'success');
 };
 
 window.tdЗакрыть = закрыть;
