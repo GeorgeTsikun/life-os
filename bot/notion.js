@@ -151,6 +151,38 @@ async function записатьВстречу(разбор, исходный) {
   return стр.id;
 }
 
+// ── СТРУКТУРНЫЙ СОЗВОН → 📝 Meeting Notes (полная разбивка) ───────────────────
+const заголовок = (t) => ({ object:'block', type:'heading_3', heading_3:{ rich_text:text(t) } });
+const буллет    = (t) => ({ object:'block', type:'bulleted_list_item', bulleted_list_item:{ rich_text:text(t) } });
+const чекбокс   = (t) => ({ object:'block', type:'to_do', to_do:{ rich_text:text(t), checked:false } });
+
+export async function записатьСтруктурныйСозвон(m) {
+  if (!notionАктивен()) return null;
+  const arr = (a) => Array.isArray(a) ? a : [];
+  const children = [];
+  if (m.summary) children.push(...параграфы(m.summary));
+  if (arr(m.decisions).length)   { children.push(заголовок('✅ Решения'));       arr(m.decisions).forEach(d => children.push(буллет(d))); }
+  if (arr(m.commitments).length) { children.push(заголовок('🤝 Обязательства')); arr(m.commitments).forEach(c => children.push(чекбокс(`${c.who||'?'}: ${c.what}${c.due?` (до ${c.due})`:''}`))); }
+  if (arr(m.risks).length)       { children.push(заголовок('⚠️ Риски'));          arr(m.risks).forEach(r => children.push(буллет(r))); }
+  try {
+    const стр = await notion.pages.create({
+      parent: { database_id: БАЗЫ.meetings },
+      properties: {
+        'Встреча': { title: text(m.title || 'Созвон') },
+        'Дата':    { date: { start: сегодня() } },
+        'Тип':     { select: { name: 'Созвон' } },
+        'Решения': { rich_text: text(arr(m.decisions).join('; ')) },
+      },
+      children: children.slice(0, 90),
+    });
+    console.log('[notion] ✓ структурный созвон ←', стр.id);
+    return стр.id;
+  } catch (err) {
+    console.error('[notion meeting]', err.message);
+    return null;
+  }
+}
+
 // ── РОУТЕР: куда положить по типу ─────────────────────────────────────────────
 export async function сохранитьВNotion(разбор, исходныйТекст /*, источник */) {
   if (!notionАктивен()) return { записал: null, база: null };

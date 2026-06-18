@@ -3,6 +3,7 @@
 // ожидания (жду от других), всё целиком → таблица meeting_notes (история).
 import { InlineKeyboard } from 'grammy';
 import { getActiveModel } from './model.js';
+import { записатьСтруктурныйСозвон, notionАктивен } from './notion.js';
 
 const MSK = 3 * 3600 * 1000;
 const сегодняМСК = () => new Date(Date.now() + MSK).toISOString().split('T')[0];
@@ -54,6 +55,8 @@ export async function разобратьСозвон({ bot, supa, openai, ownerT
     owner:'george', title:r.title, date:сегодня, summary:r.summary,
     decisions:r.decisions, commitments:r.commitments, risks:r.risks, transcript:текст,
   }).then(x=>x,()=>{});
+  // Полная разбивка в Notion (если подключён) — fire-and-forget
+  if (notionАктивен()) записатьСтруктурныйСозвон(r).catch(()=>{});
 
   const блок = (заг, arr, ф) => arr.length ? `\n\n${заг}\n${arr.map(ф).join('\n')}` : '';
   const сообщ = `📝 *${r.title}*` +
