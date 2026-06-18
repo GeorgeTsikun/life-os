@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=74';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=74';
-import { TG } from '../telegram.js?v=74';
+import { DB } from '../db.js?v=75';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=75';
+import { TG } from '../telegram.js?v=75';
 
 let radarChart, energyChart;
 let _currentQuests = []; // для синхронизации taskId при completeQuest
@@ -52,6 +52,9 @@ export function renderDash() {
     });
   } else {
   el.innerHTML = `<div class="screen">
+
+  <!-- ── ☀️ УТРЕННИЙ ФОКУС ДНЯ ──────────────────────────────────────────────── -->
+  ${renderMorningBrief()}
 
   <!-- ── ГЕРОЙ-КАРТА с фото ────────────────────────────────────────────────── -->
   <div class="hero-card" style="position:relative;border-radius:18px;overflow:hidden;margin-bottom:14px;background:linear-gradient(135deg,#0a1628,#03030A);border:1px solid rgba(0,245,212,.15)">
@@ -289,6 +292,7 @@ function десктопныйДашборд(p) {
   </div>` : '';
 
   return `<div class="screen dd">
+    ${renderMorningBrief()}
     <!-- ГЕРОЙ-БАННЕР -->
     <div class="dd-hero">
       <div class="dd-hero-photo">
@@ -375,6 +379,56 @@ function renderTimeWasteBlock() {
   </div>`;
 }
 
+// ── УТРЕННИЙ ФОКУС ДНЯ (единый экран: задачи + календарь + цели + платежи) ────
+function renderMorningBrief() {
+  const сегодня = new Date(); const d = сегодня.toDateString();
+  const dateStr = сегодня.toLocaleDateString('ru-RU', { weekday:'long', day:'numeric', month:'long' });
+  const часы = сегодня.getHours();
+  const привет = часы < 5 ? 'Доброй ночи' : часы < 12 ? 'Доброе утро' : часы < 18 ? 'Добрый день' : 'Добрый вечер';
+
+  // Топ-задачи на сегодня (Q1 + запланированные на сегодня, не ловушки)
+  const tasks = DB.getTasks().filter(t => !t.done && !t.cancelled && t.quadrant !== 'eliminate');
+  const today = tasks.filter(t => t.quadrant === 'do' || (t.due_date && new Date(t.due_date).toDateString() === d) || (t.start_iso && new Date(t.start_iso).toDateString() === d));
+  const ord = (t) => t.start_iso ? new Date(t.start_iso).getTime() : 9e15;
+  const топ = today.sort((a,b) => ord(a) - ord(b)).slice(0, 3);
+  const taskRows = топ.length ? топ.map(t => {
+    const вр = t.start_iso && t.start_iso.includes('T') ? new Date(t.start_iso).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}) : '';
+    return `<div onclick="window.openTaskDetail?.('${t.id}')" style="cursor:pointer;display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+      <span style="width:6px;height:6px;border-radius:50%;background:#00F5D4;flex-shrink:0"></span>
+      <span style="flex:1;font-size:13px;color:#E8EDF5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.text}</span>
+      ${вр?`<span style="font-size:11px;color:#00C9FF">${вр}</span>`:''}
+    </div>`;
+  }).join('') : `<div style="font-size:12px;color:rgba(232,237,245,.4)">На сегодня задач нет — спроси коуча в боте /coach</div>`;
+
+  // Горящие платежи
+  let платежи = '';
+  try {
+    const f = JSON.parse(localStorage.getItem('lifeos_finance') || 'null');
+    const горящие = (f?.payments || []).filter(p => p.status !== 'paid' && typeof p.dueIn === 'number' && p.dueIn <= 1);
+    if (горящие.length) платежи = `<div style="margin-top:10px;font-size:12px;color:#FF6B6B">🔥 Платежи сегодня/завтра: ${горящие.map(p=>p.title).join(', ')}</div>`;
+  } catch {}
+
+  // Самая отстающая цель
+  let цельСтр = '';
+  try {
+    const goals = JSON.parse(localStorage.getItem('lifeos_lifegoals') || '[]');
+    if (Array.isArray(goals) && goals.length) {
+      const m = goals.map(g => ({ g, p: g.target ? g.current/g.target : 0 })).sort((a,b)=>a.p-b.p)[0];
+      цельСтр = `<div style="margin-top:10px;font-size:12px;color:rgba(232,237,245,.65)">🎯 Подтянуть: <b>${m.g.title}</b> — ${Math.round(m.p*100)}%</div>`;
+    }
+  } catch {}
+
+  return `<div class="card" style="margin-bottom:14px;border:1px solid rgba(0,245,212,.25);background:linear-gradient(135deg,rgba(0,245,212,.06),rgba(123,97,255,.04))">
+    <div style="font-size:10px;letter-spacing:.08em;color:rgba(232,237,245,.45);text-transform:capitalize">${dateStr}</div>
+    <div class="sec-label" style="margin:2px 0 10px;font-size:14px">☀️ ${привет}, фокус дня</div>
+    <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">ГЛАВНОЕ СЕГОДНЯ</div>
+    ${taskRows}
+    <div id="brief-cal" style="margin-top:10px;font-size:12px;color:rgba(232,237,245,.5)"></div>
+    ${цельСтр}
+    ${платежи}
+  </div>`;
+}
+
 // ── БЛОК GOOGLE-КАЛЕНДАРЯ (двусторонний: читаем реальные события) ────────────
 function renderGCalBlock() {
   return `<div class="card" id="gcal-block" style="margin-bottom:12px">
@@ -392,6 +446,13 @@ window._loadGCal = async function() {
     const r = await fetch('/api/google/events?days=1');
     const data = await r.json();
     const ev = data.events || [];
+    const brief = document.getElementById('brief-cal');
+    if (brief) {
+      const next = ev.find(e => !e.allDay && new Date(e.start) > new Date());
+      brief.innerHTML = ev.length
+        ? `📅 В календаре ${ev.length} ${ev.length===1?'событие':'событий'}${next?` · ближайшее: ${next.summary} в ${new Date(next.start).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`:''}`
+        : '📅 Календарь свободен';
+    }
     if (!ev.length) { body.innerHTML = '<span style="color:rgba(232,237,245,.35)">Сегодня в календаре пусто</span>'; return; }
     body.innerHTML = ev.map(e => {
       const t = e.allDay ? 'весь день' : new Date(e.start).toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });

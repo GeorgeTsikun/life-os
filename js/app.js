@@ -1,19 +1,19 @@
 // ── LIFE OS — ГЛАВНЫЙ МОДУЛЬ ──────────────────────────────────────────────────
-import { DB } from './db.js?v=74';
-import { injectUI, checkAchievements, onQuestCompleted, applyDebuffMode } from './gamification.js?v=74';
-import { TG } from './telegram.js?v=74';
-import { renderDash }         from './screens/dash.js?v=74';
-import { renderTasks }        from './screens/tasks.js?v=74';
-import { renderHealth }       from './screens/health.js?v=74';
-import { renderProjects }     from './screens/projects.js?v=74';
-import { renderPeople }       from './screens/people.js?v=74';
-import { renderFinance }      from './screens/finance.js?v=74';
-import { renderContent }      from './screens/content.js?v=74';
-import { renderAchievements } from './screens/achievements.js?v=74';
-import { renderOnboarding }   from './screens/onboarding.js?v=74';
-import { renderAnalytics }    from './screens/analytics.js?v=74';
-import * as Sync              from './supabaseSync.js?v=74';
-import { openVoiceCapture }  from './voiceCapture.js?v=74';
+import { DB } from './db.js?v=75';
+import { injectUI, checkAchievements, onQuestCompleted, applyDebuffMode } from './gamification.js?v=75';
+import { TG } from './telegram.js?v=75';
+import { renderDash }         from './screens/dash.js?v=75';
+import { renderTasks }        from './screens/tasks.js?v=75';
+import { renderHealth }       from './screens/health.js?v=75';
+import { renderProjects }     from './screens/projects.js?v=75';
+import { renderPeople }       from './screens/people.js?v=75';
+import { renderFinance }      from './screens/finance.js?v=75';
+import { renderContent }      from './screens/content.js?v=75';
+import { renderAchievements } from './screens/achievements.js?v=75';
+import { renderOnboarding }   from './screens/onboarding.js?v=75';
+import { renderAnalytics }    from './screens/analytics.js?v=75';
+import * as Sync              from './supabaseSync.js?v=75';
+import { openVoiceCapture }  from './voiceCapture.js?v=75';
 
 // ── ИНИЦИАЛИЗАЦИЯ ─────────────────────────────────────────────────────────────
 const ОНБОРДИНГ_ПРОЙДЕН = localStorage.getItem('lifeos_onboarded') === 'true'
