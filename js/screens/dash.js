@@ -1,7 +1,40 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=75';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=75';
-import { TG } from '../telegram.js?v=75';
+import { DB } from '../db.js?v=76';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=76';
+import { TG } from '../telegram.js?v=76';
+
+// ── Вдохновение (как в Momentum): крупная фраза + глубокая цитата ────────────
+const ФРАЗЫ = [
+  'Ты сможешь.', 'Сегодня — твой день.', 'Действуй, не жди.', 'Маленький шаг — это тоже движение.',
+  'Дисциплина сильнее мотивации.', 'Фокус решает.', 'Делай, потом думай.', 'Ты ближе, чем кажется.',
+  'Меньше слов — больше дела.', 'Начни сейчас.', 'Сделай это испуганным.', 'Каждый день — вклад в большое.',
+  'Будь тем, кто доводит.', 'Спокойно и по делу.', 'Энергия идёт за вниманием.', 'Выбирай сложное — оно окупается.',
+];
+const ЦИТАТЫ = [
+  { t:'Единственный способ добиться успеха — сначала пережить много неудач.', a:'—' },
+  { t:'Дисциплина — это мост между целями и достижениями.', a:'Джим Рон' },
+  { t:'Делай что можешь, тем что имеешь, там где ты есть.', a:'Теодор Рузвельт' },
+  { t:'Качество — это не действие, это привычка.', a:'Аристотель' },
+  { t:'Кто хочет — ищет возможности, кто не хочет — ищет причины.', a:'—' },
+  { t:'Лучшее время посадить дерево было 20 лет назад. Второе лучшее — сейчас.', a:'Пословица' },
+  { t:'Не считай дни — сделай так, чтобы дни считались.', a:'Мухаммед Али' },
+  { t:'Ты не обязан быть великим, чтобы начать, но обязан начать, чтобы стать великим.', a:'Зиг Зиглар' },
+  { t:'Успех — это сумма небольших усилий, повторяемых изо дня в день.', a:'Роберт Кольер' },
+  { t:'Действие — основа всякого успеха.', a:'Пабло Пикассо' },
+  { t:'Дорогу осилит идущий.', a:'—' },
+  { t:'Сначала ты создаёшь привычки, потом привычки создают тебя.', a:'—' },
+  { t:'Если хочешь идти быстро — иди один. Хочешь далеко — идите вместе.', a:'Пословица' },
+  { t:'Воля к победе ничто без воли к подготовке.', a:'Хуан Антонио Самаранч' },
+  { t:'Большие дела не делаются за один раз — они делаются по чуть-чуть каждый день.', a:'—' },
+  { t:'Твоё будущее создаётся тем, что ты делаешь сегодня, а не завтра.', a:'Роберт Кийосаки' },
+  { t:'Препятствие — это путь.', a:'Стоики' },
+  { t:'Не бойся идти медленно, бойся стоять на месте.', a:'Китайская мудрость' },
+];
+const _вдохновение = () => {
+  const f = ФРАЗЫ[Math.floor(Math.random() * ФРАЗЫ.length)];
+  const q = ЦИТАТЫ[Math.floor(Math.random() * ЦИТАТЫ.length)];
+  return { f, q };
+};
 
 let radarChart, energyChart;
 let _currentQuests = []; // для синхронизации taskId при completeQuest
@@ -201,6 +234,7 @@ export function renderDash() {
     </div>
   </div>
 
+  ${renderQuoteBlock()}
   <div style="height:16px"></div>
 </div>`;
   }
@@ -346,6 +380,7 @@ function десктопныйДашборд(p) {
       </div>
     </div>
 
+    ${renderQuoteBlock()}
     <div style="height:8px"></div>
   </div>`;
 }
@@ -376,6 +411,15 @@ function renderTimeWasteBlock() {
       <div style="font-size:11px;color:rgba(232,237,245,.5)">${i.min} мин</div>
     </div>`).join('')}
     <div style="font-size:11px;color:${цвет};margin-top:8px">🪞 ${честно}</div>
+  </div>`;
+}
+
+// ── ЦИТАТА ДНЯ (внизу, ротация при каждом открытии) ──────────────────────────
+function renderQuoteBlock() {
+  const { q } = _вдохновение();
+  return `<div style="text-align:center;padding:22px 18px 10px;color:rgba(232,237,245,.55)">
+    <div style="font-size:14px;font-style:italic;line-height:1.5;max-width:520px;margin:0 auto">«${q.t}»</div>
+    ${q.a && q.a !== '—' ? `<div style="font-size:11px;color:rgba(232,237,245,.35);margin-top:8px">— ${q.a}</div>` : ''}
   </div>`;
 }
 
@@ -418,9 +462,11 @@ function renderMorningBrief() {
     }
   } catch {}
 
+  const { f: фраза } = _вдохновение();
   return `<div class="card" style="margin-bottom:14px;border:1px solid rgba(0,245,212,.25);background:linear-gradient(135deg,rgba(0,245,212,.06),rgba(123,97,255,.04))">
     <div style="font-size:10px;letter-spacing:.08em;color:rgba(232,237,245,.45);text-transform:capitalize">${dateStr}</div>
-    <div class="sec-label" style="margin:2px 0 10px;font-size:14px">☀️ ${привет}, фокус дня</div>
+    <div style="font-size:22px;font-weight:800;color:#E8EDF5;margin:6px 0 2px;line-height:1.15">${фраза}</div>
+    <div class="sec-label" style="margin:2px 0 10px;font-size:12px">☀️ ${привет}, фокус дня</div>
     <div style="font-size:10px;color:rgba(232,237,245,.4);margin-bottom:4px">ГЛАВНОЕ СЕГОДНЯ</div>
     ${taskRows}
     <div id="brief-cal" style="margin-top:10px;font-size:12px;color:rgba(232,237,245,.5)"></div>
