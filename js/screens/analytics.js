@@ -1,6 +1,6 @@
 // ── ANALYTICS SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=76';
-import { xpForLevel } from '../gamification.js?v=76';
+import { DB } from '../db.js?v=77';
+import { xpForLevel } from '../gamification.js?v=77';
 
 let analyticsChart = null;
 
