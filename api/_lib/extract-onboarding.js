@@ -1,5 +1,5 @@
 // ── /api/extract-onboarding — превращаем голос в структуру LIFE OS ───────────
-import { getActiveModel } from './_lib/model.js';
+import { getActiveModel } from './model.js';
 // Принимает { ответы: {...} }, возвращает полную структуру данных для приложения
 
 import OpenAI from 'openai';

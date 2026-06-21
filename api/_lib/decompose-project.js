@@ -1,5 +1,5 @@
 // ── /api/decompose-project — ИИ разбивает проект на задачи с подзадачами ──────
-import { getActiveModel } from './_lib/model.js';
+import { getActiveModel } from './model.js';
 import OpenAI from 'openai';
 
 export const config = { maxDuration: 30 };

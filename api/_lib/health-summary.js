@@ -1,5 +1,5 @@
 // ── /api/health-summary — AI-анализ здоровья ─────────────────────────────────
-import { getActiveModel } from './_lib/model.js';
+import { getActiveModel } from './model.js';
 // Принимает данные здоровья, возвращает короткий вывод + рекомендации.
 
 import OpenAI from 'openai';

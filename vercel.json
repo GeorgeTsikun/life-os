@@ -1,5 +1,12 @@
 {
   "version": 2,
+  "rewrites": [
+    { "source": "/api/task-draft",        "destination": "/api/ai?op=task-draft" },
+    { "source": "/api/decompose-project",  "destination": "/api/ai?op=decompose-project" },
+    { "source": "/api/health-summary",     "destination": "/api/ai?op=health-summary" },
+    { "source": "/api/classify-task",      "destination": "/api/ai?op=classify-task" },
+    { "source": "/api/extract-onboarding", "destination": "/api/ai?op=extract-onboarding" }
+  ],
   "headers": [
     {
       "source": "/(.*)",

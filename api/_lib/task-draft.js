@@ -1,7 +1,7 @@
 // ── /api/task-draft — ИИ-агент: делает черновик задачи (10-70% готовности) ────
 // По тексту задачи генерит готовый черновик (письмо/план/текст), шаги и — если
 // непонятно — уточняющие вопросы. Задача открывается уже наполовину сделанной.
-import { getActiveModel } from './_lib/model.js';
+import { getActiveModel } from './model.js';
 import OpenAI from 'openai';
 
 export const config = { maxDuration: 30 };

@@ -1,5 +1,5 @@
 // ── /api/classify-task — AI-разбор задачи для Mini App ─────────────────────
-import { getActiveModel } from './_lib/model.js';
+import { getActiveModel } from './model.js';
 // Принимает {текст}, возвращает классификацию: квадрант, категорию, дату.
 
 import OpenAI from 'openai';
