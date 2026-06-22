@@ -73,7 +73,11 @@ nav{
   border-radius:26px !important;
   margin:0 12px 10px !important;
 }
-.nav-btn{ border-radius:16px !important; color:var(--text-60) !important; transition:all .25s cubic-bezier(.34,1.56,.64,1); }
+.nav-btn{ border-radius:16px !important; color:rgba(244,247,252,.82) !important; transition:all .25s cubic-bezier(.34,1.56,.64,1); }
+.nav-btn .lbl{ color:rgba(244,247,252,.82) !important; font-weight:600 !important; }
+.nav-btn:hover{ color:#fff !important; }
+.nav-btn:hover .lbl{ color:#fff !important; }
+.nav-btn.active .lbl{ color:#fff !important; }
 .nav-btn.active{
   background:linear-gradient(135deg, rgba(255,255,255,.18), rgba(255,255,255,.06)) !important;
   border:1px solid rgba(255,255,255,.22) !important;
@@ -114,6 +118,13 @@ nav{
 #content .card:nth-child(3){animation-delay:.10s} #content .card:nth-child(4){animation-delay:.14s}
 #content .card:nth-child(5){animation-delay:.18s} #content .card:nth-child(6){animation-delay:.22s}
 #content .card:nth-child(n+7){animation-delay:.26s}
+
+/* ── Десктоп: ровные 2 колонки + центрирование контента ──────────────────── */
+@media (min-width:1024px){
+  #content{ max-width:1180px; margin:0 auto; }
+  .screen.dd{ max-width:1180px; margin:0 auto; }
+  .dd-grid-2{ grid-template-columns:1fr 1fr !important; align-items:start; }
+}
 
 @media (prefers-reduced-motion: reduce){
   *, .ambient .orb, #content > .screen, #content .card{ animation:none !important; transition:none !important; }
