@@ -1,5 +1,5 @@
 // ── СЛОЙ ДАННЫХ ───────────────────────────────────────────────────────────────
-import { KNOWLEDGE_SEED } from './data/knowledge.js?v=81';
+import { KNOWLEDGE_SEED } from './data/knowledge.js?v=82';
 // Приоритет: localStorage (работает без интернета).
 // Если заданы VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY — синхронизируется с Supabase.
 // Переменные окружения читаются из window.__ENV__ (injected Vercel) или import.meta.env
@@ -28,20 +28,10 @@ const ДАННЫЕ = {
   projects: [],
   people: [],
   health: {
-    sleep: {hours:7.2,quality:85,deep:22,rem:18,bedtime:'23:15',wake:'06:27'},
-    hrv: 58,
-    restingHr: 58,
-    steps: 8420,
-    calories: 420,
-    km: 6.2,
-    move: 78,
-    exercise: 65,
-    stand: 90,
-    lastSync: new Date().toISOString(),
-    weeklyData: [7.2,6.8,7.5,6.5,8.0,7.8,8.2],
-    energyData: [65,72,88,75,91,60,55],
-    pulseData: [58,62,60,55,58,56,60,62,59],
-    hrvData: [52,58,55,48,45,42,50,56,60],
+    sleep: null, hrv: null, restingHr: null, steps: null, calories: null,
+    km: null, move: null, exercise: null, stand: null,
+    lastSync: null, real: false,
+    weeklyData: [], energyData: [], pulseData: [], hrvData: [],
   },
   nutrition: {
     water: 0,
@@ -59,13 +49,8 @@ const ДАННЫЕ = {
     fatGoal: 70,
     date: new Date().toDateString(),
   },
-  workouts: [
-    {id:'w1',date:new Date().toDateString(),type:'Силовая',duration:60,xp:100,emoji:'🏋️'},
-    {id:'w2',date:new Date(Date.now()-2*86400000).toDateString(),type:'Кардио',duration:40,xp:80,emoji:'🏃'},
-    {id:'w3',date:new Date(Date.now()-4*86400000).toDateString(),type:'Силовая',duration:65,xp:100,emoji:'🏋️'},
-    {id:'w4',date:new Date(Date.now()-5*86400000).toDateString(),type:'Плавание',duration:45,xp:90,emoji:'🏊'},
-  ],
-  gymDays: [true,false,true,true,false,true,false],
+  workouts: [],
+  gymDays: [false,false,false,false,false,false,false],
   quests: [
     {id:'q1',title:'Закрыть главную задачу Q1',icon:'🎯',xp:150,done:false},
     {id:'q2',title:'Выпить 2.5л воды',icon:'💧',xp:150,done:false},
@@ -100,23 +85,23 @@ const ДАННЫЕ = {
   // balance = сумма xpValue выполненных задач − сумма потраченных удовольствий
   // Пересчитывается из pleasureLog и tasks при каждом запросе
   achievements: [
-    {key:'streak7',icon:'🔥',name:'7-дн. страйк',unlocked:true,color:'#FFD700'},
-    {key:'first_client',icon:'🚀',name:'Первый клиент',unlocked:true,color:'#00F5D4'},
+    {key:'streak7',icon:'🔥',name:'7-дн. страйк',unlocked:false,color:'#FFD700'},
+    {key:'first_client',icon:'🚀',name:'Первый клиент',unlocked:false,color:'#00F5D4'},
     {key:'focus_master',icon:'🧠',name:'Мастер фокуса',unlocked:false,color:'#7B61FF'},
     {key:'club300',icon:'💎',name:'Клуб 300',unlocked:false,color:'#00E396'},
     {key:'iron_week',icon:'🏋️',name:'Железная неделя',unlocked:false,color:'#FF9F43'},
     {key:'sleep_master',icon:'🌙',name:'Мастер сна',unlocked:false,color:'#7B61FF'},
-    {key:'crm_pro',icon:'🤝',name:'CRM Про',unlocked:true,color:'#00E396'},
-    {key:'100k',icon:'💰',name:'Первые 100К',unlocked:true,color:'#FFD700'},
+    {key:'crm_pro',icon:'🤝',name:'CRM Про',unlocked:false,color:'#00E396'},
+    {key:'100k',icon:'💰',name:'Первые 100К',unlocked:false,color:'#FFD700'},
     {key:'deep_focus',icon:'🎯',name:'Глубокий фокус',unlocked:false,color:'#00F5D4'},
     {key:'level10',icon:'👑',name:'Уровень 10',unlocked:false,color:'#FFD700'},
     {key:'nutrition_week',icon:'🥗',name:'Неделя питания',unlocked:false,color:'#00E396'},
     {key:'water_streak',icon:'💧',name:'7 дней воды',unlocked:false,color:'#00C9FF'},
   ],
   dailyLog: {
-    energy: 7,
-    mood: '😊',
-    focus: 2.5,
+    energy: null,
+    mood: null,
+    focus: null,
     note: '',
   },
   weeklyChallenge: {
@@ -126,13 +111,8 @@ const ДАННЫЕ = {
     xp: 500,
     emoji: '⚡',
   },
-  rpgStats: {
-    STR: 62,
-    VIT: 70,
-    SOC: 55,  // CHA→SOC (Социум)
-    WIS: 48,
-    ENG: 52,  // FOC→ENG (Энергобаланс, динамический от HRV)
-  },
+  // v3: пусто — реальные шкалы накапливаются из чекинов/отчётов
+  rpgStats: {},
 };
 
 // ── БАЗА ЧАСТЫХ БЛЮД ДЖОРДЖА (дефолт, выбор в один тап) ──────────────────────
@@ -214,6 +194,7 @@ export const DB = {
     инициализировать();
     this.migrateTaskIdsToUUID();   // §migration: t-id → UUID для корректного upsert
     this.migrateRelativeDatesToISO(); // §migration: 'завтра'/'сегодня' → реальные ISO даты
+    this.migrateV3StripFakes();    // §v3: убрать выдуманные данные (ачивки/радар/фейк-здоровье/seed-спорт)
     this.applyDailyDecay();
     this.resetDailyQuests();
     this.resetDailyNutrition();
@@ -221,6 +202,33 @@ export const DB = {
     const moved = this.sweepQ4toIdeaBank();
     if (moved > 0) window.showToast?.(`💡 ${moved} идей из Q4 → Банк идей`, 'info');
     this.ensureRecurringTasks();
+  },
+
+  // ── §v3: одноразовая чистка выдуманных данных ────────────────────────────────
+  // Принцип v3: никаких фейковых чисел. Сбрасываем то, что было захардкожено как
+  // «демо» (ачивки «получено», RPG-радар, фейк-здоровье/энергия, seed-тренировки).
+  // Реальные данные появятся из дневных отчётов/бота/Apple Health.
+  migrateV3StripFakes() {
+    if (localStorage.getItem('lifeos_v3_stripped') === '1') return;
+    try {
+      // Ачивки: снять авто-«получено» (заслужишь реально — вернём отдельной логикой)
+      const ach = хранилищеПолучить('achievements') || [];
+      ach.forEach(a => { a.unlocked = false; });
+      хранилищеСохранить('achievements', ach);
+      // RPG-радар: нет реального источника → null (карточка покажет «нет данных»)
+      хранилищеСохранить('rpgStats', null);
+      // Здоровье: очистить выдуманные показатели/графики (реальные придут из Health/бота)
+      const h = хранилищеПолучить('health') || {};
+      h.hrv = null; h.restingHr = null; h.steps = null; h.calories = null;
+      h.sleep = null; h.move = null; h.exercise = null; h.stand = null;
+      h.weeklyData = []; h.energyData = []; h.pulseData = []; h.hrvData = [];
+      h.real = false;
+      хранилищеСохранить('health', h);
+      // Seed-тренировки и фейковые «дни зала» — убрать
+      хранилищеСохранить('workouts', []);
+      хранилищеСохранить('gymDays', [false,false,false,false,false,false,false]);
+    } catch (e) { console.warn('[v3 strip]', e.message); }
+    localStorage.setItem('lifeos_v3_stripped', '1');
   },
 
   // ── ПОВТОРЯЮЩИЕСЯ ЗАДАЧИ (шаблоны → авто-создание по расписанию) ─────────────
@@ -967,16 +975,12 @@ export const DB = {
   },
 
   // RPG характеристики
+  // v3: без фейк-дефолтов. Возвращаем только реально накопленные шкалы (из чекинов/
+  // отчётов). Пусто → дашборд покажет «нет данных». ENG считаем из реального HRV.
   getRpgStats() {
-    const шкалы = { ...ДАННЫЕ.rpgStats, ...(this.get('rpgStats') || {}) };
-    // Защита: все базовые шкалы должны быть числами
-    шкалы.STR = typeof шкалы.STR === 'number' ? шкалы.STR : 62;
-    шкалы.VIT = typeof шкалы.VIT === 'number' ? шкалы.VIT : 70;
-    шкалы.SOC = typeof шкалы.SOC === 'number' ? шкалы.SOC : 55;
-    шкалы.WIS = typeof шкалы.WIS === 'number' ? шкалы.WIS : 48;
-    // ENG — динамический: рассчитывается из HRV (clamp 0–100)
-    const hrv = this.getHealth().hrv || 60;
-    шкалы.ENG = Math.min(100, Math.max(0, Math.round((hrv / 80) * 100)));
+    const шкалы = { ...(this.get('rpgStats') || {}) };
+    const hrv = this.getHealth()?.hrv;
+    if (typeof hrv === 'number') шкалы.ENG = Math.min(100, Math.max(0, Math.round((hrv / 80) * 100)));
     return шкалы;
   },
 
@@ -987,7 +991,7 @@ export const DB = {
     const profile = this.getProfile();
     if (profile.lastDecayDate === сегодня) return; // уже применяли сегодня
 
-    const шкалы = this.get('rpgStats') || ДАННЫЕ.rpgStats;
+    const шкалы = this.get('rpgStats') || {};   // v3: без фейк-дефолтов
     const деградация = { STR: 5, VIT: 8, SOC: 4, WIS: 3 }; // ENG — только HRV
     for (const [ключ, убыль] of Object.entries(деградация)) {
       if (ключ in шкалы) {

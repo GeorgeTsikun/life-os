@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=81';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=81';
-import { TG } from '../telegram.js?v=81';
+import { DB } from '../db.js?v=82';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=82';
+import { TG } from '../telegram.js?v=82';
 
 // ── Вдохновение (как в Momentum): крупная фраза + глубокая цитата ────────────
 const ФРАЗЫ = [
@@ -135,10 +135,10 @@ export function renderDash() {
   <!-- ── МИНИ-СТАТЫ ──────────────────────────────────────────────────────────── -->
   <div class="energy-chips">
     ${[
-      { l:'Сон',    v: health.sleep?.hours + 'ч', i:'🌙', c:'#7B61FF' },
-      { l:'Энергия',v: (daily.energy || 7) + '/10', i:'⚡', c:'#FFD700' },
-      { l:'Задачи', v: `${doneTasks}/${tasks.filter(t => !t.done || t.done).length}`, i:'✅', c:'#00F5D4' },
-      { l:'Фокус',  v: (daily.focus || 2.5) + 'ч', i:'🎯', c:'#00E396' },
+      { l:'Сон',    v: health.sleep?.hours ? health.sleep.hours + 'ч' : '—', i:'🌙', c:'#7B61FF' },
+      { l:'Энергия',v: daily.energy != null ? daily.energy + '/10' : '—', i:'⚡', c:'#FFD700' },
+      { l:'Задачи', v: `${doneTasks}/${tasks.length}`, i:'✅', c:'#00F5D4' },
+      { l:'Фокус',  v: daily.focus != null ? daily.focus + 'ч' : '—', i:'🎯', c:'#00E396' },
     ].map(s => `<div class="stat-chip">
       <div style="font-size:18px;margin-bottom:4px">${s.i}</div>
       <div class="num" style="font-size:13px;color:${s.c}">${s.v}</div>
@@ -205,34 +205,8 @@ export function renderDash() {
     </div>`).join('')}
   </div>` : ''}
 
-  <!-- ── RPG ХАРАКТЕРИСТИКИ ─────────────────────────────────────────────────── -->
-  <div class="card" style="margin-bottom:12px">
-    <div class="sec-label">📊 СОСТОЯНИЕ ГЕРОЯ</div>
-    <!-- Радар — на всю ширину, достаточно крупный -->
-    <div style="width:100%;height:220px;position:relative">
-      <canvas id="radar-chart" style="width:100%;height:100%"></canvas>
-    </div>
-    <!-- Шкалы под радаром -->
-    <div style="margin-top:14px">
-      ${RPG_STATS.map(s => {
-        const val = typeof rpg[s.key] === 'number' ? rpg[s.key] : 50;
-        return `<div class="stat-row" style="margin-bottom:6px">
-          <div class="stat-label" style="color:${s.color};font-size:10px;min-width:64px">${s.label}</div>
-          <div class="stat-bar" style="flex:1;height:6px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden;margin:0 8px">
-            <div class="stat-bar-fill" style="height:100%;width:${val}%;background:${s.color};box-shadow:0 0 6px ${s.color}60;border-radius:4px;transition:width .4s ease"></div>
-          </div>
-          <div class="stat-val" style="color:${s.color};font-size:11px;font-weight:700;min-width:24px;text-align:right">${val}</div>
-        </div>`;
-      }).join('')}
-    </div>
-    <!-- График энергии / неделя -->
-    <div style="margin-top:14px">
-      <div style="font-size:9px;color:rgba(232,237,245,.35);letter-spacing:.08em;margin-bottom:6px">⚡ ЭНЕРГИЯ / НЕДЕЛЯ</div>
-      <div style="height:70px;position:relative">
-        <canvas id="energy-chart" style="width:100%;height:100%"></canvas>
-      </div>
-    </div>
-  </div>
+  <!-- ── СОСТОЯНИЕ ГЕРОЯ (реальные данные или честный пустой стейт) ─────────── -->
+  ${heroStateCard(rpg, health)}
 
   ${renderQuoteBlock()}
   <div style="height:16px"></div>
@@ -241,8 +215,8 @@ export function renderDash() {
 
   requestAnimationFrame(() => {
     destroyCharts();
-    mountRadar(rpg);
-    mountEnergy(health.energyData || [65, 72, 88, 75, 91, 60, 55]);
+    if (document.getElementById('radar-chart')) mountRadar(rpg);
+    if (document.getElementById('energy-chart') && (health.energyData || []).length) mountEnergy(health.energyData);
     window._loadGCal?.();
   });
 
@@ -269,28 +243,7 @@ function десктопныйДашборд(p) {
   </div>`;
 
   // СОСТОЯНИЕ ГЕРОЯ — радар + шкалы + энергия
-  const heroState = `<div class="card">
-    <div class="sec-label">📊 СОСТОЯНИЕ ГЕРОЯ</div>
-    <div style="width:100%;height:250px;position:relative;margin-top:4px">
-      <canvas id="radar-chart" style="width:100%;height:100%"></canvas>
-    </div>
-    <div style="margin-top:14px">
-      ${RPG_STATS.map(s => {
-        const val = typeof rpg[s.key] === 'number' ? rpg[s.key] : 50;
-        return `<div class="stat-row" style="margin-bottom:7px">
-          <div class="stat-label" style="color:${s.color};font-size:10px;min-width:64px">${s.label}</div>
-          <div class="stat-bar" style="flex:1;height:7px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden;margin:0 8px">
-            <div style="height:100%;width:${val}%;background:${s.color};box-shadow:0 0 6px ${s.color}60;border-radius:4px;transition:width .4s ease"></div>
-          </div>
-          <div style="color:${s.color};font-size:11px;font-weight:700;min-width:24px;text-align:right">${val}</div>
-        </div>`;
-      }).join('')}
-    </div>
-    <div style="margin-top:14px">
-      <div style="font-size:9px;color:rgba(232,237,245,.35);letter-spacing:.08em;margin-bottom:6px">⚡ ЭНЕРГИЯ / НЕДЕЛЯ</div>
-      <div style="height:80px;position:relative"><canvas id="energy-chart" style="width:100%;height:100%"></canvas></div>
-    </div>
-  </div>`;
+  const heroState = heroStateCard(rpg, health);
 
   // КВЕСТЫ ДНЯ
   const questsCard = `<div class="card">
@@ -779,7 +732,7 @@ window.toggleInboxGroup = function(groupId) {
 function renderSphere(health, profile, tasks) {
   const rc     = calcRC(health, profile);
   const mode   = rcMode(rc);
-  const rpg    = DB.getRpgStats();
+  const rpg    = DB.getRpgStats() || {};
   const debuff = Object.values(rpg).some(v => typeof v === 'number' && v < 30);
   const balance = DB.getBalance();
 
@@ -926,7 +879,46 @@ function renderQ1Alert(tasks) {
 }
 
 // ── REAL CAPACITY БЛОК ───────────────────────────────────────────────────────
+// Карточка «Состояние героя»: реальные шкалы/радар если есть данные, иначе честный пустой стейт
+function heroStateCard(rpg, health) {
+  const есть = rpg && typeof rpg === 'object' && RPG_STATS.some(s => typeof rpg[s.key] === 'number');
+  if (!есть) {
+    return `<div class="card" style="margin-bottom:12px">
+      <div class="sec-label">📊 СОСТОЯНИЕ ГЕРОЯ</div>
+      <div style="font-size:12px;color:rgba(232,237,245,.55);margin-top:8px;line-height:1.5">Пока нет данных. Сферы (тело · восстановление · люди · фокус · энергия) заполняются из твоих дневных отчётов и активности — расскажи боту, как ты по каждой, и здесь появятся реальные значения.</div>
+    </div>`;
+  }
+  const energy = (health?.energyData || []);
+  return `<div class="card" style="margin-bottom:12px">
+    <div class="sec-label">📊 СОСТОЯНИЕ ГЕРОЯ</div>
+    <div style="width:100%;height:220px;position:relative"><canvas id="radar-chart" style="width:100%;height:100%"></canvas></div>
+    <div style="margin-top:14px">
+      ${RPG_STATS.map(s => {
+        const val = typeof rpg[s.key] === 'number' ? rpg[s.key] : 0;
+        return `<div class="stat-row" style="margin-bottom:6px">
+          <div class="stat-label" style="color:${s.color};font-size:10px;min-width:64px">${s.label}</div>
+          <div class="stat-bar" style="flex:1;height:6px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden;margin:0 8px">
+            <div class="stat-bar-fill" style="height:100%;width:${val}%;background:${s.color};box-shadow:0 0 6px ${s.color}60;border-radius:4px;transition:width .4s ease"></div>
+          </div>
+          <div class="stat-val" style="color:${s.color};font-size:11px;font-weight:700;min-width:24px;text-align:right">${val}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    ${energy.length ? `<div style="margin-top:14px">
+      <div style="font-size:9px;color:rgba(232,237,245,.35);letter-spacing:.08em;margin-bottom:6px">⚡ ЭНЕРГИЯ / НЕДЕЛЯ</div>
+      <div style="height:70px;position:relative"><canvas id="energy-chart" style="width:100%;height:100%"></canvas></div>
+    </div>` : ''}
+  </div>`;
+}
+
 function renderRcBlock(health, profile) {
+  // v3: без реальных данных здоровья не выдумываем «ёмкость»
+  if (!health || (health.hrv == null && (health.sleep == null || !health.sleep?.hours))) {
+    return `<div class="card" style="margin-bottom:12px;border-left:3px solid rgba(255,255,255,.15)">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:rgba(232,237,245,.5)">⚡ РЕАЛЬНАЯ ЁМКОСТЬ</div>
+      <div style="font-size:12px;color:rgba(232,237,245,.55);margin-top:8px;line-height:1.5">Нет данных о здоровье. Расскажи боту голосом как спал / какой пульс-HRV, или подключи Apple Health — и я посчитаю реальную ёмкость дня.</div>
+    </div>`;
+  }
   const rc   = calcRC(health, profile);
   const mode = rcMode(rc);
   const pct  = Math.min(100, Math.round(rc * 100));
