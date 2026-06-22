@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=80';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=80';
-import { TG } from '../telegram.js?v=80';
+import { DB } from '../db.js?v=81';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=81';
+import { TG } from '../telegram.js?v=81';
 
 // ── Вдохновение (как в Momentum): крупная фраза + глубокая цитата ────────────
 const ФРАЗЫ = [

@@ -1,6 +1,6 @@
 // ── PROJECTS SCREEN ───────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=80';
-import { TG } from '../telegram.js?v=80';
+import { DB } from '../db.js?v=81';
+import { TG } from '../telegram.js?v=81';
 
 const MONTH_GOAL = 3000000; // цель по выручке за месяц
 
@@ -11,20 +11,7 @@ function fmt(v) {
 }
 function rub(v) { return (v||0).toLocaleString('ru-RU') + ' ₽'; }
 
-// Стабильный псевдослучай из строки (для оценок радара, если нет реальных)
-function hashStr(s) { let h=0; for (let i=0;i<(s||'').length;i++) h=(h*31+s.charCodeAt(i))>>>0; return h; }
-function metricsFor(p) {
-  if (p.metrics) return p.metrics;                 // если заданы вручную
-  const h = hashStr(p.id || p.name);
-  const j = (n) => 30 + ((h >> n) % 55);           // 30..85
-  return {
-    sales:     Math.max(p.progress || 0, 20),      // продажи ~ прогресс выручки
-    marketing: j(2),
-    product:   j(5),
-    finance:   p.target ? Math.round((p.current / p.target) * 100) : j(8),
-    team:      j(11),
-  };
-}
+// (v3) псевдослучайные метрики проектов убраны — показываем только реальные данные.
 
 // Инлайн-спарклайн
 function spark(data, color, h = 40) {
@@ -97,7 +84,7 @@ export function renderProjects() {
 
     <!-- РАДАР + ДЕДЛАЙНЫ + AI CEO -->
     <div class="proj-trio">
-      ${radarCardHTML(projects)}
+      ${radarCardHTML(projects, tasks)}
       ${deadlinesCardHTML(projects, tasks)}
       ${aiCeoCardHTML(projects)}
     </div>
@@ -172,28 +159,30 @@ function daysLabel(dateStr) {
 }
 
 // РАДАР: таблица проектов × метрики
-function radarCardHTML(projects) {
-  const cols = [
-    { k:'sales', l:'💰 Продажи' }, { k:'marketing', l:'🔥 Маркетинг' },
-    { k:'product', l:'🎯 Продукт' }, { k:'finance', l:'💎 Финансы' }, { k:'team', l:'👥 Команда' },
-  ];
+function radarCardHTML(projects, tasks = []) {
+  // v3: только реальные сигналы (задачи/готово/прогресс/доход), без выдумки.
   return `<div class="card">
-    <div class="sec-label">📡 РАДАР ПРОЕКТОВ</div>
-    <div style="font-size:10px;color:rgba(232,237,245,.35);margin-bottom:10px">Оценка по ключевым направлениям</div>
+    <div class="sec-label">📡 ОБЗОР ПРОЕКТОВ</div>
+    <div style="font-size:10px;color:rgba(232,237,245,.35);margin-bottom:10px">По реальным данным: задачи · прогресс · доход</div>
     <div class="radar-tbl">
-      <div class="radar-row radar-head"><span>Проект</span>${cols.map(c=>`<span>${c.l.split(' ')[0]}</span>`).join('')}<span>Итог</span></div>
+      <div class="radar-row radar-head"><span>Проект</span><span>📋</span><span>✅</span><span>📈</span><span>💰</span></div>
       ${projects.map(p => {
-        const m = metricsFor(p);
-        const vals = cols.map(c => m[c.k] || 0);
-        const tot = Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
-        const tColor = tot >= 60 ? '#00E396' : tot >= 40 ? '#F5B942' : '#FF5C8A';
+        const tp   = tasks.filter(t => t.project_id === p.id && !t.cancelled);
+        const act  = tp.filter(t => !t.done).length;
+        const done = tp.filter(t => t.done).length;
+        const prog = p.progress || 0;
+        const inc  = p.current ? fmt(p.current) : '—';
+        const pColor = prog >= 60 ? '#00E396' : prog >= 30 ? '#F5B942' : 'rgba(232,237,245,.5)';
         return `<div class="radar-row">
           <span style="color:#E8EDF5">${p.emoji} ${p.name}</span>
-          ${vals.map(v=>`<span style="color:${v>=60?'#00E396':v>=40?'#F5B942':'#FF5C8A'}">${v}</span>`).join('')}
-          <span style="color:${tColor};font-weight:800">${tot}%</span>
+          <span style="color:${act?'#00C9FF':'rgba(232,237,245,.3)'}">${act}</span>
+          <span style="color:${done?'#00E396':'rgba(232,237,245,.3)'}">${done}</span>
+          <span style="color:${pColor};font-weight:700">${prog}%</span>
+          <span style="color:#FFD700">${inc}</span>
         </div>`;
       }).join('')}
     </div>
+    <div style="font-size:9px;color:rgba(232,237,245,.3);margin-top:8px">Нет данных по доходу/прогрессу? Обнови проект или расскажи боту.</div>
   </div>`;
 }
 
@@ -230,15 +219,10 @@ function aiCeoCardHTML(projects) {
   if (!weakest) {
     body = '<div style="font-size:12px;color:rgba(232,237,245,.5)">Добавь проекты — и AI CEO подскажет, где узкое место.</div>';
   } else {
-    const m = metricsFor(weakest);
-    const weakArea = Object.entries({ Продажи:m.sales, Маркетинг:m.marketing, Продукт:m.product, Финансы:m.finance, Команда:m.team }).sort((a,b)=>a[1]-b[1])[0][0];
-    const potential = weakest.target ? Math.round((weakest.target - weakest.current) * 0.2) : 50000;
-    body = `<div style="font-size:11px;color:rgba(232,237,245,.5);margin-bottom:6px">Сегодня</div>
-      <div style="font-size:13px;font-weight:700;margin-bottom:4px">Самый слабый проект: <span style="color:#FF5C8A">${weakest.name}</span></div>
-      <div style="font-size:11px;color:rgba(232,237,245,.6);margin-bottom:10px">Причина: проседает направление «${weakArea}» (${weakest.progress}% к цели).</div>
-      <div style="font-size:11px;color:#00E396;font-weight:600;margin-bottom:4px">Рекомендую:</div>
-      <div style="font-size:11px;color:rgba(232,237,245,.65);line-height:1.7">1. Создать оффер для целевой аудитории<br>2. Найти 10 потенциальных клиентов<br>3. Запустить рекламу в Instagram и Telegram</div>
-      <div style="font-size:11px;color:#00E396;margin-top:10px">Потенциальный рост: +${rub(potential)}</div>`;
+    const gap = weakest.target ? Math.max(0, weakest.target - (weakest.current || 0)) : 0;
+    body = `<div style="font-size:13px;font-weight:700;margin-bottom:6px">Самый низкий прогресс: <span style="color:#FF5C8A">${weakest.emoji||''} ${weakest.name}</span></div>
+      <div style="font-size:11px;color:rgba(232,237,245,.6);line-height:1.6">Прогресс ${weakest.progress||0}%${weakest.target?` · до цели ${rub(gap)}`:''}.</div>
+      <div style="font-size:11px;color:rgba(232,237,245,.45);margin-top:8px">Хочешь разбор и план по нему — нажми 🤖 в проекте или спроси бота <b>/progress</b>.</div>`;
   }
   return `<div class="card purple">
     <div class="row" style="justify-content:space-between;margin-bottom:10px">
