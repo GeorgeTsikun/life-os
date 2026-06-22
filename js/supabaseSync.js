@@ -84,7 +84,7 @@ export async function загрузитьВсё() {
   if (!активен()) return false;
   try {
     const сегодня = new Date().toISOString().split('T')[0];
-    const [tasks, projects, people, profileАрр, dailyАрр, quests, achievements, contentItems] = await Promise.all([
+    let [tasks, projects, people, profileАрр, dailyАрр, quests, achievements, contentItems] = await Promise.all([
       запросSelect('tasks', 'order=created_at.asc'),
       запросSelect('projects'),
       запросSelect('people'),
@@ -94,6 +94,14 @@ export async function загрузитьВсё() {
       запросSelect('achievements'),
       запросSelect('content_items', 'order=created_at.desc').catch(() => []),
     ]);
+
+    // TOMBSTONES: удалённое локально не возвращаем из облака (id в lifeos_deleted)
+    let _удалённые = {};
+    try { _удалённые = JSON.parse(localStorage.getItem('lifeos_deleted') || '{}'); } catch {}
+    const неУдалён = (x) => x && !_удалённые[x.id];
+    tasks        = (tasks || []).filter(неУдалён);
+    people       = (people || []).filter(неУдалён);
+    contentItems = (contentItems || []).filter(неУдалён);
 
     if (tasks?.length) {
       // ── УМНЫЙ MERGE: не затираем локальные изменения ──────────────────────────
@@ -564,7 +572,9 @@ export async function удалитьИдею(id) {
 export async function загрузитьИдеи() {
   if (!активен()) return;
   try {
-    const data = await запросSelect('idea_bank', `order=created_at.desc`);
+    let data = await запросSelect('idea_bank', `order=created_at.desc`);
+    let _del = {}; try { _del = JSON.parse(localStorage.getItem('lifeos_deleted') || '{}'); } catch {}
+    data = (data || []).filter(r => r && !_del[r.id]);   // tombstones
     if (data?.length) {
       localStorage.setItem('lifeos_ideaBank', JSON.stringify(data.map(r => ({
         id:           r.id,

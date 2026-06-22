@@ -1,5 +1,5 @@
 // ── СЛОЙ ДАННЫХ ───────────────────────────────────────────────────────────────
-import { KNOWLEDGE_SEED } from './data/knowledge.js?v=79';
+import { KNOWLEDGE_SEED } from './data/knowledge.js?v=80';
 // Приоритет: localStorage (работает без интернета).
 // Если заданы VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY — синхронизируется с Supabase.
 // Переменные окружения читаются из window.__ENV__ (injected Vercel) или import.meta.env
@@ -409,6 +409,7 @@ export const DB = {
     window._дбHook?.('idea', нов);
   },
   removeFromIdeaBank(id) {
+    this.markDeleted(id);
     this.saveIdeaBank(this.getIdeaBank().filter(x => x.id !== id));
     window._дбHook?.('idea_delete', { id });
   },
@@ -651,7 +652,20 @@ export const DB = {
     return { totalMin, hours: +(totalMin / 60).toFixed(1), items, count: junk.length };
   },
 
+  // ── TOMBSTONES: удалил → не воскресает (pull отфильтрует эти id) ─────────────
+  getDeleted() { try { return JSON.parse(localStorage.getItem('lifeos_deleted') || '{}'); } catch { return {}; } },
+  markDeleted(id) {
+    if (!id) return;
+    const d = this.getDeleted(); d[id] = Date.now();
+    // не даём списку расти бесконечно — храним последние 1000
+    const ids = Object.keys(d);
+    if (ids.length > 1000) ids.slice(0, ids.length - 1000).forEach(k => delete d[k]);
+    localStorage.setItem('lifeos_deleted', JSON.stringify(d));
+  },
+  isDeleted(id) { return !!this.getDeleted()[id]; },
+
   deleteTask(id) {
+    this.markDeleted(id);
     const задачи = this.getTasks().filter(x => x.id !== id);
     this.saveTasks(задачи);
     window._дбHook?.('task_delete', { id });
@@ -758,6 +772,7 @@ export const DB = {
     return newMeal;
   },
   deleteMeal(id) {
+    this.markDeleted(id);
     const meals = this.getMeals().filter(m => m.id !== id);
     localStorage.setItem(this._mealsKey(), JSON.stringify(meals));
     this._recalcNutritionFromMeals(meals);

@@ -2,8 +2,8 @@
 // Пайплайн: Идея → Сценарий → Съёмка → Монтаж → Запланировано → Опубликовано
 // Группировка по платформам, метрики после публикации.
 
-import { DB } from '../db.js?v=79';
-import { TG } from '../telegram.js?v=79';
+import { DB } from '../db.js?v=80';
+import { TG } from '../telegram.js?v=80';
 
 const ПЛАТФОРМЫ = [
   { id:'instagram', name:'Instagram', emoji:'📷', color:'#E1306C' },
@@ -49,26 +49,9 @@ const KANBAN_COLS = [
   { id: 'done',      label: '🚀 Готово',     color: '#00E396', statuses: ['published'] },
 ];
 
-// ── SEED данные если нет в localStorage ───────────────────────────────────────
-const SEED_CONTENT = [
-  { id:'c1', title:'Разбор провального запуска Smart Stylist',
-    platforms:['instagram'], content_type:'reel', status:'idea',
-    refs:[], notes:'Что пошло не так и что я понял', created_at:Date.now()-86400000*2 },
-  { id:'c2', title:'5 ошибок при найме команды AI-стартапа',
-    platforms:['instagram','threads'], content_type:'carousel', status:'script',
-    text:'Сценарий: Слайд 1 — Найм без цели...', created_at:Date.now()-86400000 },
-  { id:'c3', title:'Утренний ритуал предпринимателя',
-    platforms:['instagram'], content_type:'reel', status:'editing',
-    created_at:Date.now()-86400000*3 },
-  { id:'c4', title:'Матрица Эйзенхауэра для одиночки',
-    platforms:['instagram','threads'], content_type:'carousel', status:'published',
-    publish_date:'2026-06-05', created_at:Date.now()-86400000*5 },
-];
-
+// Демо-сид убран (v3: никаких выдуманных данных). Пусто → честный empty-state.
 function загрузитьКонтент() {
-  let данные = JSON.parse(localStorage.getItem('lifeos_content') || 'null');
-  if (!данные) { данные = SEED_CONTENT; localStorage.setItem('lifeos_content', JSON.stringify(данные)); }
-  return данные;
+  return JSON.parse(localStorage.getItem('lifeos_content') || '[]');
 }
 
 function сохранитьКонтент(данные) {
@@ -387,6 +370,7 @@ window.changeContentStatus = function(id, status) {
 
 window.deleteContent = function(id) {
   if (!confirm('Удалить эту единицу контента?')) return;
+  DB.markDeleted(id);  // tombstone — не воскреснет при синке
   const все = загрузитьКонтент().filter(x => x.id !== id);
   сохранитьКонтент(все);
   document.querySelector('.detail-overlay')?.remove();

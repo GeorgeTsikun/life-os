@@ -1,6 +1,6 @@
 // ── ДЕНЬГИ — платёжный календарь, приходы, долги, кэш, офферы, лиды ───────────
 // Самодостаточный экран: данные в localStorage 'lifeos_finance', сид — из онбординга.
-import { TG } from '../telegram.js?v=79';
+import { TG } from '../telegram.js?v=80';
 
 const KEY = 'lifeos_finance';
 

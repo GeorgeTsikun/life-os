@@ -1,6 +1,6 @@
 // ── PEOPLE / CRM SCREEN ───────────────────────────────────────────────────────
-import { DB } from '../db.js?v=79';
-import { TG } from '../telegram.js?v=79';
+import { DB } from '../db.js?v=80';
+import { TG } from '../telegram.js?v=80';
 
 const CHECKUPS = [
   {l:'Чекап здоровья — терапевт',d:'июль 2026',i:'🏥'},
@@ -325,6 +325,7 @@ window.addPersonLog = function(id) {
 
 window.deletePerson = function(id) {
   if (!confirm('Удалить этого человека?')) return;
+  DB.markDeleted(id);  // tombstone — не воскреснет при синке
   const people = DB.getPeople().filter(x => x.id !== id);
   DB.savePeople(people);
   window._дбHook?.('people', people);
