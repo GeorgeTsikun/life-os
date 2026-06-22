@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=78';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=78';
-import { TG } from '../telegram.js?v=78';
+import { DB } from '../db.js?v=79';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=79';
+import { TG } from '../telegram.js?v=79';
 
 // ── Вдохновение (как в Momentum): крупная фраза + глубокая цитата ────────────
 const ФРАЗЫ = [
@@ -359,23 +359,19 @@ function десктопныйДашборд(p) {
 
     ${renderQ1Alert(tasks)}
 
-    <!-- 2 РОВНЫЕ КОЛОНКИ ВИДЖЕТОВ -->
-    <div class="dd-grid dd-grid-2">
-      <div class="dd-col">
-        ${renderGoalsBlock()}
-        ${renderGCalBlock()}
-        ${renderRcBlock(health, profile)}
-        ${renderFocusBlock(tasks, health, profile)}
-        ${questsCard}
-      </div>
-      <div class="dd-col">
-        ${renderCheckinBlock(daily)}
-        ${renderTimeWasteBlock()}
-        ${renderTimelineBlock(tasks)}
-        ${renderInboxBlock()}
-        ${heroState}
-        ${achCard}
-      </div>
+    <!-- ВИДЖЕТЫ: плотная masonry-упаковка в 2 колонки (без дыр) -->
+    <div class="dd-masonry">
+      ${renderGoalsBlock()}
+      ${renderGCalBlock()}
+      ${renderRcBlock(health, profile)}
+      ${renderCheckinBlock(daily)}
+      ${renderFocusBlock(tasks, health, profile)}
+      ${renderTimeWasteBlock()}
+      ${renderTimelineBlock(tasks)}
+      ${questsCard}
+      ${renderInboxBlock()}
+      ${heroState}
+      ${achCard}
     </div>
 
     ${renderQuoteBlock()}

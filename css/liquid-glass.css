@@ -123,7 +123,11 @@ nav{
 @media (min-width:1024px){
   #content{ max-width:1180px; margin:0 auto; }
   .screen.dd{ max-width:1180px; margin:0 auto; }
-  .dd-grid-2{ grid-template-columns:1fr 1fr !important; align-items:start; }
+  /* masonry: плотная упаковка карточек в 2 колонки без пустот */
+  .dd-masonry{ column-count:2; column-gap:18px; }
+  .dd-masonry > *{ break-inside:avoid; -webkit-column-break-inside:avoid; display:block; width:100%; margin:0 0 18px !important; }
+}
+@media (min-width:1500px){ .dd-masonry{ column-count:3; }
 }
 
 @media (prefers-reduced-motion: reduce){
