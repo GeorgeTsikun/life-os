@@ -32,6 +32,20 @@ export async function setActiveModel(supa, id) {
   return true;
 }
 
+// Устойчивый парсинг JSON-ответа модели: чистит ```-ограждения, выдёргивает
+// {...}; кидает понятную ошибку при пустом контенте (reasoning съел токены).
+export function парсJSONОтвет(r) {
+  let s = (r?.choices?.[0]?.message?.content || '').trim();
+  if (!s) throw new Error('пустой ответ модели (увеличь max_completion_tokens или смени модель)');
+  s = s.replace(/```json\s*|\s*```/g, '').trim();
+  try { return JSON.parse(s); }
+  catch {
+    const m = s.match(/\{[\s\S]*\}/);
+    if (m) return JSON.parse(m[0]);
+    throw new Error('не удалось разобрать JSON ответа модели');
+  }
+}
+
 // Список доступных моделей из OpenAI (только чат-модели gpt/o)
 export async function listOpenAIModels() {
   try {

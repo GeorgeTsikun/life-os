@@ -2,7 +2,7 @@
 // Знает контекст (проекты/задачи/финансы/здоровье) → утром спрашивает план →
 // генерит ПЛОТНЫЙ распорядок по часам → создаёт задачи с временем → шлёт в чат.
 import { InlineKeyboard } from 'grammy';
-import { getActiveModel } from './model.js';
+import { getActiveModel, парсJSONОтвет } from './model.js';
 import { читатьЦели } from './goals.js';
 import { событияНаДень } from './google.js';
 
@@ -69,9 +69,9 @@ export async function сгенерироватьПлан(openai, supa, доп = 
     model: getActiveModel(),
     response_format: { type: 'json_object' },
     messages: [{ role: 'user', content: prompt }],
-    max_completion_tokens: 900,
+    max_completion_tokens: 3000,
   });
-  const data = JSON.parse(r.choices[0].message.content);
+  const data = парсJSONОтвет(r);
   data.blocks = Array.isArray(data.blocks) ? data.blocks : [];
   return data;
 }
@@ -148,9 +148,9 @@ export async function вечернийРазбор({ bot, supa, openai, ownerTgI
   try {
     const r = await openai.chat.completions.create({
       model: getActiveModel(), response_format: { type: 'json_object' },
-      messages: [{ role: 'user', content: prompt }], max_completion_tokens: 700,
+      messages: [{ role: 'user', content: prompt }], max_completion_tokens: 3000,
     });
-    const j = JSON.parse(r.choices[0].message.content);
+    const j = парсJSONОтвет(r);
     for (const k of ['done','moved','new_done','meals','ideas']) p[k] = Array.isArray(j[k]) ? j[k] : [];
     p.water_ml = Number(j.water_ml) || 0;
     p.note = j.note || '';

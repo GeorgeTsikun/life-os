@@ -2,7 +2,7 @@
 // Транскрипт встречи → структурный разбор. Мои обязательства → задачи, чужие →
 // ожидания (жду от других), всё целиком → таблица meeting_notes (история).
 import { InlineKeyboard } from 'grammy';
-import { getActiveModel } from './model.js';
+import { getActiveModel, парсJSONОтвет } from './model.js';
 import { записатьСтруктурныйСозвон, notionАктивен } from './notion.js';
 
 const MSK = 3 * 3600 * 1000;
@@ -28,9 +28,9 @@ export async function разобратьСозвон({ bot, supa, openai, ownerT
   try {
     const c = await openai.chat.completions.create({
       model: getActiveModel(), response_format: { type:'json_object' },
-      messages: [{ role:'user', content: prompt }], max_completion_tokens: 900,
+      messages: [{ role:'user', content: prompt }], max_completion_tokens: 3000,
     });
-    const j = JSON.parse(c.choices[0].message.content);
+    const j = парсJSONОтвет(c);
     r.title = название || j.title || 'Созвон';
     r.summary = j.summary || '';
     for (const k of ['decisions','risks']) r[k] = Array.isArray(j[k]) ? j[k] : [];
