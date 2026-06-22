@@ -101,9 +101,15 @@ export async function создатьСобытие(задача) {
   try {
     const token = await получитьТокен();
     const isDateOnly = !задача.start_iso.includes('T');
-    const startDate = new Date(задача.start_iso);
     const длительностьМин = задача.duration_min || (isDateOnly ? 0 : 60);
-    const endDate = new Date(startDate.getTime() + длительностьМин * 60000);
+
+    // start_iso — это МОСКОВСКОЕ локальное время ("2026-06-22T16:05:00").
+    // Отдаём Google «наивное» местное время + timeZone, БЕЗ конвертации в UTC
+    // (иначе сервер в UTC сместит на +3ч). Конец считаем по московской стене.
+    const startNaive = задача.start_iso.slice(0, 19);
+    const startMs = new Date(startNaive + '+03:00').getTime();          // якорим в Москве
+    const endNaive = new Date(startMs + длительностьМин * 60000 + 3 * 3600000)
+      .toISOString().slice(0, 19);                                      // обратно к московской стене
 
     const описание = [
       задача.notes,
@@ -112,8 +118,8 @@ export async function создатьСобытие(задача) {
     ].filter(Boolean).join('\n');
 
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(маппинг.calendar_id)}/events`;
-    const start = isDateOnly ? { date: задача.start_iso } : { dateTime: startDate.toISOString(), timeZone: 'Europe/Moscow' };
-    const end   = isDateOnly ? { date: задача.start_iso } : { dateTime: endDate.toISOString(),   timeZone: 'Europe/Moscow' };
+    const start = isDateOnly ? { date: задача.start_iso } : { dateTime: startNaive, timeZone: 'Europe/Moscow' };
+    const end   = isDateOnly ? { date: задача.start_iso } : { dateTime: endNaive,   timeZone: 'Europe/Moscow' };
 
     const colorId = ЦВЕТА_ПО_КАТЕГОРИИ[задача.cat];
     const тело = { summary: задача.text || 'Задача', description: описание, start, end };
