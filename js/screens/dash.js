@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=82';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=82';
-import { TG } from '../telegram.js?v=82';
+import { DB } from '../db.js?v=83';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=83';
+import { TG } from '../telegram.js?v=83';
 
 // ── Вдохновение (как в Momentum): крупная фраза + глубокая цитата ────────────
 const ФРАЗЫ = [
@@ -888,13 +888,15 @@ function heroStateCard(rpg, health) {
       <div style="font-size:12px;color:rgba(232,237,245,.55);margin-top:8px;line-height:1.5">Пока нет данных. Сферы (тело · восстановление · люди · фокус · энергия) заполняются из твоих дневных отчётов и активности — расскажи боту, как ты по каждой, и здесь появятся реальные значения.</div>
     </div>`;
   }
-  const energy = (health?.energyData || []);
+  // v3: без Chart.js-радара (он ломал masonry-колонки) — честные бары по реальным шкалам
   return `<div class="card" style="margin-bottom:12px">
     <div class="sec-label">📊 СОСТОЯНИЕ ГЕРОЯ</div>
-    <div style="width:100%;height:220px;position:relative"><canvas id="radar-chart" style="width:100%;height:100%"></canvas></div>
-    <div style="margin-top:14px">
+    <div style="margin-top:10px">
       ${RPG_STATS.map(s => {
-        const val = typeof rpg[s.key] === 'number' ? rpg[s.key] : 0;
+        const val = typeof rpg[s.key] === 'number' ? rpg[s.key] : null;
+        if (val == null) return `<div class="stat-row" style="margin-bottom:6px;opacity:.5">
+          <div class="stat-label" style="color:${s.color};font-size:10px;min-width:64px">${s.label}</div>
+          <div style="flex:1;font-size:10px;color:rgba(232,237,245,.35);margin:0 8px">нет данных</div></div>`;
         return `<div class="stat-row" style="margin-bottom:6px">
           <div class="stat-label" style="color:${s.color};font-size:10px;min-width:64px">${s.label}</div>
           <div class="stat-bar" style="flex:1;height:6px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden;margin:0 8px">
@@ -904,10 +906,6 @@ function heroStateCard(rpg, health) {
         </div>`;
       }).join('')}
     </div>
-    ${energy.length ? `<div style="margin-top:14px">
-      <div style="font-size:9px;color:rgba(232,237,245,.35);letter-spacing:.08em;margin-bottom:6px">⚡ ЭНЕРГИЯ / НЕДЕЛЯ</div>
-      <div style="height:70px;position:relative"><canvas id="energy-chart" style="width:100%;height:100%"></canvas></div>
-    </div>` : ''}
   </div>`;
 }
 

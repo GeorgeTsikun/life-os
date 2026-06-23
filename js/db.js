@@ -1,5 +1,5 @@
 // ── СЛОЙ ДАННЫХ ───────────────────────────────────────────────────────────────
-import { KNOWLEDGE_SEED } from './data/knowledge.js?v=82';
+import { KNOWLEDGE_SEED } from './data/knowledge.js?v=83';
 // Приоритет: localStorage (работает без интернета).
 // Если заданы VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY — синхронизируется с Supabase.
 // Переменные окружения читаются из window.__ENV__ (injected Vercel) или import.meta.env
@@ -209,7 +209,7 @@ export const DB = {
   // «демо» (ачивки «получено», RPG-радар, фейк-здоровье/энергия, seed-тренировки).
   // Реальные данные появятся из дневных отчётов/бота/Apple Health.
   migrateV3StripFakes() {
-    if (localStorage.getItem('lifeos_v3_stripped') === '1') return;
+    if (localStorage.getItem('lifeos_v3_stripped2') === '1') return;
     try {
       // Ачивки: снять авто-«получено» (заслужишь реально — вернём отдельной логикой)
       const ach = хранилищеПолучить('achievements') || [];
@@ -228,7 +228,7 @@ export const DB = {
       хранилищеСохранить('workouts', []);
       хранилищеСохранить('gymDays', [false,false,false,false,false,false,false]);
     } catch (e) { console.warn('[v3 strip]', e.message); }
-    localStorage.setItem('lifeos_v3_stripped', '1');
+    localStorage.setItem('lifeos_v3_stripped2', '1');
   },
 
   // ── ПОВТОРЯЮЩИЕСЯ ЗАДАЧИ (шаблоны → авто-создание по расписанию) ─────────────
