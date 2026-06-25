@@ -1,7 +1,7 @@
 // ── DASHBOARD SCREEN ──────────────────────────────────────────────────────────
-import { DB } from '../db.js?v=83';
-import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=83';
-import { TG } from '../telegram.js?v=83';
+import { DB } from '../db.js?v=84';
+import { levelFromXp, xpProgress, xpForLevel, RPG_STATS, onQuestCompleted, calcRC, rcMode, awardXP } from '../gamification.js?v=84';
+import { TG } from '../telegram.js?v=84';
 
 // ── Вдохновение (как в Momentum): крупная фраза + глубокая цитата ────────────
 const ФРАЗЫ = [
@@ -56,7 +56,8 @@ export function renderDash() {
   const curXp   = Math.round(prog * needXp);
   const mult    = profile.streak >= 30 ? '1.5x' : profile.streak >= 14 ? '1.25x' : profile.streak >= 7 ? '1.1x' : '';
   const doneTasks = tasks.filter(t => t.done).length;
-  const unlockedAchs = achs.filter(a => a.unlocked);
+  // v3: показываем только реально заслуженные ачивки (фейк-«получено» убран; логика начисления — позже)
+  const unlockedAchs = achs.filter(a => a.unlocked && a.earnedAt);
 
   const photoSrc  = profile.photo || 'assets/avatar.jpg';
   // Квесты дня — самостоятельные ежедневные привычки (НЕ подменяем на задачи,
@@ -135,7 +136,7 @@ export function renderDash() {
   <!-- ── МИНИ-СТАТЫ ──────────────────────────────────────────────────────────── -->
   <div class="energy-chips">
     ${[
-      { l:'Сон',    v: health.sleep?.hours ? health.sleep.hours + 'ч' : '—', i:'🌙', c:'#7B61FF' },
+      { l:'Сон',    v: (health.real && health.sleep?.hours) ? health.sleep.hours + 'ч' : '—', i:'🌙', c:'#7B61FF' },
       { l:'Энергия',v: daily.energy != null ? daily.energy + '/10' : '—', i:'⚡', c:'#FFD700' },
       { l:'Задачи', v: `${doneTasks}/${tasks.length}`, i:'✅', c:'#00F5D4' },
       { l:'Фокус',  v: daily.focus != null ? daily.focus + 'ч' : '—', i:'🎯', c:'#00E396' },
@@ -910,8 +911,8 @@ function heroStateCard(rpg, health) {
 }
 
 function renderRcBlock(health, profile) {
-  // v3: без реальных данных здоровья не выдумываем «ёмкость»
-  if (!health || (health.hrv == null && (health.sleep == null || !health.sleep?.hours))) {
+  // v3: показываем «ёмкость» только по РЕАЛЬНЫМ данным (health.real ставит Apple Health/бот)
+  if (!health || !health.real) {
     return `<div class="card" style="margin-bottom:12px;border-left:3px solid rgba(255,255,255,.15)">
       <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:rgba(232,237,245,.5)">⚡ РЕАЛЬНАЯ ЁМКОСТЬ</div>
       <div style="font-size:12px;color:rgba(232,237,245,.55);margin-top:8px;line-height:1.5">Нет данных о здоровье. Расскажи боту голосом как спал / какой пульс-HRV, или подключи Apple Health — и я посчитаю реальную ёмкость дня.</div>

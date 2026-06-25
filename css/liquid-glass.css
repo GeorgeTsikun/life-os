@@ -133,3 +133,45 @@ nav{
 @media (prefers-reduced-motion: reduce){
   *, .ambient .orb, #content > .screen, #content .card{ animation:none !important; transition:none !important; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   СВЕТЛАЯ ТЕМА (html.light) — белый фон, тёмный текст, светлое стекло.
+   Приложение заинлайнено светлым текстом → переворачиваем частые inline-цвета
+   через атрибут-селекторы. ponytail: ceiling — точечные акцент-цвета остаются.
+   ════════════════════════════════════════════════════════════════════════ */
+html.light .ambient{ background:radial-gradient(130% 130% at 50% -10%, #eef2ff 0%, #e4e9f7 50%, #d7ddef 100%); }
+html.light .ambient .orb{ opacity:.45; }
+html.light, html.light body, html.light #app{ color:#141a2b; }
+
+/* стекло → светлое матовое */
+html.light .card, html.light .hero-card, html.light .stat-chip, html.light .project-card,
+html.light .person-card, html.light .modal-sheet, html.light .detail-sheet, html.light nav,
+html.light .btn-ghost, html.light .cat-pill, html.light .toggle-btn{
+  background:linear-gradient(150deg, rgba(255,255,255,.82), rgba(255,255,255,.58)) !important;
+  border:1px solid rgba(20,26,43,.10) !important;
+  box-shadow:0 20px 50px -28px rgba(30,40,80,.4), inset 0 1px 0 rgba(255,255,255,.7) !important;
+}
+html.light .card::after, html.light .hero-card::after{ background:linear-gradient(180deg, rgba(255,255,255,.55), transparent 42%); }
+
+/* базовый и приглушённый текст → тёмный (через inline-substring) */
+html.light [style*="#E8EDF5"], html.light [style*="#fff"], html.light [style*="#FFF"],
+html.light [style*="#ffffff"], html.light [style*=":white"], html.light [style*=" white"]{ color:#141a2b !important; }
+html.light [style*="232,237,245"]{ color:rgba(20,26,43,.62) !important; }
+html.light [style*="244,247,252"]{ color:rgba(20,26,43,.62) !important; }
+html.light .num{ color:#141a2b; }
+html.light .sec-label{ color:rgba(20,26,43,.5) !important; }
+
+/* навигация */
+html.light .nav-btn, html.light .nav-btn .lbl{ color:rgba(20,26,43,.7) !important; }
+html.light .nav-btn.active, html.light .nav-btn.active .lbl{ color:#141a2b !important; }
+html.light .nav-btn.active{ background:linear-gradient(135deg, rgba(20,26,43,.10), rgba(20,26,43,.04)) !important; border:1px solid rgba(20,26,43,.14) !important; }
+
+/* поля ввода */
+html.light .input, html.light .input:focus, html.light textarea.input{
+  background:rgba(20,26,43,.05) !important; border:1px solid rgba(20,26,43,.15) !important; color:#141a2b !important;
+}
+html.light .input::placeholder{ color:rgba(20,26,43,.4) !important; }
+
+/* акцентные заливки (бирюза→фиолет) на светлом — текст тёмный для читабельности кнопок */
+html.light .btn-teal{ color:#04121a !important; }
+html.light .theme-toggle, html.light #theme-toggle{ background:rgba(20,26,43,.06); border-color:rgba(20,26,43,.15); }

@@ -240,6 +240,8 @@ export async function загрузитьВсё() {
       const meta = _getMeta();
       for (const row of (kvRows || [])) {
         if (!row.key || row.data == null) continue;
+        // v3: не тащим старый фейк-радар из облака (rpgStats копится только локально из чекинов)
+        if (row.key === 'rpgStats') continue;
         // newest-wins: если локальное изменение свежее облака — НЕ затираем
         const cloudTs = _ms(row.updated_at);
         const localTs = meta['kv:' + row.key] || 0;
